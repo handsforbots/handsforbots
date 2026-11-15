@@ -27,6 +27,7 @@ export const PACKAGE_SCOPE = '@your-org' // optional
 | npm name | `@your-org/your-new-name` |
 | Global debug API | `__YOUR_NEW_NAME__` (slug uppercased, `-` → `_`) |
 | localStorage debug key | `your-new-name:debug` |
+| localStorage panel key | `your-new-name:panel` |
 | OTel `service.name` | `your-new-name` |
 | Grafana dashboard UID | `your-new-name` |
 

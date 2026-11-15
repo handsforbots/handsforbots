@@ -28,6 +28,8 @@ localStorage.setItem('semantic-event-observability:debug', 'true')
 location.reload()
 ```
 
+**−** collapses the panel to its title bar. That choice stays in `localStorage` (`semantic-event-observability:panel`). **×** turns the panel off.
+
 Configure exporters and policy via plugin options:
 
 ```javascript

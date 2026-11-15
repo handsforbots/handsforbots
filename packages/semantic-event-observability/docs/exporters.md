@@ -35,6 +35,8 @@ localStorage.setItem('semantic-event-observability:debug', 'true')
 
 Or `exporterConfig.devPanel.enabled = true`.
 
+The header has **export** (download recent events and the browser), **−** (collapse to the title bar) and **×** (hide the panel and set the debug key to `false`). The collapsed choice is stored in `localStorage` under `<slug>:panel` (`minimized`) and restored on the next load. Events keep arriving while it is collapsed.
+
 ## Grafana stack
 
 ### `faro`

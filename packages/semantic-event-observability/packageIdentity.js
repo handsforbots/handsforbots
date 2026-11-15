@@ -33,6 +33,7 @@ export function getPackageIdentity(overrides = {}) {
 		version: overrides.version || PACKAGE_VERSION,
 		globalKey: `__${slug.replace(/-/g, '_').toUpperCase()}__`,
 		debugStorageKey: `${slug}:debug`,
+		panelStorageKey: `${slug}:panel`,
 		sessionStorageKey: `${slug}:session`,
 		otelServiceName: slug,
 		grafanaDashboardUid: slug,

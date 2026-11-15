@@ -5,6 +5,8 @@ export type PackageIdentity = {
 	version: string
 	globalKey: string
 	debugStorageKey: string
+	/** localStorage key for the dev panel chrome (`minimized` or absent). */
+	panelStorageKey: string
 	sessionStorageKey: string
 	otelServiceName: string
 	grafanaDashboardUid: string
