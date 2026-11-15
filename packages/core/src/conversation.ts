@@ -13,6 +13,8 @@ export class Conversation {
   private _state: unknown = undefined
   /** Opaque slot for the `memory` plugin; saved and restored with the conversation. */
   memory: unknown = undefined
+  /** Opaque slot for the `conversation-state` plugin (ADR 0019); saved and restored with the conversation. */
+  conversationState: unknown = undefined
   private _attributes: ConversationAttributes = EMPTY_ATTRIBUTES
 
   constructor(
@@ -48,6 +50,7 @@ export class Conversation {
     this._messages = snapshot.messages
     this._state = snapshot.state
     this.memory = snapshot.memory
+    this.conversationState = snapshot.conversationState
     const hadAttributes = Object.keys(this._attributes).length > 0
     this._attributes = cleanAttributes(snapshot.attributes)
     this.onMessages(this._messages)
@@ -60,6 +63,7 @@ export class Conversation {
     this._messages = []
     this._state = undefined
     this.memory = undefined
+    this.conversationState = undefined
     const hadAttributes = Object.keys(this._attributes).length > 0
     this._attributes = EMPTY_ATTRIBUTES
     this.onMessages(this._messages)
@@ -73,6 +77,7 @@ export class Conversation {
       messages: this._messages,
       state: this._state,
       ...(this.memory === undefined ? {} : { memory: this.memory }),
+      ...(this.conversationState === undefined ? {} : { conversationState: this.conversationState }),
       ...(Object.keys(this._attributes).length === 0 ? {} : { attributes: this._attributes }),
     }
   }

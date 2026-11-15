@@ -1,6 +1,6 @@
 ---
 name: handsforbots-persistence
-description: Configure what Hands for Bots v2 sends, keeps and stores - the memory plugin (turns sent to the assistant, turns kept, compaction into a summary), storage-local (encrypted in the browser with a key in an expiring cookie or on the backend), storage-backend (conversation on your server), retention choices for developers and end users (widget privacy panel), and tab-sync modes (sync, notify, off). Use when the task involves persisting or restoring a conversation, token/history limits, summaries, privacy or data retention, shared computers, multiple tabs or windows, or implementing the server endpoints these packages call.
+description: Configure what Hands for Bots v2 sends, keeps and stores - the memory plugin (turns sent to the assistant, turns kept, compaction into a summary), the explicit conversation state (sourced facts, decisions and pending items sent with every request), storage-local (encrypted in the browser with a key in an expiring cookie or on the backend), storage-backend (conversation on your server), retention choices for developers and end users (widget privacy panel), and tab-sync modes (sync, notify, off). Use when the task involves persisting or restoring a conversation, token/history limits, summaries, privacy or data retention, shared computers, multiple tabs or windows, or implementing the server endpoints these packages call.
 ---
 
 # Hands for Bots v2 — persistence, memory and privacy
@@ -36,6 +36,20 @@ createH4B({ plugins: [memory({ send: 30 })] }) // explicit instance replaces the
 - The summary lives in `SessionSnapshot.memory` and is stored with the conversation. `reset()` clears it.
 - `httpSummarizer` POSTs `{ previous, messages }` and expects `{ summary }`.
 - Transports no longer cap history themselves; `contextWindow` on `universalLLM` / `openAICompatible` is only an extra, optional cap.
+
+## Explicit conversation state (optional)
+
+The `memory` summary is a rough recap. When the backend needs facts it can rely on (active topic, goal, entities with versions, decisions, sourced facts, pending items), add `@handsforbots/conversation-state`. Guide: `docs/en-us/conversation-state.md`; decision: ADR 0019.
+
+```ts
+createH4B({ plugins: [conversationState()] })                                          // updates come with the reply
+createH4B({ plugins: [conversationState({ updates: httpStateUpdater({ url: '/api/h4b/state' }) })] }) // a channel of its own
+```
+
+- Every request carries the context signal `conversation.state` (`{ revision, sections, rejected? }`), apart from the messages. `send: false` if the backend keeps the state itself; `persist: false` keeps it out of storage.
+- The backend sends **operations** (`{ base?, ops: [{ op: 'set' | 'add' | 'update' | 'remove', section, ... }] }`), never a whole state: as a `ui.effect` named `conversation.state`, through the `update_conversation_state` action, or as the answer of `httpStateUpdater` (`POST { state, messages, threadId, turnId }` → `{ base?, ops }` or `204`).
+- `facts` need `evidence: [{ messageId, quote }]` with the quote copied from that message; `decisions` need a `messageId`. Wrong ones are rejected with a reason the model sees in the next request (`rejected`). More than `maxRemovals` (3) removals, or going over `maxChars` (4000), rejects the whole update.
+- On the server, `readConversationState(body.context)`, `stateItems(state, { scope })`, `stateUpdateSchema()` and `conversationStatePrompt()` from `@handsforbots/conversation-state/server`. It is client data: context for the model, never authorization.
 
 ## Storage in the browser: `storageLocal`
 
@@ -81,6 +95,7 @@ Endpoint contract (implement all three; with consent on, requests also carry `X-
 - [ ] Chose browser vs server storage, and the retention default; decided whether users get `userChoices`.
 - [ ] If `backendKey` / `storageBackend` / `httpSummarizer`: the endpoints exist, use the user's session, enforce expiry, and keep provider keys on the server.
 - [ ] `send` / `keep` fit the backend: `'none'` if it already keeps the thread.
+- [ ] If `conversation-state`: the backend's prompt includes `conversationStatePrompt()`, the update channel is chosen, and the backend reads `rejected`.
 - [ ] Shared devices: `'tab'` retention or a short key TTL.
 - [ ] Tabs: `tabSync` mode chosen; `'tab'` retention with `notify`/`off`.
 - [ ] Tested reload, key expiry (delete the cookie) and a second tab.

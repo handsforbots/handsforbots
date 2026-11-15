@@ -23,6 +23,7 @@ Cada pacote exporta uma fábrica de plugin: chame com as opções e passe para `
 | [`expose-webmcp`](#expose-webmcp) | `webmcp` | `webmcp` |
 | [`mcp-apps`](#mcp-apps) | `mountMcpApp`, `mcpAppRenderer` | — |
 | [`cues`](#cues) | `cues` | `cues` |
+| [`conversation-state`](#conversation-state) | `conversationState`, `httpStateUpdater` | `conversationState` |
 | [`memory`](#memory) | `memory`, `httpSummarizer`, `localSummary`, `groupTurns` | `memory` |
 | [`storage-local`](#storage-local) | `storageLocal`, `cookieKey`, `backendKey` | `storage`, `retention` |
 | [`storage-backend`](#storage-backend) | `storageBackend` | `storage`, `retention` |
@@ -312,6 +313,10 @@ O serviço `cues` tem `getState()` (por canal: `value`, `previous`, `streak`, `c
 ```css
 h4b-chat[data-cue-tom='confuso'][data-cue-tom-level='3'] .avatar { animation: tremer 0.6s; }
 ```
+
+## conversation-state
+
+`conversationState({ sections?, updates?: 'response' | 'manual' | StateUpdater, action?: true, persist?: true, send?: true, maxChars?: 4000, maxRemovals?: 3, journal?: 50, screen?, wait?: 2000 })`. O estado explícito da conversa (ADR 0019): assunto, objetivo, profundidade, entidades, decisões, fatos com fonte e pendências, como afirmações atômicas com fonte, data, escopo e confiança. Vai em toda requisição como o sinal de contexto `conversation.state`, separado das mensagens. O backend só o muda por operações (`set`, `add`, `update`, `remove`) que a página confere antes: um fato precisa de um trecho achado, tal como foi escrito, na mensagem que ele cita; o que o usuário afirmou só muda com evidência do usuário; e uma atualização com remoções demais ou acima do limite de tamanho é recusada inteira. As atualizações vêm com a resposta (`ui.effect` `conversation.state` ou a ação `update_conversation_state`), por um canal à parte (`httpStateUpdater({ url })`) ou só da página. Serviço `conversationState`: `getState()`, `subscribe()`, `view()`, `update()`, `revert()`, `history()`, `settled()`; evento `conversation.state`. No backend, `readConversationState`, `stateItems`, `stateUpdateSchema` e `conversationStatePrompt` de `@handsforbots/conversation-state/server`. Guia: [Estado explícito da conversa](./conversation-state.md).
 
 ## memory
 

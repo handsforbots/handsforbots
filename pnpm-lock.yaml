@@ -140,6 +140,21 @@ importers:
         specifier: ^27.0.0
         version: 27.4.0
 
+  packages/conversation-state:
+    devDependencies:
+      '@handsforbots/core':
+        specifier: workspace:^
+        version: link:../core
+      '@handsforbots/testkit':
+        specifier: workspace:^
+        version: link:../testkit
+      '@handsforbots/transport-agui':
+        specifier: workspace:^
+        version: link:../transport-agui
+      '@handsforbots/transport-http':
+        specifier: workspace:^
+        version: link:../transport-http
+
   packages/copilotkit:
     dependencies:
       '@handsforbots/transport-agui':
