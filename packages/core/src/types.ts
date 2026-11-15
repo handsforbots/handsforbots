@@ -317,6 +317,8 @@ export type Match = {
   confidence?: number
   /** Short confirmation shown/spoken after the action. */
   reply?: (result: unknown) => string | undefined
+  /** Extra parts for the reply message, e.g. a `quick_replies` data part. Only sent when the action succeeds. */
+  parts?: Part[]
 }
 
 export type Matcher = {

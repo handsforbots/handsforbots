@@ -164,11 +164,13 @@ Dentro de `<CopilotKitProvider>` e `<H4BProvider>`: `useCopilotKitBridge({ agent
 
 ## menu
 
-`menu({ commands, language?, fuzzyThreshold?: 0.8, maxFuzzyWords?: 6 })`. Um comando: `{ action, label?, slash?, patterns?, phrases?, args?, reply? }`.
+`menu({ commands, language?, fuzzyThreshold?: 0.8, maxFuzzyWords?: 6, fuzzyMargin?: 0.05, uncertain?: 'llm' | 'ask', askThreshold?: 0.6, askText?, negations?, typedQuestions?: 'llm' | 'command' })`. Um comando: `{ action, label?, slash?, patterns?, phrases?, args?, reply? }`.
 
 - `slash: 'atrasados'` → `/atrasados …` (o resto da linha vira `rest`).
 - `patterns: ['mostrar pedidos {status}', /^pedidos? (?<status>\w+)$/]`: templates sem diferenciar maiúsculas e acentos, ou RegExps com grupos nomeados.
 - `phrases: { pt: ['pedidos atrasados'], en: ['late orders'] }`: reconhecimento tolerante a erros para entradas curtas (ótimo com voz).
+- O que o fuzzy recusa, e por isso vai ao LLM: uma negação que a frase não tem ("não abrir detalhes do pedido" nunca roda "abrir detalhes do pedido"; palavras por `language` em pt, es e en, todas sem idioma, ou a sua lista em `negations`), texto digitado que termina em `?` ("fechar modal?" é pergunta; `typedQuestions: 'command'` reconhece mesmo assim; transcrições nunca são afetadas) e um melhor comando que não vence outro comando por `fuzzyMargin`.
+- Entradas incertas (score entre `askThreshold` e `fuzzyThreshold`, ou dois comandos a menos de `fuzzyMargin`) vão ao LLM por padrão. Com `uncertain: 'ask'`, o menu responde "Você quis dizer "pedidos atrasados"?" (`askText` para mudar) com as frases candidatas como `quick_replies`, sem LLM; escolher ou falar uma delas a executa. A pergunta fica gravada como a ação `menu.clarify`, então o LLM a vê no turno seguinte.
 - Serviço: `suggest(texto)`, `list()`, `add(comando)`, `commandSignal(ação, args, rótulo)` para botões e paletas.
 
 ## voice

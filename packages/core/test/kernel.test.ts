@@ -319,6 +319,25 @@ describe('direct route (menu)', () => {
     expect(textOf(h4b.messages[3]!)).toBe('12 pedidos abertos.')
   })
 
+  it('adds the match parts to the direct reply, only when the action succeeds', async () => {
+    const quick = { type: 'data' as const, name: 'quick_replies', value: [{ label: 'sim' }] }
+    const h4b = await createH4B({
+      actions: [
+        { name: 'ok', description: 'Ok', handler: () => 1 },
+        { name: 'fails', description: 'Fails', handler: () => { throw new Error('boom') } },
+      ],
+    }).start()
+    h4b.addMatcher({ name: 'test', match: (s) => ({ action: textOf(s.parts), parts: [quick] }) })
+
+    h4b.send('ok')
+    await idle(h4b)
+    expect(h4b.messages.at(-1)).toMatchObject({ role: 'assistant', parts: [quick] })
+
+    h4b.send('fails')
+    await idle(h4b)
+    expect(h4b.messages.at(-1)).not.toMatchObject({ parts: [quick] })
+  })
+
   it('ignores low-confidence matches and actions not exposed to the user', async () => {
     const transport = scripted([[], []])
     const h4b = await createH4B({

@@ -48,7 +48,7 @@ export const weather = definePlugin<WeatherOptions>({
 | `registerAction(definição)` | Ações (removidas no descarte) |
 | `on(evento, listener)` / `emit(evento, payload)` | Notificações |
 | `intercept(hook, fn, prioridade?)` | `signal.before`, `request.before`, `action.before`, `stimulus.before`, `storage.before`, `interrupt.before` (quanto de uma resposta interrompida chegou à pessoa; veja [Interrupção](./conversation.md#interromper-sob-demanda)) |
-| `addMatcher(matcher)` | Reconhecimento de comandos diretos (veja `menu`) |
+| `addMatcher(matcher)` | Reconhecimento de comandos diretos (veja `menu`). Um match é `{ action, args?, confidence?, reply?, parts? }`; `parts` (ex.: uma parte `data` `quick_replies`) entram na mensagem de resposta quando a ação dá certo |
 | `capture(handler, { accepts })` | Pegar alguns sinais para si (veja `guided`) |
 | `signal(entrada)` | Enviar entrada (a origem é o nome do plugin) |
 | `effect(setup)` / `onDispose(fn)` | Recursos com limpeza |

@@ -56,12 +56,22 @@ export type FuzzyOptions = {
  * job of a semantic matcher.
  */
 export function fuzzyBest<T>(input: string, entries: FuzzyEntry<T>[], options: FuzzyOptions = {}): FuzzyResult<T> | undefined {
+  const best = fuzzyRank(input, entries, options)[0]
+  return best && best.score >= (options.threshold ?? 0.8) ? best : undefined
+}
+
+/**
+ * Every distinct value with its best-scoring phrase, highest score first,
+ * with no threshold. Empty for empty or long inputs (`maxWords`).
+ */
+export function fuzzyRank<T>(input: string, entries: FuzzyEntry<T>[], options: Pick<FuzzyOptions, 'maxWords'> = {}): FuzzyResult<T>[] {
   const text = normalize(input)
-  if (!text || text.split(' ').length > (options.maxWords ?? 6)) return undefined
-  let best: FuzzyResult<T> | undefined
+  if (!text || text.split(' ').length > (options.maxWords ?? 6)) return []
+  const best = new Map<T, FuzzyResult<T>>()
   for (const entry of entries) {
     const score = similarity(text, entry.phrase)
-    if (!best || score > best.score) best = { value: entry.value, phrase: entry.phrase, score }
+    const current = best.get(entry.value)
+    if (!current || score > current.score) best.set(entry.value, { value: entry.value, phrase: entry.phrase, score })
   }
-  return best && best.score >= (options.threshold ?? 0.8) ? best : undefined
+  return [...best.values()].sort((a, b) => b.score - a.score)
 }

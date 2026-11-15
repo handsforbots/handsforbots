@@ -1,7 +1,7 @@
 import { definePlugin, textOf, type Match, type Signal } from '@handsforbots/core'
-import { fuzzyBest, normalize, similarity, type FuzzyEntry } from './fuzzy.js'
+import { fuzzyRank, normalize, similarity, type FuzzyEntry, type FuzzyResult } from './fuzzy.js'
 
-export { distance, fuzzyBest, normalize, similarity, type FuzzyEntry, type FuzzyOptions, type FuzzyResult } from './fuzzy.js'
+export { distance, fuzzyBest, fuzzyRank, normalize, similarity, type FuzzyEntry, type FuzzyOptions, type FuzzyResult } from './fuzzy.js'
 
 export type CommandArgs = unknown | ((captured: Record<string, string>) => unknown)
 
@@ -33,7 +33,51 @@ export type MenuOptions = {
   fuzzyThreshold?: number
   /** Longer inputs skip fuzzy matching. Default 6 words. */
   maxFuzzyWords?: number
+  /**
+   * The best command must beat the runner-up (a different command) by this
+   * much; otherwise the input is uncertain. Default 0.05.
+   */
+  fuzzyMargin?: number
+  /**
+   * What to do with uncertain inputs: a fuzzy score between `askThreshold`
+   * and `fuzzyThreshold`, or two commands within `fuzzyMargin`.
+   * `'llm'` (default) sends them to the transport; `'ask'` replies
+   * "did you mean…?" with the candidates as quick replies, without the LLM.
+   */
+  uncertain?: 'llm' | 'ask'
+  /** Lowest fuzzy score that still asks (with `uncertain: 'ask'`). Default 0.6. */
+  askThreshold?: number
+  /** Text of the "did you mean…?" reply. Default per `language` (pt, es, en). */
+  askText?: (phrases: string[]) => string
+  /**
+   * Words that make a short input a non-command ("não abrir detalhes"): when
+   * the input has one that the matched phrase lacks, fuzzy matching skips it.
+   * Default per `language` (pt, es, en; all of them without a language).
+   */
+  negations?: string[]
+  /**
+   * Typed text ending in "?" ("fechar modal?") is a question, not a command:
+   * `'llm'` (default) skips fuzzy matching for it; `'command'` matches it.
+   * Transcripts are never affected (recognizers add "?" on their own).
+   */
+  typedQuestions?: 'llm' | 'command'
 }
+
+/** Action the menu runs to ask "did you mean…?" for uncertain inputs. */
+export const CLARIFY_ACTION = 'menu.clarify'
+
+const NEGATIONS: Record<string, string[]> = {
+  pt: ['não', 'nunca', 'jamais', 'nem'],
+  es: ['no', 'nunca', 'jamás', 'ni'],
+  en: ['not', 'never', "don't", 'dont', "doesn't", "didn't", "won't", 'no'],
+}
+
+const ASK_TEXT: Record<string, (or: string) => string> = {
+  pt: (list) => `Você quis dizer ${list}?`,
+  es: (list) => `¿Quisiste decir ${list}?`,
+  en: (list) => `Did you mean ${list}?`,
+}
+const OR: Record<string, string> = { pt: 'ou', es: 'o', en: 'or' }
 
 export type Suggestion = { command: Command; label: string; score: number }
 
@@ -64,6 +108,15 @@ export const menu = definePlugin<MenuOptions | undefined>({
     ctx.addMatcher({ name: 'menu.explicit', priority: -30, match: service.matchExplicit })
     ctx.addMatcher({ name: 'menu.pattern', priority: -20, match: service.matchPattern })
     ctx.addMatcher({ name: 'menu.fuzzy', priority: -10, match: service.matchFuzzy })
+    if (options.uncertain === 'ask') {
+      ctx.registerAction({
+        name: CLARIFY_ACTION,
+        description: 'Asks the user which command they meant.',
+        confirm: 'never',
+        exposeTo: ['user'],
+        handler: (args: unknown) => args,
+      })
+    }
   },
 })
 
@@ -85,6 +138,23 @@ export function createMenu(options: MenuOptions = {}) {
     (Array.isArray(command.slash) ? command.slash : command.slash ? [command.slash] : []).map((s) =>
       normalize(s.replace(/^\//, '')),
     )
+
+  const base = options.language?.toLowerCase().split('-')[0]
+  const negationWords = (options.negations ?? (base && NEGATIONS[base] ? NEGATIONS[base]! : [
+    ...new Set(Object.values(NEGATIONS).flat().filter((w) => w !== 'no')),
+  ])).map(normalize).filter(Boolean)
+  const padded = (text: string) => ` ${normalize(text)} `
+  /** A negation in the input that the phrase does not have ("não abrir" vs "abrir"). */
+  const negates = (input: string, phrase: string) =>
+    negationWords.some((word) => padded(input).includes(` ${word} `) && !padded(phrase).includes(` ${word} `))
+
+  const askText = (phrases: string[]) => {
+    if (options.askText) return options.askText(phrases)
+    const lang = base && ASK_TEXT[base] ? base : 'en'
+    const quoted = phrases.map((p) => `"${p}"`)
+    const list = quoted.length > 1 ? `${quoted.slice(0, -1).join(', ')} ${OR[lang]} ${quoted.at(-1)}` : quoted[0]!
+    return ASK_TEXT[lang]!(list)
+  }
 
   const resolveArgs = (command: Command, captured: Record<string, string>) =>
     typeof command.args === 'function' ? (command.args as (c: Record<string, string>) => unknown)(captured) : (command.args ?? captured)
@@ -148,11 +218,33 @@ export function createMenu(options: MenuOptions = {}) {
   const matchFuzzy = (signal: Signal): Match | null => {
     const text = textInput(signal)
     if (!text || text.startsWith('/')) return null
+    if (signal.modality === 'text' && text.endsWith('?') && options.typedQuestions !== 'command') return null
     const entries: FuzzyEntry<Command>[] = commands.flatMap((command) =>
       phrasesOf(command).map((phrase) => ({ phrase, value: command })),
     )
-    const best = fuzzyBest(text, entries, { threshold: options.fuzzyThreshold, maxWords: options.maxFuzzyWords })
-    return best ? toMatch(best.value, {}, best.score) : null
+    const ranked = fuzzyRank(text, entries, { maxWords: options.maxFuzzyWords }).filter((r) => !negates(text, r.phrase))
+    const [best, second] = ranked
+    if (!best) return null
+    const threshold = options.fuzzyThreshold ?? 0.8
+    const close = second !== undefined && best.score - second.score < (options.fuzzyMargin ?? 0.05)
+    if (best.score >= threshold && !close) return toMatch(best.value, {}, best.score)
+    if (options.uncertain !== 'ask') return null
+    const askFrom = Math.min(options.askThreshold ?? 0.6, threshold)
+    const candidates = ranked.filter((r) => r.score >= askFrom && best.score - r.score < 0.2).slice(0, 3)
+    return candidates.length ? clarify(candidates) : null
+  }
+
+  /** "Did you mean…?" reply; each quick reply is a phrase, so choosing it (or saying it) matches exactly. */
+  const clarify = (candidates: FuzzyResult<Command>[]): Match => {
+    const choices = candidates.map((c) => ({ action: c.value.action, phrase: c.phrase, score: c.score }))
+    const phrases = candidates.map((c) => c.phrase)
+    return {
+      action: CLARIFY_ACTION,
+      args: { options: choices },
+      confidence: 1,
+      reply: () => askText(phrases),
+      parts: [{ type: 'data', name: 'quick_replies', value: phrases.map((label) => ({ label })) }],
+    }
   }
 
   const api: MenuService = {

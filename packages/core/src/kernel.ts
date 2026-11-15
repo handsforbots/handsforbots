@@ -1106,10 +1106,12 @@ export class H4B {
     const reply = outcome.error
       ? outcome.error
       : (match.reply?.(outcome.result) ?? action?.describeResult?.(outcome.result, args))
-    if (reply) {
+    const parts = outcome.error ? [] : (match.parts ?? [])
+    if (reply || parts.length) {
       const messageId = createId('msg')
       await this.deliver(turnId, { type: 'message.start', messageId }, round)
-      await this.deliver(turnId, { type: 'message.delta', messageId, delta: reply }, round)
+      if (reply) await this.deliver(turnId, { type: 'message.delta', messageId, delta: reply }, round)
+      for (const part of parts) await this.deliver(turnId, { type: 'message.part', messageId, part }, round)
       await this.deliver(turnId, { type: 'message.end', messageId }, round)
     }
     this.closeStreaming(round)
