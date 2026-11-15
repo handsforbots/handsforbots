@@ -12,7 +12,7 @@ Este guia mostra como ler o histórico, como registrar nele eventos da sua inter
 | `assistant` | O backend (ou um comando direto) responde | `parts`, `toolCalls`, `streaming`, `route`, `createdAt` |
 | `tool` | Uma ação terminou | `toolCallId`, `name`, `result` ou `error`, `route`, `createdAt` |
 
-Toda mensagem tem `id` e `createdAt`. A `route` diz como o turno foi resolvido: `transport`, `direct`, `capture`, `agent` ou `push` (veja [Conceitos](./concepts.md#rotas)). Os argumentos de uma ação ficam no `toolCalls` da mensagem `assistant`; o resultado fica na mensagem `tool` com o mesmo `toolCallId`.
+Toda mensagem tem `id` e `createdAt`. A `route` diz como o turno foi resolvido: `transport`, `direct`, `capture`, `agent` ou `push` (veja [Conceitos](./concepts.md#rotas)). Os argumentos de uma ação ficam no `toolCalls` da mensagem `assistant`; o resultado fica na mensagem `tool` com o mesmo `toolCallId`. Um id de chamada aparece uma vez por conversa: um `action.call` repetido não é gravado nem roda de novo ([Segurança](./security.md)).
 
 Uma mensagem `assistant` pode ter partes `source` e partes de texto com `citations`: de onde saiu a resposta ([Fontes e citações](./sources.md)). Elas são guardadas com a mensagem e não voltam ao backend.
 

@@ -401,7 +401,8 @@ O registro de ações substitui o `BotsCommands` (que hoje executa `window[comma
 - `confirm`: `never` | `destructive` | `always`.
 - **Confiança por origem:** usuário (menu) > assistente do app > agente externo (WebMCP). Cada ação declara para quem fica exposta (`exposeTo`) e pode exigir confirmação só para algumas origens.
 - Ações do histórico **não** são reexecutadas no reload; o que precisa ser restaurado vira `state.patch`.
-- Limite de taxa e auditoria via telemetria.
+- **Um `callId` roda uma vez por conversa** (feito em 2026-11-14): um `action.call` repetido pelo transporte é ignorado com `error` (`action.call`); o handler recebe `ctx.callId` para usar como chave de idempotência no backend.
+- Auditoria via telemetria: feita (`action.invoked` e o histórico com a origem). Limite de taxa: ainda não; até lá, um `action.before` do app. Pesa mais para a origem `agent` (WebMCP, MCP Apps), que não passa pelo backend; implementar antes de expor ações de escrita a agentes externos em produção.
 
 ### 2.10 Adapters externos
 
@@ -665,6 +666,7 @@ P3 — reavaliar com demanda
 
 | Data | Alteração |
 |------|-----------|
+| 2026-11-14 | Um `callId` roda uma vez por conversa (repetição do transporte ignorada); limite de taxa de ações fica como pendência antes de expor escrita a agentes externos (seção 2.9) |
 | 2026-11-14 | Estado explícito da conversa (`@handsforbots/conversation-state`): afirmações com fonte, mudadas só por operações conferidas, enviadas em campo próprio em toda requisição (ADR 0019) |
 | 2026-11-12 | Oportunidades vindas do backend do polvo (alexlana): decisão em aberto 11 (contrato de recusa e limite), `agent-intents` como referência da decisão 4, guias pendentes de respostas fixas marcadas e de classificador no backend (seção 3, `cues`), receitas de Turnstile e checagens antes de enviar (seção 3, XSS), proteção do endpoint como trabalho do backend (seção 6, item 7) |
 | 2026-11-11 | `readCuesState` em `@handsforbots/cues/server`: o backend lê e valida o `cues.state` vindo do AG-UI, do HTTP ou de sinais (ADR 0018) |

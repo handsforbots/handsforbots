@@ -1216,6 +1216,13 @@ export class H4B {
     return id
   }
 
+  /** A call id runs at most once per conversation, so a transport that repeats `action.call` can't run an action twice. */
+  private hasToolCall(callId: string): boolean {
+    return this.conversation.messages.some(
+      (m) => (m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId)) || (m.role === 'tool' && m.toolCallId === callId),
+    )
+  }
+
   /** Runs `stimulus.before` interceptors, then applies the stimulus. */
   private async deliver(turnId: string, stimulus: Stimulus, round: RoundState) {
     const accepted = this.hasInterceptors('stimulus.before') ? await this.runHooks('stimulus.before', stimulus) : stimulus
@@ -1268,6 +1275,13 @@ export class H4B {
         conversation.update<AssistantMessage>(stimulus.messageId, (m) => ({ ...m, streaming: false }))
         break
       case 'action.call': {
+        if (this.hasToolCall(stimulus.callId)) {
+          this.emit('error', {
+            error: new Error(`Action call "${stimulus.callId}" (${stimulus.name}) was already received; the repeat was ignored.`),
+            source: 'action.call',
+          })
+          break
+        }
         const id = this.ensureAssistant(round, stimulus.messageId)
         const call: ToolCall = { id: stimulus.callId, name: stimulus.name, args: stimulus.args }
         conversation.update<AssistantMessage>(id, (m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), call] }))

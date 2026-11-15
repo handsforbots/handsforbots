@@ -12,7 +12,7 @@ This guide shows how to read the history, how to record interface events that do
 | `assistant` | The backend (or a direct command) answers | `parts`, `toolCalls`, `streaming`, `route`, `createdAt` |
 | `tool` | An action finished | `toolCallId`, `name`, `result` or `error`, `route`, `createdAt` |
 
-Every message has an `id` and a `createdAt`. The `route` says how the turn was resolved: `transport`, `direct`, `capture`, `agent` or `push` (see [Concepts](./concepts.md#routes)). An action's arguments are in the `toolCalls` of the `assistant` message; its result is in the `tool` message with the same `toolCallId`.
+Every message has an `id` and a `createdAt`. The `route` says how the turn was resolved: `transport`, `direct`, `capture`, `agent` or `push` (see [Concepts](./concepts.md#routes)). An action's arguments are in the `toolCalls` of the `assistant` message; its result is in the `tool` message with the same `toolCallId`. A call id appears once per conversation: a repeated `action.call` is not recorded or run again ([Security](./security.md)).
 
 An `assistant` message may carry `source` parts and text parts with `citations`: where the answer came from ([Sources and citations](./sources.md)). They are stored with the message and not sent back to the backend.
 

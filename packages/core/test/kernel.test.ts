@@ -198,6 +198,34 @@ describe('transport route', () => {
     expect(transport.requests).toHaveLength(1)
   })
 
+  it('runs a call id once per conversation, even when the transport repeats it', async () => {
+    const call: Stimulus = { type: 'action.call', callId: 'c1', name: 'save_note', args: { text: 'a' } }
+    const transport = scripted([
+      [call, call],
+      [call, { type: 'message.delta', messageId: 'a2', delta: 'Salvo.' }],
+      [call, { type: 'message.delta', messageId: 'a3', delta: 'Já estava salvo.' }],
+    ])
+    const handler = vi.fn(() => 'ok')
+    const errors: string[] = []
+    const h4b = await createH4B({
+      plugins: [transportPlugin(transport)],
+      actions: [{ name: 'save_note', description: 'Save a note', handler }],
+    }).start()
+    h4b.on('error', ({ source }) => errors.push(source))
+
+    h4b.send('salva')
+    await idle(h4b)
+    h4b.send('salva de novo')
+    await idle(h4b)
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(transport.requests).toHaveLength(3)
+    expect(h4b.messages.filter((m) => m.role === 'tool')).toHaveLength(1)
+    expect(h4b.messages.flatMap((m) => (m.role === 'assistant' ? (m.toolCalls ?? []) : []))).toHaveLength(1)
+    expect(errors).toEqual(['action.call', 'action.call', 'action.call'])
+    expect(textOf(h4b.messages.at(-1)!)).toBe('Já estava salvo.')
+  })
+
   it('answers unknown or invalid actions with an error result instead of crashing', async () => {
     const transport = scripted([
       [

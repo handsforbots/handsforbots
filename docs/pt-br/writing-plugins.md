@@ -88,15 +88,17 @@ const meuTransporte: Transport = {
 }
 ```
 
-Ações pedidas com `action.call` são executadas pelo kernel, que chama `run` de novo com os resultados no histórico (até `maxActionRoundtrips`). Emita `action.result` para ferramentas que o seu backend já executou. A maioria das APIs HTTP cabe no [`http()`](./plugins.md#transport-http) sem escrever um transporte.
+Ações pedidas com `action.call` são executadas pelo kernel, que chama `run` de novo com os resultados no histórico (até `maxActionRoundtrips`). Emita `action.result` para ferramentas que o seu backend já executou. Dê a cada chamada um `callId` próprio: um id de chamada roda no máximo uma vez por conversa, e um repetido é ignorado com um `error` (`source: 'action.call'`). A maioria das APIs HTTP cabe no [`http()`](./plugins.md#transport-http) sem escrever um transporte.
 
 ## Testes
 
 Plugins são código comum: crie uma instância, forneça um transporte roteirizado e aguarde os turnos.
 
 ```ts
+import { scriptedTransport } from '@handsforbots/testkit'
+
 const h4b = await createH4B({ plugins: [weather({ apiUrl: '/x' })] }).start()
-h4b.provide('transport', { name: 't', async *run() { yield { type: 'action.call', callId: '1', name: 'show_weather', args: { city: 'Lisboa' } } } })
+h4b.provide('transport', scriptedTransport([[{ type: 'action.call', callId: 'c1', name: 'show_weather', args: { city: 'Lisboa' } }]]))
 const { messages } = await h4b.ask('clima em Lisboa?')
 ```
 

@@ -58,6 +58,8 @@ Chat-format history includes recorded actions as assistant `tool_calls` + `tool`
 
 Every outcome of a call made inside the kernel (assistant tool call, direct command, `runAction`, agent) is appended to the history as a `tool` message, with `result` or `error`, and emitted as `action.invoked`.
 
+A call id runs at most once per conversation. If the transport repeats an `action.call` with an id already in the history, the repeat is ignored and the kernel emits `error` with `source: 'action.call'`, so the backend must give every tool call its own id. Handlers receive it as `ctx.callId`: use it as an idempotency key when the action writes on your server.
+
 ## Stimuli a backend (or `push`) can send
 
 `message.start | message.delta | message.part | message.end` (assistant text and parts; a `source` part replaces the one with the same `id`), `message.citations` (citations into the last text part, UTF-16 positions; see `docs/en-us/sources.md`), `action.call` (client runs an action), `action.result` (a tool the backend already ran — recorded), `ui.render` (rich content; without `slot` it becomes a `data` part named `ui` in the message, kept in history), `ui.effect` (one-off GUI effect, not in history), `state.snapshot | state.patch` (shared state, JSON Patch), `audio`, `custom`, `error`.
