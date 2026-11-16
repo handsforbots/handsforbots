@@ -11,7 +11,7 @@
 
 ![Hands for Bots](https://img.shields.io/badge/[•__•]-Hands_for_Bots-purple?style=social) &nbsp; ![Collaborative GUI](https://img.shields.io/badge/🖐-Collaborative_GUI-purple?style=social) &nbsp; ![Multimodal](https://img.shields.io/badge/🎙-Multimodal-purple?style=social)
 
-[![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org) &nbsp; [![MIT License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge&color=%23750014)](./LICENSE.md) &nbsp; [![GitHub Repo](https://img.shields.io/badge/github-%23323330.svg?style=for-the-badge&logo=github&logoColor=%23FFFFFF)](https://github.com/alexlana/handsforbots)
+[![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org) &nbsp; [![MIT License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge&color=%23750014)](./LICENSE.md) &nbsp; [![GitHub Repo](https://img.shields.io/badge/github-%23323330.svg?style=for-the-badge&logo=github&logoColor=%23FFFFFF)](https://github.com/handsforbots/handsforbots)
 
 </div>
 

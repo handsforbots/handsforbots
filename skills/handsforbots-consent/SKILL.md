@@ -5,7 +5,7 @@ description: Wire Hands for Bots v2 to a consent tool (cookie banner, CMP or cus
 
 # Hands for Bots v2 — consent
 
-H4B does **not** draw a banner and does **not** store decisions. The site's consent tool does both; H4B follows what it is told. Full guide: `docs/en-us/consent.md` (`docs/pt-br/consent.md`) in https://github.com/alexlana/handsforbots. Decision: ADR 0010. Related: the `handsforbots-persistence` skill.
+H4B does **not** draw a banner and does **not** store decisions. The site's consent tool does both; H4B follows what it is told. Full guide: `docs/en-us/consent.md` (`docs/pt-br/consent.md`) in https://github.com/handsforbots/handsforbots. Decision: ADR 0010. Related: the `handsforbots-persistence` skill.
 
 ## Setup
 

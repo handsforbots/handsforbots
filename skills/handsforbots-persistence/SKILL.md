@@ -14,7 +14,7 @@ Three independent decisions, plus tabs. Settle each one explicitly; the defaults
 | **Where** it is stored and **how long** | `@handsforbots/storage-local` or `@handsforbots/storage-backend` | Not stored (page lifetime only) |
 | Tabs | `@handsforbots/tab-sync` | Without it, tabs share browser storage but not live state |
 
-Full guide: `docs/en-us/persistence.md` (`docs/pt-br/persistence.md`) in https://github.com/alexlana/handsforbots. Decisions: ADR 0008 and 0009.
+Full guide: `docs/en-us/persistence.md` (`docs/pt-br/persistence.md`) in https://github.com/handsforbots/handsforbots. Decisions: ADR 0008 and 0009.
 
 **Consent:** with `createH4B({ consent })`, both storages require the purpose `persistence`: they mount only while it is granted and erase everything they kept when it is withdrawn (the conversation on screen stays). See the `handsforbots-consent` skill.
 

@@ -5,7 +5,7 @@ description: Make a Hands for Bots v2 (H4B) assistant speak with the right voice
 
 # Hands for Bots v2 — speech synthesis and voice effects
 
-Full guide: `docs/en-us/speech.md` (`docs/pt-br/speech.md`) in https://github.com/alexlana/handsforbots. Decision: `docs/adr/0013-sintese-de-voz-e-efeitos.md`. Sources and measured numbers: `docs/en-us/references.md#speech-synthesis-and-effects`. When the project's code disagrees with this file, trust the code (`packages/voice/src/voice.ts`, `packages/voice-models/src`, `packages/voice-effects/src`). Interruption, barge-in and the echo filter are in the `handsforbots-conversation` skill.
+Full guide: `docs/en-us/speech.md` (`docs/pt-br/speech.md`) in https://github.com/handsforbots/handsforbots. Decision: `docs/adr/0013-sintese-de-voz-e-efeitos.md`. Sources and measured numbers: `docs/en-us/references.md#speech-synthesis-and-effects`. When the project's code disagrees with this file, trust the code (`packages/voice/src/voice.ts`, `packages/voice-models/src`, `packages/voice-effects/src`). Interruption, barge-in and the echo filter are in the `handsforbots-conversation` skill.
 
 ## Pick the engine
 

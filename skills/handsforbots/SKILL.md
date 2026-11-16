@@ -7,7 +7,7 @@ description: Integrate Hands for Bots v2 (H4B, @handsforbots/* packages) into a 
 
 H4B v2 is a headless TypeScript kernel plus plugins. It is **not a chat window**: it sits between people, the host GUI and any agent. Inputs become **signals**, signals become **turns**, backends answer with **stimuli** (messages, action calls, UI effects, state). GUI capabilities are declared once as **actions** and become available to the assistant (tool calls), to the user (direct commands, no LLM round trip) and to browser agents (WebMCP), under the same validation, confirmation and origin rules.
 
-Source of truth: the repository docs, `docs/en-us/*.md` (`docs/pt-br` in Portuguese), at https://github.com/alexlana/handsforbots. `docs/en-us/plugins.md` lists every package and option. v1 (`handsforbots/Bot.js`, `[•{...}•]` tags, `bot.eventEmitter`) is gone and nothing is compatible: if the project still uses v1, see `docs/en-us/migrating-from-v1.md` before touching it.
+Source of truth: the repository docs, `docs/en-us/*.md` (`docs/pt-br` in Portuguese), at https://github.com/handsforbots/handsforbots. `docs/en-us/plugins.md` lists every package and option. v1 (`handsforbots/Bot.js`, `[•{...}•]` tags, `bot.eventEmitter`) is gone and nothing is compatible: if the project still uses v1, see `docs/en-us/migrating-from-v1.md` before touching it.
 
 ## Before writing code
 

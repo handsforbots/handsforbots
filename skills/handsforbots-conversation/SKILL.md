@@ -5,7 +5,7 @@ description: Build conversation behavior on Hands for Bots v2 (H4B) - what happe
 
 # Hands for Bots v2 — interruption and voice conversation
 
-Full guide: `docs/en-us/conversation.md` (`docs/pt-br/conversation.md`) in https://github.com/alexlana/handsforbots. Decision: `docs/adr/0011-interrupcao-e-fim-de-turno.md`. Sources and vendor figures: `docs/en-us/references.md`. When the code in the project disagrees with this file, trust the code (`packages/core/src/kernel.ts`, `packages/voice/src/voice.ts`).
+Full guide: `docs/en-us/conversation.md` (`docs/pt-br/conversation.md`) in https://github.com/handsforbots/handsforbots. Decision: `docs/adr/0011-interrupcao-e-fim-de-turno.md`. Sources and vendor figures: `docs/en-us/references.md`. When the code in the project disagrees with this file, trust the code (`packages/core/src/kernel.ts`, `packages/voice/src/voice.ts`).
 
 ## Input while the assistant is busy
 

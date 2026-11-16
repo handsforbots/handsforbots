@@ -7,7 +7,7 @@ description: Read and extend the Hands for Bots v2 conversation history (h4b.mes
 
 The history is `h4b.messages`: `user`, `assistant` and `tool` messages, each with `id`, `createdAt` and the `route` that produced it. Every action that runs inside the kernel is recorded there — whether the assistant, the user or a browser agent called it. Extend this history instead of building a parallel store: it is what the backend receives, what the widget draws, what `storage-local` saves and what `tab-sync` merges.
 
-Full guide: `docs/en-us/history.md` (`docs/pt-br/history.md`) in https://github.com/alexlana/handsforbots.
+Full guide: `docs/en-us/history.md` (`docs/pt-br/history.md`) in https://github.com/handsforbots/handsforbots.
 
 ## Choose the mechanism first
 
