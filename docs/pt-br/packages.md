@@ -20,7 +20,7 @@ Os plugins não importam uns aos outros em tempo de execução: eles encontram o
 npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsforbots/widget@alpha
 ```
 
-- Os pacotes do H4B têm uma versão só e saem com a tag `alpha` enquanto a v2 está em alpha: acrescente `@alpha` (ou fixe `2.0.0-alpha.0`).
+- Os pacotes do H4B têm uma versão só e saem com a tag `alpha` enquanto a v2 está em alpha: acrescente `@alpha` (ou fixe `2.0.0-alpha.1`).
 - A maioria dos pacotes declara `@handsforbots/core` como dependência par (peer): instale-o você, uma vez. A linha de instalação de cada pacote abaixo já inclui os pacotes `@handsforbots` de que ele precisa.
 - Módulos ES com tipos TypeScript incluídos. Rodam no navegador; as entradas `/server` (`cues`, `conversation-state`, `observability`) e o `voice-effects` rodam no Node também.
 - Os esquemas das ações aceitam qualquer biblioteca [Standard Schema](https://standardschema.dev) (Zod, Valibot, ArkType) ou JSON Schema puro. Nenhuma é obrigatória.

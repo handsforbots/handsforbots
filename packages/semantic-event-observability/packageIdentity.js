@@ -16,7 +16,7 @@ export const PACKAGE_SCOPE = '@handsforbots'
 export const PACKAGE_NAME = `${PACKAGE_SCOPE}/${PACKAGE_SLUG}`
 
 /** Semantic version — keep in sync with package.json when publishing. */
-export const PACKAGE_VERSION = '0.1.0'
+export const PACKAGE_VERSION = '0.1.1'
 
 /**
  * Derive stable identifiers from PACKAGE_SLUG.

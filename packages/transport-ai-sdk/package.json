@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/transport-ai-sdk",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0-alpha.1",
   "description": "Transport (pick one). Connects Hands for Bots to a Vercel AI SDK route (UI message stream).",
   "keywords": [
     "handsforbots",
