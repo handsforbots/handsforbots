@@ -1,6 +1,6 @@
 # @handsforbots/voice
 
-Voice for Hands for Bots: pluggable speech-to-text and text-to-speech (browser or cloud), push-to-talk, hands-free and barge-in.
+Plugin. Voice for Hands for Bots: pluggable speech-to-text and text-to-speech (browser or cloud), push-to-talk, hands-free and barge-in.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,6 +1,6 @@
 # @handsforbots/transport-http
 
-Generic HTTP turn transport for Hands for Bots (sessions, SSE, tool calls) with UniversalLLM and OpenAI-compatible presets.
+Transport (pick one). Connects Hands for Bots to your HTTP API (sessions, SSE, tool calls), with UniversalLLM and OpenAI-compatible presets.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

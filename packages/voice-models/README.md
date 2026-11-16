@@ -1,6 +1,6 @@
 # @handsforbots/voice-models
 
-Neural text-to-speech in the browser for @handsforbots/voice: Piper, Kokoro and transformers.js pipelines, models from Hugging Face, any URL or a local file, downloaded with progress and cached.
+Add-on. Neural text-to-speech in the browser for @handsforbots/voice: Piper, Kokoro and transformers.js pipelines, models from Hugging Face, any URL or a local file, downloaded with progress and cached.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

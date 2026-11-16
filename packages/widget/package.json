@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/widget",
   "version": "2.0.0-alpha.0",
-  "description": "Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…",
+  "description": "UI. Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-ui"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#widget",
   "repository": {

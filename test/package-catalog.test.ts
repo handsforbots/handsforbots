@@ -7,6 +7,8 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8')
 
 type Manifest = {
   name: string
+  description?: string
+  keywords?: string[]
   peerDependencies?: Record<string, string>
   peerDependenciesMeta?: Record<string, { optional?: boolean }>
   publishConfig?: { access?: string }
@@ -82,6 +84,30 @@ describe('package catalog', () => {
     const text = read('skills/handsforbots/references/packages.md')
     const missing = packages.filter((pkg) => !text.includes(`| \`${pkg.dir}\` |`)).map((pkg) => pkg.manifest.name)
     expect(missing).toEqual([])
+  })
+
+  it('every description starts with its role and the keywords name it, so the npm listing reads at a glance', () => {
+    const roles: Record<string, string> = {
+      'Start here': 'core',
+      'Transport (pick one)': 'transport',
+      UI: 'ui',
+      Plugin: 'plugin',
+      'Add-on': 'addon',
+      Standalone: 'standalone',
+      Dev: 'dev',
+    }
+    const wrong = packages.flatMap(({ dir, manifest }) => {
+      const { description = '', keywords = [] } = manifest
+      const label = Object.keys(roles).find((r) => description.replace(/^⭐ /, '').startsWith(`${r}. `))
+      if (!label) return [`${manifest.name}: description has no role`]
+      if (!keywords.includes('handsforbots') || !keywords.includes(`h4b-${roles[label]}`))
+        return [`${manifest.name}: keywords lack handsforbots or h4b-${roles[label]}`]
+      const readme = read(`packages/${dir}/README.md`)
+      if (dir !== 'semantic-event-observability' && !readme.includes(`\n${description}\n`))
+        return [`${manifest.name}: README summary differs from the description`]
+      return []
+    })
+    expect(wrong).toEqual([])
   })
 
   it('every package is published publicly from this repository', () => {

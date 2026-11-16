@@ -1,6 +1,6 @@
 # @handsforbots/menu
 
-Direct commands (no LLM) for Hands for Bots: slash, patterns and fuzzy phrases.
+Plugin. Direct commands (no LLM) for Hands for Bots: slash, patterns and fuzzy phrases.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

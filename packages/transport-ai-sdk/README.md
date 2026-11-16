@@ -1,6 +1,6 @@
 # @handsforbots/transport-ai-sdk
 
-Vercel AI SDK (UI message stream) transport for Hands for Bots.
+Transport (pick one). Connects Hands for Bots to a Vercel AI SDK route (UI message stream).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

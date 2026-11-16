@@ -1,6 +1,6 @@
 # @handsforbots/transport-agui
 
-AG-UI transport for Hands for Bots.
+Transport (pick one). Connects Hands for Bots to an AG-UI agent (LangGraph, Mastra, PydanticAI, CopilotKit runtime…).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

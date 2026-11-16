@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/transport-agui",
   "version": "2.0.0-alpha.0",
-  "description": "AG-UI transport for Hands for Bots.",
+  "description": "Transport (pick one). Connects Hands for Bots to an AG-UI agent (LangGraph, Mastra, PydanticAI, CopilotKit runtime…).",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-transport"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#transport-agui",
   "repository": {

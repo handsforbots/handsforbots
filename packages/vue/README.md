@@ -1,6 +1,6 @@
 # @handsforbots/vue
 
-Vue bindings for Hands for Bots.
+UI. Vue bindings for Hands for Bots: plugin and composables for messages, actions, context and stimuli.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/transport-rasa",
   "version": "2.0.0-alpha.0",
-  "description": "Rasa (REST channel) transport for Hands for Bots.",
+  "description": "Transport (pick one). Connects Hands for Bots to Rasa (REST channel).",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-transport"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#transport-rasa",
   "repository": {

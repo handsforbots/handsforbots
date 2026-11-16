@@ -1,6 +1,6 @@
 # @handsforbots/storage-backend
 
-Keeps the Hands for Bots conversation on your backend, with retention the server enforces.
+Plugin. Keeps the Hands for Bots conversation on your backend, with retention the server enforces.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

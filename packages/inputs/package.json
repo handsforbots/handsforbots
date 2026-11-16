@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/inputs",
   "version": "2.0.0-alpha.0",
-  "description": "Multimodal inputs for Hands for Bots: camera (photos, video frames), files, GUI events (successor of Poke) and sensors.",
+  "description": "Plugin. Multimodal inputs for Hands for Bots: camera (photos, video frames), files, GUI events (successor of Poke) and sensors.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#inputs",
   "repository": {

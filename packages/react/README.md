@@ -1,6 +1,6 @@
 # @handsforbots/react
 
-React bindings for Hands for Bots.
+UI. React bindings for Hands for Bots: provider and hooks for messages, actions, context and stimuli.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

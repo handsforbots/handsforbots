@@ -1,6 +1,6 @@
 # @handsforbots/voice-effects
 
-Declarative effects for synthesized speech: a JSON chain in Web Audio terms, parameters described like Web Audio Modules, SSML prosody, presets, offline rendering and export to FFmpeg filtergraphs and SSML.
+Standalone. Declarative effects for synthesized speech: a JSON chain in Web Audio terms, parameters described like Web Audio Modules, SSML prosody, presets, offline rendering and export to FFmpeg filtergraphs and SSML.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

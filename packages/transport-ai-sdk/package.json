@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/transport-ai-sdk",
   "version": "2.0.0-alpha.0",
-  "description": "Vercel AI SDK (UI message stream) transport for Hands for Bots.",
+  "description": "Transport (pick one). Connects Hands for Bots to a Vercel AI SDK route (UI message stream).",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-transport"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#transport-ai-sdk",
   "repository": {

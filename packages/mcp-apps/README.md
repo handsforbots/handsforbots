@@ -1,6 +1,6 @@
 # @handsforbots/mcp-apps
 
-Renders MCP Apps (ui:// resources) in sandboxed iframes inside Hands for Bots conversations, bridging their tool calls to H4B actions.
+Plugin. Renders MCP Apps (ui:// resources) in sandboxed iframes inside Hands for Bots conversations, bridging their tool calls to H4B actions.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,6 +1,6 @@
 # @handsforbots/inputs
 
-Multimodal inputs for Hands for Bots: camera (photos, video frames), files, GUI events (successor of Poke) and sensors.
+Plugin. Multimodal inputs for Hands for Bots: camera (photos, video frames), files, GUI events (successor of Poke) and sensors.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,6 +1,6 @@
 # @handsforbots/testkit
 
-Test helpers and a transport conformance suite for Hands for Bots plugins.
+Dev. Test helpers and a transport conformance suite for Hands for Bots apps and plugins.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/core",
   "version": "2.0.0-alpha.0",
-  "description": "Headless multimodal and action layer between users, GUIs and agents.",
+  "description": "⭐ Start here. Hands for Bots kernel: users, the GUI and agents act on the same page through one action layer. Install this first, then one transport.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-core"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#core",
   "repository": {

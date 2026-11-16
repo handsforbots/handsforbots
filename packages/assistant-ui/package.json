@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/assistant-ui",
   "version": "2.0.0-alpha.0",
-  "description": "assistant-ui runtime for Hands for Bots: use assistant-ui components as the conversation surface over any H4B transport.",
+  "description": "UI. assistant-ui runtime for Hands for Bots: use assistant-ui components as the conversation surface over any H4B transport.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-ui"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#assistant-ui",
   "repository": {

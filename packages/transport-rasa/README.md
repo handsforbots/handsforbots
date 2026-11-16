@@ -1,6 +1,6 @@
 # @handsforbots/transport-rasa
 
-Rasa (REST channel) transport for Hands for Bots.
+Transport (pick one). Connects Hands for Bots to Rasa (REST channel).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

@@ -1,6 +1,6 @@
 # @handsforbots/copilotkit
 
-CopilotKit bridge for Hands for Bots: actions as frontend tools, context, and voice/menu/sensor input through the CopilotKit agent.
+UI. CopilotKit bridge for Hands for Bots: actions as frontend tools, context, and voice/menu/sensor input through the CopilotKit agent.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

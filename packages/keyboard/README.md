@@ -1,6 +1,6 @@
 # @handsforbots/keyboard
 
-Keyboard shortcuts for Hands for Bots: push-to-talk, interrupt, command palette.
+Plugin. Keyboard shortcuts for Hands for Bots: push-to-talk, interrupt, command palette.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

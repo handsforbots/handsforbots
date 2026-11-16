@@ -1,6 +1,6 @@
 # @handsforbots/tab-sync
 
-Keeps the Hands for Bots conversation in sync across tabs and windows (BroadcastChannel).
+Plugin. Keeps the Hands for Bots conversation in sync across tabs and windows (BroadcastChannel).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

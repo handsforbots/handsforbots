@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/keyboard",
   "version": "2.0.0-alpha.0",
-  "description": "Keyboard shortcuts for Hands for Bots: push-to-talk, interrupt, command palette.",
+  "description": "Plugin. Keyboard shortcuts for Hands for Bots: push-to-talk, interrupt, command palette.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#keyboard",
   "repository": {

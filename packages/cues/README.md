@@ -1,6 +1,6 @@
 # @handsforbots/cues
 
-Cues for Hands for Bots: closed-vocabulary presentation categories (tone, scene, urgency…) set by the backend, an action or content rules, with repetition counts and policies.
+Plugin. Cues for Hands for Bots: closed-vocabulary presentation categories (tone, scene, urgency…) set by the backend, an action or content rules, with repetition counts and policies.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

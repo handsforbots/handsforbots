@@ -1,6 +1,6 @@
 # @handsforbots/observability
 
-Semantic observability for Hands for Bots v2: turns, routes, actions and signals as logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith).
+Plugin. Semantic observability for Hands for Bots v2: turns, routes, actions and signals as logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

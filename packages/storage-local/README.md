@@ -1,6 +1,6 @@
 # @handsforbots/storage-local
 
-Persists the Hands for Bots conversation in localStorage/sessionStorage with an inactivity timeout.
+Plugin. Persists the Hands for Bots conversation in localStorage/sessionStorage with an inactivity timeout.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

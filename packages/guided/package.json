@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/guided",
   "version": "2.0.0-alpha.0",
-  "description": "Guided tours and on-screen highlights that assistants, agents and users can trigger (successor of v1 GUIDed).",
+  "description": "Plugin. Guided tours and on-screen highlights that assistants, agents and users can trigger (successor of v1 GUIDed).",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#guided",
   "repository": {

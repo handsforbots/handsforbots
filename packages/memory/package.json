@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/memory",
   "version": "2.0.0-alpha.0",
-  "description": "Hands for Bots memory policy: how many turns are sent and kept, and compaction of older turns. Mounted by default by @handsforbots/core.",
+  "description": "Plugin. Hands for Bots memory policy: how many turns are sent and kept, and compaction of older turns. Mounted by default by @handsforbots/core.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#memory",
   "repository": {

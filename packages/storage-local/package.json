@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/storage-local",
   "version": "2.0.0-alpha.0",
-  "description": "Persists the Hands for Bots conversation in localStorage/sessionStorage with an inactivity timeout.",
+  "description": "Plugin. Persists the Hands for Bots conversation in localStorage/sessionStorage with an inactivity timeout.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#storage-local",
   "repository": {

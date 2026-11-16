@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/testkit",
   "version": "2.0.0-alpha.0",
-  "description": "Test helpers and a transport conformance suite for Hands for Bots plugins.",
+  "description": "Dev. Test helpers and a transport conformance suite for Hands for Bots apps and plugins.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-dev"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#testkit",
   "repository": {

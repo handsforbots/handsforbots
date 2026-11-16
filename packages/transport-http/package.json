@@ -1,7 +1,12 @@
 {
   "name": "@handsforbots/transport-http",
   "version": "2.0.0-alpha.0",
-  "description": "Generic HTTP turn transport for Hands for Bots (sessions, SSE, tool calls) with UniversalLLM and OpenAI-compatible presets.",
+  "description": "Transport (pick one). Connects Hands for Bots to your HTTP API (sessions, SSE, tool calls), with UniversalLLM and OpenAI-compatible presets.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-transport"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#transport-http",
   "repository": {

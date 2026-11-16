@@ -1,6 +1,6 @@
 # @handsforbots/widget
 
-Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…
+UI. Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

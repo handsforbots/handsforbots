@@ -1,6 +1,6 @@
 # @handsforbots/consent
 
-Consent rule sets (LGPD, GDPR, CCPA starting points), loaders for JSON/YAML rules, region helpers and anonymization for Hands for Bots.
+Add-on. Consent rule sets for Hands for Bots (LGPD, GDPR, CCPA starting points), JSON/YAML loaders, region helpers and anonymization.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 

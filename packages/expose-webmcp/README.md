@@ -1,6 +1,6 @@
 # @handsforbots/expose-webmcp
 
-Expose Hands for Bots actions to browser agents through WebMCP (document.modelContext).
+Plugin. Expose Hands for Bots actions to browser agents through WebMCP (document.modelContext).
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 
