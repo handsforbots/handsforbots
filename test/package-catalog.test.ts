@@ -110,6 +110,23 @@ describe('package catalog', () => {
     expect(wrong).toEqual([])
   })
 
+  it('the core README, the npm front door, links every other package', () => {
+    const text = read('packages/core/README.md')
+    const missing = packages
+      .filter((pkg) => pkg.dir !== 'core' && !text.includes(`(https://www.npmjs.com/package/${pkg.manifest.name})`))
+      .map((pkg) => pkg.manifest.name)
+    expect(missing).toEqual([])
+  })
+
+  it.each(['README.md', 'docs/pt-br/README.md'])('%s lists every capability package', (doc) => {
+    const text = read(doc)
+    const missing = packages
+      .filter((pkg) => /^(Plugin|Add-on|Standalone|Dev)\. /.test(pkg.manifest.description ?? ''))
+      .filter((pkg) => !text.includes(`(https://www.npmjs.com/package/${pkg.manifest.name})`))
+      .map((pkg) => pkg.manifest.name)
+    expect(missing).toEqual([])
+  })
+
   it('every package is published publicly from this repository', () => {
     const wrong = packages
       .filter(
