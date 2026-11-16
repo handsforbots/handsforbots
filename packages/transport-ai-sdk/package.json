@@ -3,12 +3,22 @@
   "version": "2.0.0-alpha.0",
   "description": "Vercel AI SDK (UI message stream) transport for Hands for Bots.",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#transport-ai-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/transport-ai-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

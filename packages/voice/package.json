@@ -3,12 +3,22 @@
   "version": "2.0.0-alpha.0",
   "description": "Voice for Hands for Bots: pluggable speech-to-text and text-to-speech (browser or cloud), push-to-talk, hands-free and barge-in.",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#voice",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/voice"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

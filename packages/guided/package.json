@@ -3,12 +3,22 @@
   "version": "2.0.0-alpha.0",
   "description": "Guided tours and on-screen highlights that assistants, agents and users can trigger (successor of v1 GUIDed).",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#guided",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/guided"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": true,
   "exports": {
     ".": "./src/index.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

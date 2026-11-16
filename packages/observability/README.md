@@ -1,0 +1,21 @@
+# @handsforbots/observability
+
+Semantic observability for Hands for Bots v2: turns, routes, actions and signals as logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith).
+
+Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
+
+## Install
+
+```bash
+npm install @handsforbots/observability@alpha @handsforbots/core@alpha
+```
+
+## Documentation
+
+- [This package](https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#observability)
+- [Getting started](https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/getting-started.md)
+- [Documentação em português](https://github.com/handsforbots/handsforbots/blob/main/docs/pt-br/README.md)
+
+## License
+
+MIT

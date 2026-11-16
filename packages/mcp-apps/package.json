@@ -3,12 +3,22 @@
   "version": "2.0.0-alpha.0",
   "description": "Renders MCP Apps (ui:// resources) in sandboxed iframes inside Hands for Bots conversations, bridging their tool calls to H4B actions.",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#mcp-apps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/mcp-apps"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

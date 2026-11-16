@@ -3,6 +3,15 @@
   "version": "2.0.0-alpha.0",
   "description": "Explicit conversation state for Hands for Bots: a small, structured, auditable record of topic, goal, entities, decisions, sourced facts and pending items, changed only by checked operations and sent with every request.",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#conversation-state",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/conversation-state"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -10,6 +19,7 @@
     "./server": "./src/server.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

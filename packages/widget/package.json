@@ -1,8 +1,17 @@
 {
   "name": "@handsforbots/widget",
   "version": "2.0.0-alpha.0",
-  "description": "Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue\u2026",
+  "description": "Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#widget",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/widget"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": true,
   "exports": {
@@ -10,6 +19,7 @@
     "./focus": "./src/focus.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

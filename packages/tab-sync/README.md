@@ -1,0 +1,21 @@
+# @handsforbots/tab-sync
+
+Keeps the Hands for Bots conversation in sync across tabs and windows (BroadcastChannel).
+
+Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
+
+## Install
+
+```bash
+npm install @handsforbots/tab-sync@alpha @handsforbots/core@alpha
+```
+
+## Documentation
+
+- [This package](https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#tab-sync)
+- [Getting started](https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/getting-started.md)
+- [Documentação em português](https://github.com/handsforbots/handsforbots/blob/main/docs/pt-br/README.md)
+
+## License
+
+MIT

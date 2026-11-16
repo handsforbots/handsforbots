@@ -1,8 +1,17 @@
 {
   "name": "@handsforbots/cues",
   "version": "2.0.0-alpha.0",
-  "description": "Cues for Hands for Bots: closed-vocabulary presentation categories (tone, scene, urgency\u2026) set by the backend, an action or content rules, with repetition counts and policies.",
+  "description": "Cues for Hands for Bots: closed-vocabulary presentation categories (tone, scene, urgency…) set by the backend, an action or content rules, with repetition counts and policies.",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#cues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/cues"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -10,6 +19,7 @@
     "./server": "./src/server.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

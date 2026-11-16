@@ -3,6 +3,15 @@
   "version": "2.0.0-alpha.0",
   "description": "Semantic observability for Hands for Bots v2: turns, routes, actions and signals as logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith).",
   "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#observability",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/observability"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -10,6 +19,7 @@
     "./server": "./src/server.ts"
   },
   "publishConfig": {
+    "access": "public",
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
