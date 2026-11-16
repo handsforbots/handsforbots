@@ -42,10 +42,28 @@ const h4b = createH4B({
 await h4b.start()
 ```
 
+## Install
+
+```bash
+npm install @handsforbots/core@alpha @handsforbots/transport-agui@alpha @handsforbots/widget@alpha
+```
+
+Add only the packages your interface uses: [Packages](./docs/en-us/packages.md) says what each one does, what it needs and what it works with.
+
+### Agent skills
+
+Coding agents integrate H4B better with its [skills](./skills/README.md). In Claude Code:
+
+```
+/plugin marketplace add handsforbots/handsforbots
+/plugin install handsforbots@handsforbots
+```
+
 ## Documentation
 
 - [Getting started](./docs/en-us/getting-started.md)
 - [Concepts](./docs/en-us/concepts.md): signals, turns, stimuli, routes, sync/async
+- [Packages](./docs/en-us/packages.md): what each package is for, what it needs, what it works with
 - [Plugins](./docs/en-us/plugins.md): every package and its options
 - [Writing plugins](./docs/en-us/writing-plugins.md)
 - [History](./docs/en-us/history.md): reading it, recording GUI decisions, timelines

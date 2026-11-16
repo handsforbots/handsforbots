@@ -56,3 +56,5 @@ pnpm --filter @handsforbots/example-react-agui dev
 ```
 
 Docs: [docs/en-us](../docs/en-us/getting-started.md) · [docs/pt-br](../docs/pt-br/getting-started.md). Architecture and plan: [ROADMAP.md](../ROADMAP.md). Examples: [react-agui](../examples/react-agui), [vite (Rasa)](../examples/README.md).
+
+Choosing packages, what each needs and what it works with: [docs/en-us/packages.md](../docs/en-us/packages.md) · [docs/pt-br/packages.md](../docs/pt-br/packages.md).

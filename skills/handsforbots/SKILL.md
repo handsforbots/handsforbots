@@ -1,6 +1,6 @@
 ---
 name: handsforbots
-description: Integrate Hands for Bots v2 (H4B, @handsforbots/* packages) into a web app - create the kernel with createH4B, pick a transport (AG-UI, Rasa, HTTP/UniversalLLM, OpenAI-compatible, Vercel AI SDK, CopilotKit), declare GUI actions the assistant, the user and browser agents can trigger, send context signals, add the <h4b-chat> widget or React/Vue bindings, voice, menu, guided tours, storage and tab sync, and write plugins. Use whenever code imports @handsforbots/*, calls createH4B, h4b.actions.register, h4b.signal/ask/runAction/push, or the user mentions Hands for Bots, H4B or HfB. For the conversation history (h4b.messages, recording GUI decisions, timelines), also load handsforbots-history. For consent tools, cookie banners, LGPD/GDPR or anonymization, also load handsforbots-consent. For messages sent while the assistant answers, stop buttons or continuous voice conversation (hands-free, end of turn, barge-in), also load handsforbots-conversation.
+description: Integrate Hands for Bots v2 (H4B, @handsforbots/* packages) into a web app - create the kernel with createH4B, pick a transport (AG-UI, Rasa, HTTP/UniversalLLM, OpenAI-compatible, Vercel AI SDK, CopilotKit), declare GUI actions the assistant, the user and browser agents can trigger, send context signals, add the <h4b-chat> widget or React/Vue bindings, voice, menu, guided tours, storage and tab sync, and write plugins. Use whenever code imports @handsforbots/*, calls createH4B, h4b.actions.register, h4b.signal/ask/runAction/push, or the user mentions Hands for Bots, H4B or HfB. For the conversation history (h4b.messages, recording GUI decisions, timelines), also load handsforbots-history. For consent tools, cookie banners, LGPD/GDPR or anonymization, also load handsforbots-consent. For messages sent while the assistant answers, stop buttons or continuous voice conversation (hands-free, end of turn, barge-in), also load handsforbots-conversation. For choosing and wiring a transport or backend (AG-UI, HTTP, AI SDK, Rasa), CopilotKit, assistant-ui, WebMCP browser agents or MCP Apps, also load handsforbots-integrations.
 ---
 
 # Hands for Bots v2 — integration
@@ -11,8 +11,8 @@ Source of truth: the repository docs, `docs/en-us/*.md` (`docs/pt-br` in Portugu
 
 ## Before writing code
 
-1. Check how the project gets the packages. They are not on npm yet: inside the H4B monorepo they resolve through the pnpm workspace; elsewhere they come from a build (`pnpm build` → `dist/`) or a local link. Don't invent install commands.
-2. Find the transport. It decides what the model receives (history, context, tools) — see the table in `references/runtime.md`.
+1. Pick the packages by what the task needs and install them with the project's package manager, `@alpha` tag while v2 is in alpha: `npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsforbots/widget@alpha`. `core` is a peer of almost every package: install it explicitly. Imports, peers and third-party needs of every package: `references/packages.md`. Inside the H4B monorepo itself, packages come from the pnpm workspace instead.
+2. Find the transport. It decides what the model receives (history, context, tools) — see the table in `references/runtime.md` and, for the backend side, the `handsforbots-integrations` skill.
 3. List the GUI capabilities the assistant should drive. They become actions; most of the integration is designing them well.
 
 ## Minimal setup
@@ -85,6 +85,40 @@ React/Vue: `useContextSignal(key, value)`. Declarative HTML (`data-h4b-context`,
 | Show where an answer came from (RAG) | Backend sends `source` parts + `message.citations` (positions in the text, no `[c3]` markers); render with `sourceView(message)` / `useSources(message)`. Group sections of one article with `sourceGroups(view)`. Links only through `safeSourceUrl` (widget does it). See `docs/en-us/sources.md` |
 
 Everything goes through **one queue**: turns, `runAction` and `push` run one at a time, in order. A `runAction` issued during a long LLM turn waits for it. Typed and spoken messages are the exception: by default one sent during a reply interrupts it (the reply keeps what was shown, `interrupted: true`), and one sent before any reply came out is joined with the pending message. Choose with `createH4B({ input: { whileBusy: 'interrupt' | 'merge' | 'queue' } })` or `h4b.setInput()` at runtime; `ask()` queues unless given `whileBusy`. Full rules: the `handsforbots-conversation` skill. Details and pitfalls: `references/runtime.md`.
+
+## Direct commands, tours, shortcuts and page inputs
+
+These run on the device and reuse your actions; add them when the task asks for what they do, whatever the product.
+
+```ts
+import { menu } from '@handsforbots/menu'
+import { guided } from '@handsforbots/guided'
+import { keyboard } from '@handsforbots/keyboard'
+import { gui, files, camera } from '@handsforbots/inputs'
+
+createH4B({
+  plugins: [
+    transport,
+    menu({
+      language: 'en',
+      commands: [
+        { action: 'filter_orders', label: 'Late orders', slash: 'late', phrases: ['late orders'], args: { status: 'late' } },
+        { action: 'filter_orders', patterns: ['show {status} orders'], args: ({ status }) => ({ status }) },
+      ],
+    }),
+    guided({ tours: { onboarding: [{ target: '#new_order', text: 'Create an order here.' }, { text: 'That is all!' }] } }),
+    keyboard(), // Alt+M hold to talk (needs voice), Escape interrupts, Mod+K emits keyboard.palette
+    gui({ idle: { minutes: 2, text: 'Need help finding something?' } }),
+    files({ maxSizeMB: 10 }),
+    camera(),
+  ],
+})
+```
+
+- **`menu`**: each command runs one registered action open to the `user` origin (an action without `exposeTo` is open to every origin), recorded in history so the LLM sees it next turn. `phrases` are fuzzy and per language (good for speech); negations, typed questions ending in `?` and close calls go to the LLM; `uncertain: 'ask'` asks "Did you mean…?" instead. Service: `h4b.get('menu').suggest(text)` / `list()` / `add(command)` / `commandSignal(action, args, label)` for buttons and palettes.
+- **`guided`**: registers the actions `guided_tour`, `guided_highlight`, `guided_close` (plus `show_section` with `sectionsAttribute`, `image_gallery` with `gallery: true`), so the assistant can point at things; the host uses `h4b.get('guided').start('onboarding')` or `.highlight('#field', 'Text')`. Targets are CSS selectors, found inside open shadow roots too. "next", "back", "skip" (and Portuguese) navigate an open tour.
+- **`keyboard`**: `false` disables a shortcut; listen to `h4b.on('keyboard.palette', …)` to open your own palette.
+- **`inputs`**: `gui()` keeps route and text selection as context and reads `data-h4b-say`, `data-h4b-command` + `data-h4b-args`, `data-h4b-context` + `data-h4b-value` from your HTML; `files()` and `camera()` provide services the widget turns into buttons (`h4b.get('files').pick()`, `h4b.get('camera').capture()`); `sensors({ enable: ['geolocation'] })` is opt-in.
 
 ## Voice with your own microphone UI
 

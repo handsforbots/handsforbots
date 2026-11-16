@@ -157,3 +157,14 @@ Supports [ADR 0019](../adr/0019-estado-explicito-da-conversa.md) and [Explicit c
 | [MemLineage (arXiv 2605.14421)](https://arxiv.org/abs/2605.14421) | Provenance and lineage per memory entry; a memory "laundered" through a summary looks legitimate when only its signature is checked | `origin` worked out from the cited messages, never taken from the writer's word |
 | [ReacTOD (TrustNLP 2026)](https://aclanthology.org/2026.trustnlp-main.21/) | A symbolic validator checks each dialogue-state change before applying it; format errors and model hallucinations otherwise cascade into wrong actions | Every operation is checked deterministically (shape, section, evidence, quote) and rejected with a reason the model sees |
 | [Anthropic: effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Structured note-taking kept outside the context window, alongside compaction | The state as notes the backend reads each turn, apart from the raw history |
+
+## Distribution: packages and agent skills
+
+Supports [Packages](./packages.md), the [skills](../../skills/README.md) and the plugin manifest in `.claude-plugin/`. Accessed 2026-11-16.
+
+| Source | What it is | Use in H4B |
+|---|---|---|
+| [npm: scoped public packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages) | Scoped packages are private by default; publishing them public needs `--access public` or `publishConfig.access` | `publishConfig.access: public` in every package; the `@handsforbots` organization |
+| [npm: `peerDependencies`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#peerdependencies) and `peerDependenciesMeta` | Peers the host installs once; npm 7+ installs missing ones, `optional` marks those a package works without | Why `core` is a peer, why every install line names it, and why `voice` is optional for `keyboard` and `voice-effects`; `test/package-catalog.test.ts` checks the lines against them |
+| [Agent Skills](https://agentskills.io) | Folder format (`SKILL.md` with `name` and `description`, plus references and scripts) read by coding agents | Format of the skills in `skills/` |
+| [Claude Code: create a marketplace](https://code.claude.com/docs/en/plugin-marketplaces) · [host and maintain one](https://code.claude.com/docs/en/plugins/host-marketplace.md) | `.claude-plugin/marketplace.json` lists plugins; users run `/plugin marketplace add owner/repo`; a plugin without `version` follows the repository's commits | The repository root is both the marketplace and the `handsforbots` plugin, whose `skills/` are the integration skills; no `version`, so users get each skill update |

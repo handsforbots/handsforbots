@@ -7,8 +7,10 @@ Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headle
 ## Install
 
 ```bash
-npm install @handsforbots/keyboard@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
+npm install @handsforbots/keyboard@alpha @handsforbots/core@alpha
 ```
+
+Optional: `@handsforbots/voice` (the talk shortcut needs it; interrupt and palette work without it).
 
 ## Documentation
 

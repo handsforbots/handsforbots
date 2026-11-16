@@ -157,3 +157,14 @@ Apoia o [ADR 0019](../adr/0019-estado-explicito-da-conversa.md) e [Estado explí
 | [MemLineage (arXiv 2605.14421)](https://arxiv.org/abs/2605.14421) | Proveniência e linhagem por entrada de memória; uma memória "lavada" pelo resumo parece legítima quando só a assinatura é conferida | `origin` deduzida das mensagens citadas, nunca tirada da palavra de quem escreve |
 | [ReacTOD (TrustNLP 2026)](https://aclanthology.org/2026.trustnlp-main.21/) | Um validador simbólico confere cada mudança de estado do diálogo antes de aplicá-la; sem isso, erros de formato e alucinações do modelo viram ações erradas em cascata | Cada operação é conferida de forma determinística (forma, seção, evidência, trecho) e recusada com um motivo que o modelo vê |
 | [Anthropic: engenharia de contexto eficaz para agentes](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Anotações estruturadas guardadas fora da janela de contexto, ao lado da compactação | O estado como anotações que o backend lê a cada turno, separadas do histórico bruto |
+
+## Distribuição: pacotes e skills para agentes
+
+Apoia [Pacotes](./packages.md), as [skills](../../skills/README.md) e o manifesto de plugin em `.claude-plugin/`. Acesso em 2026-11-16.
+
+| Fonte | O que é | Uso no H4B |
+|---|---|---|
+| [npm: pacotes públicos com escopo](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages) | Pacotes com escopo são privados por padrão; publicar como públicos exige `--access public` ou `publishConfig.access` | `publishConfig.access: public` em todo pacote; a organização `@handsforbots` |
+| [npm: `peerDependencies`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#peerdependencies) e `peerDependenciesMeta` | Peers que o hospedeiro instala uma vez; o npm 7+ instala os que faltam, `optional` marca os que o pacote dispensa | Por que o `core` é peer, por que toda linha de instalação o cita e por que o `voice` é opcional para `keyboard` e `voice-effects`; o `test/package-catalog.test.ts` confere as linhas contra eles |
+| [Agent Skills](https://agentskills.io) | Formato de pasta (`SKILL.md` com `name` e `description`, mais referências e scripts) lido por agentes de código | Formato das skills em `skills/` |
+| [Claude Code: criar um marketplace](https://code.claude.com/docs/en/plugin-marketplaces) · [hospedar e manter](https://code.claude.com/docs/en/plugins/host-marketplace.md) | `.claude-plugin/marketplace.json` lista plugins; quem usa roda `/plugin marketplace add dono/repo`; um plugin sem `version` acompanha os commits do repositório | A raiz do repositório é ao mesmo tempo o marketplace e o plugin `handsforbots`, cujas `skills/` são as skills de integração; sem `version`, quem usa recebe cada atualização das skills |

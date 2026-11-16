@@ -2,7 +2,11 @@
 
 Hands for Bots (H4B) is a headless runtime: you create an instance, add plugins, and decide which UI to use (the `<h4b-chat>` widget, your own components, or CopilotKit). Everything is a plugin, including the backend connection.
 
-> The packages are not on npm yet. Inside this repository they resolve through the pnpm workspace (`pnpm install`). See [Development](./development.md).
+```bash
+npm install @handsforbots/core@alpha @handsforbots/transport-rasa@alpha @handsforbots/widget@alpha
+```
+
+The packages are published with the `alpha` tag while v2 is in alpha. [Packages](./packages.md) lists them all, with what each needs. Inside this repository they resolve through the pnpm workspace instead (`pnpm install`, see [Development](./development.md)).
 
 ## 1. The smallest setup: widget + any backend
 

@@ -26,8 +26,8 @@ Monorepo pnpm (Node 20+, pnpm 10) com um kernel headless em TypeScript e um paco
 | `packages/semantic-event-observability` | Biblioteca JS independente, testada com `node:test` |
 | `docs/en-us`, `docs/pt-br` | Documentação pública espelhada; `references.md` guarda bibliotecas e bibliografia por tema |
 | `NOTICE.md`, `docs/pt-br/NOTICE.md` | Pacotes de terceiros e código copiado (uso e licença) |
-| `test/` | Verificações do repositório (`third-party.test.ts`) |
-| `skills/` | Skills para quem **integra** o H4B (copiadas para `.claude/skills` do projeto consumidor) |
+| `test/` | Verificações do repositório (`third-party.test.ts`, `package-catalog.test.ts`) |
+| `skills/` | Skills para quem **integra** o H4B, distribuídas como plugin do Claude Code (`.claude-plugin/`, raiz do repositório) ou copiadas para `.claude/skills` do projeto consumidor |
 | `examples/react-agui`, `examples/vite`, `examples/voice-lab` | Exemplos (React + AG-UI com agente simulado; Rasa + widget via Docker; laboratório de síntese de voz com modelos reais, porta 5192) |
 
 ## Comandos
@@ -47,7 +47,7 @@ Rode `pnpm test` e `pnpm typecheck` antes de todo commit. O estado de base é tu
 
 - TypeScript estrito (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`): imports relativos com `.js`, `import type` para tipos. 2 espaços, sem ponto e vírgula, aspas simples. Comentários de código e JSDoc em inglês.
 - Um pacote por capacidade. Plugins não importam outros plugins em runtime (só tipos); descobrem serviços com `ctx.get()` e reagem a `service.provided` / `service.removed`.
-- Pacote novo: `package.json` com `exports` apontando para `./src/index.ts` no workspace e `publishConfig.exports` para `dist/`, `peerDependencies` em `@handsforbots/core: workspace:^`, `tsconfig.json` + `tsconfig.build.json` como os vizinhos, testes em `test/`. Registre na tabela de `packages/README.md` e em `docs/*/plugins.md`.
+- Pacote novo: `package.json` com `exports` apontando para `./src/index.ts` no workspace e `publishConfig.exports` para `dist/`, `peerDependencies` em `@handsforbots/core: workspace:^`, `tsconfig.json` + `tsconfig.build.json` como os vizinhos, testes em `test/`. `publishConfig.access: public` e `repository` como os vizinhos. Registre na tabela de `packages/README.md`, em `docs/*/plugins.md`, em `docs/*/packages.md` (o que faz, do que precisa, linha de instalação, com o que funciona, ideias), em `skills/handsforbots/references/packages.md` e num `README.md` do pacote (página dele no npm). O `test/package-catalog.test.ts` confere as linhas de instalação contra os peers obrigatórios.
 - **Todo comportamento tem teste.** Testes que dependem de tempo esperam condições (`eventually`, `waitForIdle`, `h4b.when`), nunca atrasos fixos. Use `jsdom` só quando precisar de DOM. Transportes novos passam pela `transportConformance` do `testkit`.
 - Erros de listeners, storage e matchers vão para `emit('error', { error, source })`, nunca quebram o turno. `runAction` nunca lança.
 - Segurança (ADR 0005, `docs/*/security.md`): só ações registradas executam; nada de `eval`/`window[...]`; chaves nunca no navegador; renderizadores tratam props como não confiáveis.
@@ -88,6 +88,6 @@ Toda mudança de comportamento público atualiza no mesmo commit:
 2. Os sumários em `README.md` e `docs/pt-br/README.md` quando a página é nova.
 3. `docs/*/plugins.md` para opções de pacote; `ROADMAP.md` para estado de implementação; um ADR para decisões de arquitetura.
 4. `docs/*/references.md` quando a decisão se apoia em bibliotecas, serviços, artigos ou produtos de fora: link, o que é, para que serve no H4B, data de acesso, e números marcados como do fornecedor. O ADR aponta para a seção.
-5. `skills/` quando muda algo que quem integra precisa saber (interrupção e voz: `skills/handsforbots-conversation`; síntese e efeitos: `skills/handsforbots-speech`). As skills só afirmam comportamentos verificados no código: confirme de novo antes de editar.
+5. `skills/` quando muda algo que quem integra precisa saber (interrupção e voz: `skills/handsforbots-conversation`; síntese e efeitos: `skills/handsforbots-speech`; transportes, CopilotKit, assistant-ui, WebMCP e MCP Apps: `skills/handsforbots-integrations`; pacotes, imports e peers: `skills/handsforbots/references/packages.md`). As skills só afirmam comportamentos verificados no código: confirme de novo antes de editar.
 
 Escreva o que o código faz hoje. Exemplos de código na documentação devem compilar: quando houver dúvida, copie o trecho para um arquivo temporário em `packages/core/test/` (importando de `../src/index.js`), rode `pnpm --filter @handsforbots/core typecheck` e apague o arquivo.

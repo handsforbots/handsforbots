@@ -1,0 +1,18 @@
+{
+  "name": "handsforbots",
+  "description": "Skills that teach coding agents to integrate Hands for Bots v2: packages and dependencies, transports and backends, actions, voice, persistence, consent, history and speech.",
+  "author": {
+    "name": "Hands for Bots",
+    "url": "https://github.com/handsforbots"
+  },
+  "homepage": "https://github.com/handsforbots/handsforbots/tree/main/skills",
+  "repository": "https://github.com/handsforbots/handsforbots",
+  "license": "MIT",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "agents",
+    "voice",
+    "gui-actions"
+  ]
+}

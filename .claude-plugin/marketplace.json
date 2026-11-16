@@ -1,0 +1,15 @@
+{
+  "name": "handsforbots",
+  "description": "Agent skills for integrating Hands for Bots v2 (@handsforbots/* packages) into web apps.",
+  "owner": {
+    "name": "Hands for Bots",
+    "url": "https://github.com/handsforbots"
+  },
+  "plugins": [
+    {
+      "name": "handsforbots",
+      "source": "./",
+      "description": "Skills that teach coding agents to integrate Hands for Bots v2: packages and dependencies, transports and backends, actions, voice, persistence, consent, history and speech."
+    }
+  ]
+}

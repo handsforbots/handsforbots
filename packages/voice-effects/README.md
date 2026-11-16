@@ -7,8 +7,10 @@ Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headle
 ## Install
 
 ```bash
-npm install @handsforbots/voice-effects@alpha @handsforbots/voice@alpha
+npm install @handsforbots/voice-effects@alpha
 ```
+
+Optional: `@handsforbots/voice` (types only; chains, SSML and FFmpeg export work without it).
 
 ## Documentation
 
