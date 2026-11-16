@@ -61,4 +61,4 @@ Installed by the host app only when it uses the matching package or provider.
 | [vosk-server](https://github.com/alphacep/vosk-server) | Optional self-hosted speech recognition (`voskSTT`) | Apache-2.0 |
 | [Duckling](https://github.com/facebook/duckling) (`rasa/duckling` image), [nginx](https://nginx.org) | Containers of `examples/docker-compose.yml` | BSD-3-Clause / BSD-2-Clause |
 
-v1 bundled web-storage, EasySpeech, vosk-browser, Marked and others; they were removed with v1 (see git history before the v2 branch).
+v1 bundled web-storage, EasySpeech, vosk-browser, Marked and others; they were removed with v1 (see the `v1-final` git tag).

@@ -61,4 +61,4 @@ Instalados pelo app hospedeiro só quando usa o pacote ou provedor correspondent
 | [vosk-server](https://github.com/alphacep/vosk-server) | Reconhecimento de fala auto-hospedado opcional (`voskSTT`) | Apache-2.0 |
 | [Duckling](https://github.com/facebook/duckling) (imagem `rasa/duckling`), [nginx](https://nginx.org) | Contêineres do `examples/docker-compose.yml` | BSD-3-Clause / BSD-2-Clause |
 
-A v1 embutia web-storage, EasySpeech, vosk-browser, Marked e outros; eles saíram junto com a v1 (veja o histórico do git antes da branch v2).
+A v1 embutia web-storage, EasySpeech, vosk-browser, Marked e outros; eles saíram junto com a v1 (veja a tag `v1-final` do git).
