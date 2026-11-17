@@ -17,7 +17,7 @@ import {
 } from '@handsforbots/core'
 import { autofocusFlags, bindTextFocus, canFocus, type AutofocusOptions } from './focus.js'
 import { stringsFor, type Strings } from './i18n.js'
-import { escapeHtml, renderMarkdown } from './markdown.js'
+import { escapeHtml, renderMarkdown, safeImageUrl } from './markdown.js'
 import { renderCitedText, sourceList, type SourcesOptions } from './sources.js'
 import { PALETTES, STYLES } from './styles.js'
 
@@ -27,7 +27,7 @@ type CueStore = {
   subscribe(listener: () => void): () => void
 }
 
-export { renderMarkdown, escapeHtml } from './markdown.js'
+export { renderMarkdown, escapeHtml, safeImageUrl } from './markdown.js'
 export { stringsFor, STRINGS, type Strings } from './i18n.js'
 export { PALETTES } from './styles.js'
 export { renderCitedText, type SourcesOptions } from './sources.js'
@@ -58,15 +58,20 @@ export const RENDERERS: Record<string, Renderer> = {
     grid.className = 'grid'
     for (const image of props.images ?? []) {
       const { src, alt, caption } = typeof image === 'string' ? { src: image, alt: '', caption: '' } : image
-      if (!/^(https?:|data:image\/|blob:|\/|\.\/|[\w-]+\/)/i.test(src)) continue
-      const link = document.createElement('a')
-      link.href = src
-      link.target = '_blank'
-      link.rel = 'noopener noreferrer'
+      if (!safeImageUrl(src)) continue
       const img = document.createElement('img')
       img.src = src
       img.alt = alt ?? caption ?? ''
       img.loading = 'lazy'
+      // Only http(s) and relative images open in a new tab; a data: or blob: link would not.
+      if (!/^(https?:|\/|\.\/|[\w-]+\/)/i.test(src)) {
+        grid.append(img)
+        continue
+      }
+      const link = document.createElement('a')
+      link.href = src
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
       link.append(img)
       grid.append(link)
     }
@@ -593,7 +598,10 @@ export class H4BChatElement extends BaseElement {
     element.hidden = false
     if (message.role === 'user') {
       element.textContent = `${message.modality === 'transcript' ? '🎤 ' : ''}${text}`
-      for (const image of images) element.append(this.imageElement(image))
+      for (const image of images) {
+        const img = this.imageElement(image)
+        if (img) element.append(img)
+      }
       return
     }
     // Text is re-rendered on every update; rich parts (images, components such as
@@ -615,11 +623,14 @@ export class H4BChatElement extends BaseElement {
       if (this.renderedParts.has(part)) continue
       if (part.type === 'image') {
         this.renderedParts.add(part)
-        media.append(this.imageElement(part as MediaPart))
+        const img = this.imageElement(part as MediaPart)
+        if (img) media.append(img)
       } else if (part.type === 'data' && part.name === 'ui') {
         this.renderedParts.add(part)
         const { component, props } = part.value as { component: string; props?: unknown }
-        const renderer = this.options.renderers?.[component] ?? RENDERERS[component]
+        // Own names only: a component such as 'constructor' must not reach Object.prototype.
+        const own = (table: Record<string, Renderer> | undefined) => (table && Object.hasOwn(table, component) ? table[component] : undefined)
+        const renderer = own(this.options.renderers) ?? own(RENDERERS)
         if (!renderer || !this.h4b) continue
         try {
           media.append(renderer(props ?? {}, { h4b: this.h4b }))
@@ -670,15 +681,19 @@ export class H4BChatElement extends BaseElement {
     }
   }
 
-  private imageElement(image: MediaPart): HTMLImageElement {
+  /** An <img> for an image part, or nothing when its URL or data is not a safe image. */
+  private imageElement(image: MediaPart): HTMLImageElement | undefined {
+    const source = image.source
+    const src =
+      source.kind === 'url'
+        ? source.url
+        : source.kind === 'base64'
+          ? `data:${image.mimeType};base64,${source.data}`
+          : URL.createObjectURL(source.blob)
+    if (!safeImageUrl(src)) return undefined
     const img = document.createElement('img')
     img.alt = image.name ?? ''
-    img.src =
-      image.source.kind === 'url'
-        ? image.source.url
-        : image.source.kind === 'base64'
-          ? `data:${image.mimeType};base64,${image.source.data}`
-          : URL.createObjectURL(image.source.blob)
+    img.src = src
     return img
   }
 

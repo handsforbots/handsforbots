@@ -49,6 +49,7 @@ Instalados pelo app hospedeiro só quando usa o pacote ou provedor correspondent
 | [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped) (`@types/*`) | Definições de tipo | MIT |
 | [Vitest](https://vitest.dev) (`vitest`) | Testes | MIT |
 | [jsdom](https://github.com/jsdom/jsdom) (`jsdom`) | DOM nos testes | MIT |
+| [fast-check](https://fast-check.dev) (`fast-check`) | Testes de XSS por propriedades do Markdown do widget | MIT |
 | [Testing Library](https://testing-library.com) (`@testing-library/react`) | Testes de React | MIT |
 | [Zod](https://zod.dev) (`zod`) | Schemas em testes e exemplos | MIT |
 | [React DOM](https://react.dev) (`react-dom`) | Testes de React e `examples/react-agui` | MIT |

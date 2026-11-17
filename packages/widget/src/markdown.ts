@@ -7,6 +7,16 @@ function safeUrl(url: string): string | undefined {
   return /^(https?:|mailto:|tel:|\/|#|\.\/)/i.test(trimmed) ? trimmed : undefined
 }
 
+/**
+ * Whether `src` may be an image source in the widget: http(s), blob:, a
+ * relative path, or base64 data of a raster image type. Anything else
+ * (`javascript:`, `data:text/html`, SVG data, leading spaces) is rejected.
+ */
+export function safeImageUrl(src: string): boolean {
+  if (/^(https?:|blob:|\/|\.\/|[\w-]+\/)/i.test(src)) return true
+  return /^data:image\/(png|jpe?g|gif|webp|avif|bmp);base64,[a-z0-9+/]*={0,2}$/i.test(src)
+}
+
 function inline(escaped: string): string {
   return escaped
     .replace(/`([^`]+)`/g, '<code>$1</code>')

@@ -503,6 +503,8 @@ Antes da 1.0, revisar o H4B contra XSS, de ponta a ponta. A cripto do `storage-l
 - Recomendações para quem integra: CSP, Trusted Types, `request.before` para dados pessoais, o que nunca guardar na conversa. Com duas receitas, sem pacote novo: lado cliente do Cloudflare Turnstile (pegar o token, anexá-lo ao pedido no `request.before` e renovar quando vencer; quem valida é o backend) e checagens de UX antes de enviar (limite de tamanho e aviso de dado pessoal com `request.before` + `redact` do `consent`; o backend refaz as checagens, porque no navegador elas são contornáveis).
 - Testes automatizados com payloads conhecidos em cada superfície.
 
+Andamento (2026-11-17): suíte de payloads em `packages/widget/test/xss.test.ts` sobre `renderMarkdown`, `renderCitedText`, galeria, partes de imagem e mensagens no `<h4b-chat>` (payloads conhecidos + propriedades com `fast-check`), e CodeQL (`security-extended`) na CI. O Markdown e as citações passaram sem mudança. Correções que a suíte trouxe: imagens só http(s), `blob:`, relativas ou base64 rasterizado (antes, partes de imagem aceitavam qualquer URL e a galeria fazia link para `data:`); renderizadores do `ui.render` procurados só pelo nome próprio (antes, `constructor` ou `toString` alcançavam o `Object.prototype`). Falta: arquitetura da chave, `mcp-apps` (CSP no navegador), React, Vue, `guided` e `gui()`, Trusted Types nos exemplos e as recomendações para quem integra.
+
 ## 4. Fases
 
 Os prazos assumem uma equipe pequena. Cada fase só termina quando o critério de saída é cumprido.
@@ -666,6 +668,7 @@ P3 — reavaliar com demanda
 
 | Data | Alteração |
 |------|-----------|
+| 2026-11-17 | Revisão de XSS começou: suíte de payloads e propriedades no widget, CodeQL na CI; imagens restritas a esquemas seguros e renderizadores só por nome próprio (seção 3) |
 | 2026-11-14 | Um `callId` roda uma vez por conversa (repetição do transporte ignorada); limite de taxa de ações fica como pendência antes de expor escrita a agentes externos (seção 2.9) |
 | 2026-11-14 | Estado explícito da conversa (`@handsforbots/conversation-state`): afirmações com fonte, mudadas só por operações conferidas, enviadas em campo próprio em toda requisição (ADR 0019) |
 | 2026-11-12 | Oportunidades vindas do backend do polvo (alexlana): decisão em aberto 11 (contrato de recusa e limite), `agent-intents` como referência da decisão 4, guias pendentes de respostas fixas marcadas e de classificador no backend (seção 3, `cues`), receitas de Turnstile e checagens antes de enviar (seção 3, XSS), proteção do endpoint como trabalho do backend (seção 6, item 7) |

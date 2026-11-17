@@ -49,6 +49,7 @@ Installed by the host app only when it uses the matching package or provider.
 | [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped) (`@types/*`) | Type definitions | MIT |
 | [Vitest](https://vitest.dev) (`vitest`) | Tests | MIT |
 | [jsdom](https://github.com/jsdom/jsdom) (`jsdom`) | DOM in tests | MIT |
+| [fast-check](https://fast-check.dev) (`fast-check`) | Property-based XSS tests of the widget's Markdown | MIT |
 | [Testing Library](https://testing-library.com) (`@testing-library/react`) | React tests | MIT |
 | [Zod](https://zod.dev) (`zod`) | Schemas in tests and examples | MIT |
 | [React DOM](https://react.dev) (`react-dom`) | React tests and `examples/react-agui` | MIT |
