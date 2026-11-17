@@ -55,3 +55,6 @@ Temporary Items
 # v2 build output
 packages/*/dist/
 coverage/
+
+# Vitest cache
+.vitest/

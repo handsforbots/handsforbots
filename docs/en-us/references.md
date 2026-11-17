@@ -168,3 +168,14 @@ Supports [Packages](./packages.md), the [skills](../../skills/README.md) and the
 | [npm: `peerDependencies`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#peerdependencies) and `peerDependenciesMeta` | Peers the host installs once; npm 7+ installs missing ones, `optional` marks those a package works without | Why `core` is a peer, why every install line names it, and why `voice` is optional for `keyboard` and `voice-effects`; `test/package-catalog.test.ts` checks the lines against them |
 | [Agent Skills](https://agentskills.io) | Folder format (`SKILL.md` with `name` and `description`, plus references and scripts) read by coding agents | Format of the skills in `skills/` |
 | [Claude Code: create a marketplace](https://code.claude.com/docs/en/plugin-marketplaces) · [host and maintain one](https://code.claude.com/docs/en/plugins/host-marketplace.md) | `.claude-plugin/marketplace.json` lists plugins; users run `/plugin marketplace add owner/repo`; a plugin without `version` follows the repository's commits | The repository root is both the marketplace and the `handsforbots` plugin, whose `skills/` are the integration skills; no `version`, so users get each skill update |
+
+## Repository security: secrets and dependencies
+
+Supports the security checks in [Development](./development.md), `.github/` and `.githooks/`. Accessed 2026-11-16.
+
+| Source | What it is | Use in H4B |
+|---|---|---|
+| [Gitleaks](https://github.com/gitleaks/gitleaks) | Secret scanner for git history and staged changes (MIT) | `pre-commit` hook on staged changes and a full-history scan in CI, through the CLI image because `gitleaks-action` needs a license for organization repositories; `.gitleaksignore` for reviewed findings |
+| [pnpm `audit`](https://pnpm.io/cli/audit) · [`overrides`](https://pnpm.io/settings#overrides) | Checks the lockfile against the npm advisory database; overrides force a version range anywhere in the tree | Blocking audit of production dependencies in CI; overrides with the advisory id as a temporary floor for transitive dependencies |
+| [Dependabot: `cooldown`](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-) · [groups](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#groups--) | Delays version updates for N days after a release; groups related updates in one PR | 7-day wait, so a malicious or broken publish is usually pulled before it reaches us; security updates are not delayed |
+| [GitHub: security hardening for Actions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions) | Pinning third-party actions to a full commit SHA is the only immutable reference | Actions pinned by SHA, the Gitleaks image by digest, `permissions: contents: read`, `persist-credentials: false` |

@@ -1,0 +1,5 @@
+# Known Gitleaks findings, one fingerprint per line, each with the reason.
+#
+# Self-signed localhost certificate from the first v1 commit (expired 2024-08,
+# removed from the tree long ago, never used outside local development).
+bb6d875714df0c894e5ccd97304a01e728aeb1c7:nginx/certs/nginx_cert.key:private-key:1

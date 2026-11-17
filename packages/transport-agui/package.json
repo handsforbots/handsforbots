@@ -1,7 +1,7 @@
 {
   "name": "@handsforbots/transport-agui",
   "version": "2.0.0-alpha.1",
-  "description": "Transport (pick one). Connects Hands for Bots to an AG-UI agent (LangGraph, Mastra, PydanticAI, CopilotKit runtime…).",
+  "description": "Transport (pick one). Connects Hands for Bots to an AG-UI agent (LangGraph, Mastra, PydanticAI, CopilotKit runtime\u2026).",
   "keywords": [
     "handsforbots",
     "h4b",
@@ -48,6 +48,7 @@
     "@ag-ui/client": "^1.0.1",
     "@ag-ui/encoder": "^1.0.1",
     "@handsforbots/core": "workspace:^",
-    "@handsforbots/testkit": "workspace:^"
+    "@handsforbots/testkit": "workspace:^",
+    "zod": "^4.6.6"
   }
 }
