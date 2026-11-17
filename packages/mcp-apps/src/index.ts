@@ -43,12 +43,21 @@ export function buildCsp(csp: McpAppProps['csp'] = {}): string {
   ].join('; ')
 }
 
-/** Injects the CSP as the first element of <head>. */
+// Leading whitespace, comments and the doctype: nothing in them runs or loads.
+const PROLOGUE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype[^>]*>/i
+
+/**
+ * Puts the CSP <meta> before anything the parser could run or load. A policy
+ * only covers what is parsed after it, so it is never placed after the app's
+ * own markup, wherever its `<head>` is (or a comment or script says it is):
+ * a leading <meta> makes the parser open <head> right there, and the app's
+ * later <html>/<head> tags merge into it. Without a doctype, `<!doctype html>`
+ * is added so the app renders in standards mode.
+ */
 export function withCsp(html: string, policy: string): string {
-  const meta = `<meta http-equiv="Content-Security-Policy" content="${policy.replace(/"/g, '&quot;')}">`
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (head) => `${head}${meta}`)
-  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (tag) => `${tag}<head>${meta}</head>`)
-  return `<!doctype html><html><head>${meta}</head><body>${html}</body></html>`
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${policy.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`
+  const prologue = PROLOGUE.exec(html)?.[0]
+  return prologue ? `${prologue}${meta}${html.slice(prologue.length)}` : `<!doctype html>${meta}${html}`
 }
 
 /**
