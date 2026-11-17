@@ -5,49 +5,8 @@
 import { createH4B, type Message, type Transport } from '@handsforbots/core'
 import fc from 'fast-check'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PAYLOADS } from './payloads.js'
 import { RENDERERS, renderCitedText, renderMarkdown, safeImageUrl, widget } from '../src/index.js'
-
-/** Payloads written for this suite after the OWASP and PortSwigger cheat sheets (references.md, XSS section). */
-export const PAYLOADS = [
-  '<script>alert(1)</script>',
-  '<img src=x onerror=alert(1)>',
-  '<svg onload=alert(1)>',
-  '<svg><script>alert(1)</script></svg>',
-  '<iframe src="javascript:alert(1)"></iframe>',
-  '<iframe srcdoc="<script>alert(1)</script>"></iframe>',
-  '<a href="javascript:alert(1)">x</a>',
-  '<a href="&#106;avascript:alert(1)">x</a>',
-  '<details open ontoggle=alert(1)>',
-  '<form><button formaction=javascript:alert(1)>x</button></form>',
-  '<style>@import "https://evil.test/x.css"</style>',
-  '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>',
-  '<!--<img src="--><img src=x onerror=alert(1)//">',
-  '<noscript><p title="</noscript><img src=x onerror=alert(1)>">',
-  '&lt;script&gt;alert(1)&lt;/script&gt;',
-  '"><img src=x onerror=alert(1)>',
-  "'><img src=x onerror=alert(1)>",
-  '[x](javascript:alert(1))',
-  '[x](JaVaScRiPt:alert(1))',
-  '[x](javascript&#58;alert(1))',
-  '[x](&#106;avascript:alert(1))',
-  '[x](java\u0000script:alert(1))',
-  '[x](vbscript:msgbox(1))',
-  '[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)',
-  '[x](http://a"onmouseover="alert(1))',
-  "[x](http://a'onmouseover='alert(1))",
-  '[<img src=x onerror=alert(1)>](https://a.test)',
-  '[x](https://a.test)`](javascript:alert(1))`',
-  '[a](https://x.test/*b*)',
-  '[a](https://x.test/`b`)',
-  '`<script>alert(1)</script>`',
-  '**<img src=x onerror=alert(1)>**',
-  '*<svg/onload=alert(1)>*',
-  '- <a href="javascript:alert(1)">x</a>\n- [y](javascript:alert(1))',
-  '1. <img src=x onerror=alert(1)>\n2. [y](data:text/html,x)',
-  '\u202E<img src=x onerror=alert(1)>',
-  '\uE000<img src=x onerror=alert(1)>\uE001',
-  '\uE0000\uE001 \uE000999\uE001',
-]
 
 const MARKDOWN_TAGS = new Set(['P', 'BR', 'STRONG', 'EM', 'CODE', 'A', 'UL', 'OL', 'LI'])
 const CITED_TAGS = new Set([...MARKDOWN_TAGS, 'SUP', 'BUTTON'])

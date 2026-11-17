@@ -6,6 +6,7 @@ Requirements: Node 20+ and pnpm 10.
 pnpm install
 pnpm test        # Vitest for all packages + node:test for semantic-event-observability
 pnpm typecheck
+pnpm test:browser  # *.browser.test.ts in headless Chromium (first time: pnpm exec playwright install chromium)
 pnpm build       # emits dist/ for every package (exports switch to dist/ on publish)
 ```
 
@@ -38,5 +39,5 @@ Security checks:
 
 - **Secrets.** `pnpm install` points `core.hooksPath` at `.githooks/`, whose `pre-commit` runs [Gitleaks](https://github.com/gitleaks/gitleaks) on the staged changes and blocks the commit if it finds a key, token or private key. It needs `gitleaks` installed (`brew install gitleaks`) or Docker running. CI scans the whole history again. A false positive goes into `.gitleaksignore` (its fingerprint and the reason); a real secret must be revoked, not just removed from the commit.
 - **Dependencies.** CI fails when `pnpm audit --prod` finds a moderate or worse advisory in what the packages ship; advisories in dev tooling and examples are reported as warnings. When the parent package has no patched release yet, raise the floor with an `overrides` entry in `pnpm-workspace.yaml` (with the advisory id) and remove it once the parent catches up. Dependabot opens weekly update PRs, waiting 7 days after each release.
-- **XSS.** `packages/widget/test/xss.test.ts` feeds known payloads and random Markdown/HTML mixes ([fast-check](https://fast-check.dev)) to every widget surface and fails if the DOM gets a tag, event handler or URL scheme the widget does not make. Add a case there when you add a surface that turns content into HTML or URLs. CodeQL (`security-extended`) scans `packages/` on every push and pull request; findings show under Security → Code scanning.
+- **XSS.** `packages/widget/test/xss.browser.test.ts` renders the same payloads in Chromium with `alert` replaced by a counter, so a payload that ever runs fails (a raw-HTML control proves the counter works), and `packages/mcp-apps/test/csp.browser.test.ts` mounts MCP Apps of many HTML shapes and checks that their script can neither reach the network nor the host page. CI runs them in the `browser` job. `packages/widget/test/xss.test.ts` feeds known payloads and random Markdown/HTML mixes ([fast-check](https://fast-check.dev)) to every widget surface and fails if the DOM gets a tag, event handler or URL scheme the widget does not make. Add a case there when you add a surface that turns content into HTML or URLs. CodeQL (`security-extended`) scans `packages/` on every push and pull request; findings show under Security → Code scanning.
 - **Workflows.** GitHub Actions and container images are pinned by commit SHA or digest; Dependabot updates them.

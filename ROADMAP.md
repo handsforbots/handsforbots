@@ -505,6 +505,8 @@ Antes da 1.0, revisar o H4B contra XSS, de ponta a ponta. A cripto do `storage-l
 
 Andamento (2026-11-17): suíte de payloads em `packages/widget/test/xss.test.ts` sobre `renderMarkdown`, `renderCitedText`, galeria, partes de imagem e mensagens no `<h4b-chat>` (payloads conhecidos + propriedades com `fast-check`), e CodeQL (`security-extended`) na CI. O Markdown e as citações passaram sem mudança. Correções que a suíte trouxe: imagens só http(s), `blob:`, relativas ou base64 rasterizado (antes, partes de imagem aceitavam qualquer URL e a galeria fazia link para `data:`); renderizadores do `ui.render` procurados só pelo nome próprio (antes, `constructor` ou `toString` alcançavam o `Object.prototype`). Em seguida: o `withCsp` do `mcp-apps` punha a CSP depois do primeiro `<head` do HTML, então um `<head>` num comentário, um `<header>` ou um script antes do `<head>` deixavam o app rodar sem política (conferido no Chrome 156: `fetch` liberado em 3 de 5 formatos). Agora a `<meta>` vai antes de toda marcação do app (depois de um doctype inicial; sem doctype, entra `<!doctype html>`), e os mesmos formatos ficam bloqueados.
 
+Depois: testes no Chromium de verdade (`pnpm test:browser`, modo browser do Vitest com Playwright, job `browser` na CI). Canários contam qualquer payload que rode nas superfícies do widget, e o sandbox dos MCP Apps é conferido em 10 formatos de HTML; os dois pegam as falhas antigas quando reintroduzidas.
+
 Falta: arquitetura da chave, React, Vue, `copilotkit`/`assistant-ui`, `guided` e `gui()`, `ui/message` e `ui/update-model-context` do `mcp-apps` (caminho de injeção de prompt, ligado por padrão), Trusted Types nos exemplos, as recomendações para quem integra e avisos de segurança. Avisos: no `devPanel` da `observability` em desenvolvimento; em produção, só um sinal muitíssimo genérico (sem tipo, origem nem conteúdo), para não ensinar a quem ataca o que foi notado.
 
 ## 4. Fases
@@ -670,6 +672,7 @@ P3 — reavaliar com demanda
 
 | Data | Alteração |
 |------|-----------|
+| 2026-11-17 | Testes de XSS e do sandbox dos MCP Apps no Chromium (`pnpm test:browser`, job `browser` na CI) (seção 3) |
 | 2026-11-17 | CSP do `mcp-apps` antes de toda marcação do app; avisos de segurança em produção só genéricos (seção 3) |
 | 2026-11-17 | Revisão de XSS começou: suíte de payloads e propriedades no widget, CodeQL na CI; imagens restritas a esquemas seguros e renderizadores só por nome próprio (seção 3) |
 | 2026-11-14 | Um `callId` roda uma vez por conversa (repetição do transporte ignorada); limite de taxa de ações fica como pendência antes de expor escrita a agentes externos (seção 2.9) |

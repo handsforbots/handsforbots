@@ -6,6 +6,7 @@ Requisitos: Node 20+ e pnpm 10.
 pnpm install
 pnpm test        # Vitest em todos os pacotes + node:test na semantic-event-observability
 pnpm typecheck
+pnpm test:browser  # *.browser.test.ts no Chromium headless (na primeira vez: pnpm exec playwright install chromium)
 pnpm build       # gera dist/ em cada pacote (os exports passam para dist/ na publicação)
 ```
 
@@ -38,5 +39,5 @@ Verificações de segurança:
 
 - **Segredos.** O `pnpm install` aponta o `core.hooksPath` para `.githooks/`, cujo `pre-commit` roda o [Gitleaks](https://github.com/gitleaks/gitleaks) nas mudanças preparadas e bloqueia o commit se achar chave, token ou chave privada. Precisa do `gitleaks` instalado (`brew install gitleaks`) ou do Docker rodando. O CI varre o histórico inteiro de novo. Falso positivo vai para o `.gitleaksignore` (a impressão digital e o motivo); segredo real precisa ser revogado, não só tirado do commit.
 - **Dependências.** O CI falha quando o `pnpm audit --prod` acha um alerta moderado ou pior no que os pacotes entregam; alertas em ferramentas de desenvolvimento e exemplos aparecem como aviso. Quando o pacote pai ainda não tem versão corrigida, suba o piso com uma entrada em `overrides` no `pnpm-workspace.yaml` (com o id do alerta) e remova quando o pai alcançar. O Dependabot abre PRs de atualização toda semana, esperando 7 dias depois de cada versão.
-- **XSS.** O `packages/widget/test/xss.test.ts` passa payloads conhecidos e misturas aleatórias de Markdown e HTML ([fast-check](https://fast-check.dev)) por toda superfície do widget e falha se o DOM ganhar uma tag, um handler de evento ou um esquema de URL que o widget não gera. Acrescente um caso lá ao criar uma superfície que transforma conteúdo em HTML ou URL. O CodeQL (`security-extended`) varre `packages/` a cada push e pull request; os achados aparecem em Security → Code scanning.
+- **XSS.** O `packages/widget/test/xss.browser.test.ts` renderiza os mesmos payloads no Chromium com o `alert` trocado por um contador, então um payload que chegue a rodar faz o teste falhar (um controle com HTML cru prova que o contador funciona), e o `packages/mcp-apps/test/csp.browser.test.ts` monta MCP Apps em vários formatos de HTML e confere que o script deles não alcança a rede nem a página. O CI roda esses testes no job `browser`. O `packages/widget/test/xss.test.ts` passa payloads conhecidos e misturas aleatórias de Markdown e HTML ([fast-check](https://fast-check.dev)) por toda superfície do widget e falha se o DOM ganhar uma tag, um handler de evento ou um esquema de URL que o widget não gera. Acrescente um caso lá ao criar uma superfície que transforma conteúdo em HTML ou URL. O CodeQL (`security-extended`) varre `packages/` a cada push e pull request; os achados aparecem em Security → Code scanning.
 - **Workflows.** Actions do GitHub e imagens de contêiner ficam fixadas por SHA do commit ou digest; o Dependabot as atualiza.
