@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/expose-webmcp",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "description": "Plugin. Expose Hands for Bots actions to browser agents through WebMCP (document.modelContext).",
   "keywords": [
     "handsforbots",

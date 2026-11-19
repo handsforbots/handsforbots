@@ -20,7 +20,7 @@ Plugins don't import each other at runtime: they find each other's services when
 npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsforbots/widget@alpha
 ```
 
-- The H4B packages share one version and are published with the `alpha` tag while v2 is in alpha: add `@alpha` (or pin `2.0.0-alpha.1`).
+- The H4B packages share one version and are published with the `alpha` tag while v2 is in alpha: add `@alpha` (or pin `2.0.0-alpha.2`).
 - Most packages declare `@handsforbots/core` as a peer dependency: install it yourself, once. The install line of each package below already includes the `@handsforbots` packages it needs.
 - ES modules with TypeScript types included. They run in the browser; the `/server` entry points (`cues`, `conversation-state`, `observability`) and `voice-effects` run in Node too.
 - Action schemas accept any [Standard Schema](https://standardschema.dev) library (Zod, Valibot, ArkType) or plain JSON Schema. None is required.
