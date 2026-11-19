@@ -17,6 +17,10 @@ export {
   type VoiceService,
   type VoiceSpeechEvent,
   type VoiceTtsEvent,
+  type VoiceNoiseEvent,
+  type VoiceNoiseOptions,
+  type VoiceLevelEvent,
+  type VoiceLevelReading,
   type VoiceState,
 } from './voice.js'
 export {
@@ -33,5 +37,26 @@ export { websocketSTT, voskSTT, type StreamingResult, type WebSocketSTTOptions }
 export { voskBrowserSTT, type VoskBrowserModule, type VoskBrowserOptions } from './providers/vosk-browser.js'
 export { httpEndOfTurn, type HttpEndOfTurnOptions } from './providers/end-of-turn.js'
 export { textEchoFilter, echoCoverage, type TextEchoFilterOptions } from './providers/echo.js'
-export { captureFloat, capturePcm16, detectEndOfSpeech, openMicrophone } from './providers/media.js'
+export {
+  captureFloat,
+  capturePcm16,
+  detectEndOfSpeech,
+  noiseFloorTracker,
+  openMicrophone,
+  speechThreshold,
+} from './providers/media.js'
+export {
+  assessNoise,
+  checkNoise,
+  createNoiseMeter,
+  measureNoise,
+  type CheckNoiseOptions,
+  type MeasureNoiseOptions,
+  type NoiseMeter,
+  type NoiseReason,
+  type NoiseReport,
+  type NoiseThresholds,
+  type NoiseVerdict,
+} from './providers/noise.js'
+export { createLevelGate, monitorLevel, type LevelGate, type LevelGateOptions, type LevelVerdict } from './providers/level.js'
 export * from './types.js'

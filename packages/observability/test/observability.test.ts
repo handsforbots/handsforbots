@@ -90,6 +90,26 @@ describe('voice events', () => {
   })
 })
 
+describe('noise and level gate events', () => {
+  it('records the noise report numbers and the level gate steps', async () => {
+    const h4b = await createH4B({ plugins: [observability()] }).start()
+    const emit = h4b.emit.bind(h4b) as (event: string, payload: unknown) => void
+    emit('voice.noise', {
+      report: { verdict: 'too-noisy', reasons: ['loud-floor'], noiseFloorDb: -30, peakDb: -28, dynamicRangeDb: 2, fluctuationDb: 1, clippingRatio: 0, frames: 75, durationMs: 1500 },
+      action: 'push-to-talk',
+    })
+    emit('voice.level', { event: 'learned', levelDb: -20, userLevelDb: -21, gateDb: -31 })
+    emit('voice.decision', { kind: 'ignore', reason: 'background', text: 'tv-confidencial', levelDb: -40, userLevelDb: -21 })
+    const timeline = h4b.get('observability')!.getTimeline()
+    const noise = timeline.find((e) => e.name === 'voice.noise')!
+    expect(noise.payload).toMatchObject({ verdict: 'too-noisy', reasons: ['loud-floor'], noiseFloorDb: -30, action: 'push-to-talk' })
+    expect(timeline.find((e) => e.name === 'voice.level.learned')!.payload).toMatchObject({ userLevelDb: -21, gateDb: -31 })
+    const decision = timeline.find((e) => e.name === 'voice.decision')!
+    expect(decision.payload).toMatchObject({ reason: 'background', levelDb: -40, userLevelDb: -21 })
+    expect(JSON.stringify(timeline)).not.toContain('tv-confidencial')
+  })
+})
+
 describe('cue events', () => {
   it('records cue.changed and cue.repeat with their codes', async () => {
     const h4b = await createH4B({ plugins: [observability()] }).start()

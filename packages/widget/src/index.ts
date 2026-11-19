@@ -1062,14 +1062,24 @@ export class H4BChatElement extends BaseElement {
     if (!state) return
     const s = this.strings
     mic.setAttribute('aria-pressed', String(state.listening))
+    mic.setAttribute('aria-busy', String(!!state.checkingNoise))
     mic.title = state.listening ? s.listening : state.mode === 'hands-free' ? s.handsFree : s.holdToTalk
     mic.setAttribute('aria-label', mic.title)
     speaker.textContent = state.speaking ? '⏹' : state.output === 'text' ? '🔇' : '🔈'
     speaker.title = state.speaking ? s.stopSpeaking : state.output === 'text' ? s.voiceOff : s.voiceOn
     speaker.setAttribute('aria-label', speaker.title)
     const failure = !state.listening && state.error ? this.voiceError(state.error) : ''
-    partial.classList.toggle('failed', !!failure)
-    partial.textContent = state.listening && state.partial ? `“${state.partial}”` : state.listening ? s.listening : failure
+    const noisy = !!state.noise && state.noise.verdict !== 'quiet'
+    const notice = state.checkingNoise
+      ? s.noiseChecking
+      : state.listening
+        ? noisy
+          ? s.noiseHint
+          : s.listening
+        : failure || (state.noiseFallback ? s.noiseTooLoud : '')
+    partial.classList.toggle('failed', !!failure && !state.checkingNoise)
+    partial.classList.toggle('noisy', !failure && (state.noiseFallback || (state.listening && noisy)))
+    partial.textContent = state.listening && state.partial ? `“${state.partial}”` : notice
   }
 
   private voiceError({ code, stage }: { code: string; stage?: string }): string {
@@ -1094,6 +1104,10 @@ type VoiceLike = {
     partial: string
     output: 'auto' | 'voice' | 'text'
     error?: { code: string; stage?: string }
+    /** Older voice packages leave these out. */
+    noise?: { verdict: 'quiet' | 'noisy' | 'too-noisy' }
+    checkingNoise?: boolean
+    noiseFallback?: boolean
   }
   subscribe(listener: () => void): () => void
   listen(options?: { until?: 'silence' | 'stop' }): Promise<void>

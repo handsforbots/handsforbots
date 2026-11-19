@@ -76,19 +76,48 @@ export async function capturePcm16(
 }
 
 /**
+ * Minimum-statistics noise floor: the lowest RMS among the last `window`
+ * readings. Speech has pauses and stops, so the minimum follows the noise and
+ * not the voice; a steady new noise is picked up after one window.
+ */
+export function noiseFloorTracker(window: number) {
+  const ring: number[] = []
+  return {
+    push(rms: number) {
+      ring.push(rms)
+      if (ring.length > window) ring.shift()
+      return Math.min(...ring)
+    },
+    get floor() {
+      return ring.length ? Math.min(...ring) : 0
+    },
+  }
+}
+
+/** Speech threshold for one RMS reading: fixed, or raised over the tracked noise floor. */
+export function speechThreshold(floor: number, { threshold = 0.015, margin = 3 } = {}) {
+  return margin > 0 ? Math.max(threshold, floor * margin) : threshold
+}
+
+/**
  * Minimal energy-based voice activity detection: calls `onSilence` after the
- * user spoke and then stayed quiet for `silenceMs`.
+ * user spoke and then stayed quiet for `silenceMs`. Speech is RMS above
+ * `threshold` and above `margin` times the noise floor of the last `floorMs`
+ * (`margin: 0` keeps the fixed threshold), so steady room noise does not
+ * count as speech.
  */
 export function detectEndOfSpeech(
   stream: MediaStream,
   onSilence: () => void,
-  { silenceMs = 1200, threshold = 0.015 } = {},
+  { silenceMs = 1200, threshold = 0.015, margin = 3, floorMs = 3000 } = {},
 ): () => void {
   const context = new AudioContext()
   const analyser = context.createAnalyser()
   analyser.fftSize = 1024
   context.createMediaStreamSource(stream).connect(analyser)
   const data = new Float32Array(analyser.fftSize)
+  const tick = 50
+  const floor = noiseFloorTracker(Math.max(1, Math.round(floorMs / tick)))
   let spoke = false
   let quietSince = 0
   const timer = setInterval(() => {
@@ -97,14 +126,14 @@ export function detectEndOfSpeech(
     for (const v of data) sum += v * v
     const rms = Math.sqrt(sum / data.length)
     const now = Date.now()
-    if (rms > threshold) {
+    if (rms > speechThreshold(floor.push(rms), { threshold, margin })) {
       spoke = true
       quietSince = now
     } else if (spoke && now - quietSince > silenceMs) {
       spoke = false
       onSilence()
     }
-  }, 50)
+  }, tick)
   return () => {
     clearInterval(timer)
     void context.close()

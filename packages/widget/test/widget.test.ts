@@ -446,6 +446,53 @@ describe('<h4b-chat>', () => {
     update({ listening: false })
     expect(partial.textContent).toBe('')
   })
+
+  it('tells the user about the noise check, a noisy room and the fallback to push-to-talk', async () => {
+    document.body.innerHTML = ''
+    const listeners = new Set<() => void>()
+    let state: Record<string, unknown> = { supported: { stt: true, tts: false }, mode: 'hands-free', listening: false, speaking: false, partial: '', output: 'auto' }
+    const update = (patch: Record<string, unknown>) => {
+      state = { ...state, ...patch }
+      listeners.forEach((l) => l())
+    }
+    const voice = {
+      getState: () => state,
+      subscribe: (l: () => void) => (listeners.add(l), () => listeners.delete(l)),
+      listen: vi.fn(),
+      stop: vi.fn(),
+      toggle: vi.fn(),
+      setOutput: vi.fn(),
+      cancelSpeech: vi.fn(),
+    }
+    const h4b = createH4B({ plugins: [widget({ startOpen: true, language: 'en' })] })
+    await h4b.start()
+    h4b.provide('voice' as never, voice as never)
+    const root = document.querySelector('h4b-chat')!.shadowRoot!
+    const partial = root.querySelector('.partial')!
+    const mic = root.querySelector('#speech_button')!
+
+    update({ checkingNoise: true })
+    expect(partial.textContent).toBe('Checking the background noise…')
+    expect(mic.getAttribute('aria-busy')).toBe('true')
+    update({ checkingNoise: false, listening: true, noise: { verdict: 'quiet' } })
+    expect(partial.textContent).toBe('Listening…')
+    expect(partial.classList.contains('noisy')).toBe(false)
+    update({ noise: { verdict: 'noisy' } })
+    expect(partial.textContent).toContain('noisy around you')
+    expect(partial.classList.contains('noisy')).toBe(true)
+    // What the user says still wins.
+    update({ partial: 'oi' })
+    expect(partial.textContent).toBe('“oi”')
+    update({ listening: false, partial: '', mode: 'push-to-talk', noise: { verdict: 'too-noisy' }, noiseFallback: true })
+    expect(partial.textContent).toBe('Too noisy for hands-free. Hold the mic to talk.')
+    expect(mic.getAttribute('aria-busy')).toBe('false')
+    // A listening error is more urgent than the noise.
+    update({ error: { code: 'not-allowed' } })
+    expect(partial.classList.contains('failed')).toBe(true)
+    expect(partial.textContent).not.toContain('noisy')
+    update({ error: undefined, noiseFallback: false })
+    expect(partial.textContent).toBe('')
+  })
 })
 
 describe('<h4b-chat> media', () => {

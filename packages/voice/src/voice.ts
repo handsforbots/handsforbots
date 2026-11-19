@@ -1,6 +1,8 @@
 import { definePlugin, textOf, type AssistantMessage, type PluginContext } from '@handsforbots/core'
 import { planProsody, webAudioPlayer, type ProsodyPlan } from './player.js'
 import { textEchoFilter } from './providers/echo.js'
+import { checkNoise, type NoiseReport, type NoiseThresholds } from './providers/noise.js'
+import { createLevelGate, monitorLevel, type LevelGateOptions } from './providers/level.js'
 import {
   SpeechError,
   type AudioPlayer,
@@ -96,8 +98,48 @@ export type VoiceState = {
   echo?: string
   /** Speech effects in use, if any. */
   effects?: string
+  /** Last noise check (`noise` option or `checkNoise()`). */
+  noise?: NoiseReport
+  /** A noise check is running: the microphone is being measured, not listened to. */
+  checkingNoise: boolean
+  /**
+   * Hands-free was turned into push-to-talk because the room was too noisy.
+   * Cleared when the mode is set again.
+   */
+  noiseFallback: boolean
+  /** Level gate: the user's learned speech level (dBFS), once an utterance was accepted. */
+  userLevelDb?: number
   error?: SpeechError
 }
+
+/**
+ * Checks the room before hands-free listening (see the "Noisy rooms" section
+ * of the conversation guide). Off unless configured: it opens the microphone for a moment.
+ */
+export type VoiceNoiseOptions = {
+  /** `hands-free` (default): before hands-free listening starts. `manual`: only `checkNoise()`. */
+  check?: 'hands-free' | 'manual'
+  /** `push-to-talk` (default): switch to push-to-talk when too noisy and do not start listening. `warn`: only report. */
+  tooNoisy?: 'push-to-talk' | 'warn'
+  /** A report newer than this is reused instead of measuring again. Default 300000 (5 min). */
+  maxAgeMs?: number
+  /** Passed to `checkNoise`. */
+  durationMs?: number
+  thresholds?: NoiseThresholds
+  processing?: boolean
+  /** Replaces the measurement (a model, a server, a test). Default `checkNoise`. */
+  measure?: (signal: AbortSignal) => Promise<NoiseReport>
+}
+
+/** A noise check finished; `action` says what the voice did about it. */
+export type VoiceNoiseEvent = { report: NoiseReport; action?: 'push-to-talk' }
+
+/** What the level gate did, for debugging (levels in dBFS, no audio, no text). */
+export type VoiceLevelEvent =
+  | { event: 'monitor.open' }
+  | { event: 'monitor.close' }
+  | { event: 'learned'; levelDb: number; userLevelDb: number; gateDb: number }
+  | { event: 'learn.skipped'; reason: 'bot-speech' | 'no-audio' }
 
 export type ListenOptions = {
   /**
@@ -136,12 +178,23 @@ export type BargeInOptions = {
   ignore?: string[]
 }
 
+/** Level gate readings attached to a decision when the gate is on (dBFS). */
+export type VoiceLevelReading = {
+  /** Loud end of the audio heard in the lookback window. */
+  levelDb?: number
+  /** The user's learned level, if learned yet. */
+  userLevelDb?: number
+}
+
 export type VoiceDecision =
-  | { kind: 'interrupt'; text: string }
+  | ({ kind: 'interrupt'; text: string } & VoiceLevelReading)
   | {
       kind: 'ignore'
       text: string
-      reason: 'backchannel' | 'too-short' | 'echo'
+      reason: 'backchannel' | 'too-short' | 'echo' | 'background'
+      /** For `background`: the level heard and the user's learned level, in dBFS. */
+      levelDb?: number
+      userLevelDb?: number
       /** For backchannels: the reply being spoken and how many of its characters were spoken then (ADR 0015). */
       messageId?: string
       at?: number
@@ -220,6 +273,12 @@ export type VoiceService = {
   unlockAudio(): void
   /** Whether a reply arriving now would be spoken (`output` is `voice`, or `auto` after voice input). */
   willSpeakReplies(): boolean
+  /**
+   * Measures the room now (the microphone opens for a moment) and stores the
+   * report in `noise`. Resolves `undefined` if the measurement failed (the
+   * error goes to the `error` event, `source: 'voice:noise'`).
+   */
+  checkNoise(): Promise<NoiseReport | undefined>
 }
 
 declare module '@handsforbots/core' {
@@ -235,6 +294,10 @@ declare module '@handsforbots/core' {
     'voice.track': VoiceTrackEvent
     /** Each speech provider loading its model and, when it traces, its internals (for logs and debugging). */
     'voice.tts': VoiceTtsEvent
+    /** A noise check finished, and what the voice did about it. */
+    'voice.noise': VoiceNoiseEvent
+    /** The level gate opened or closed its monitor, learned the user's level, or skipped learning. */
+    'voice.level': VoiceLevelEvent
   }
 }
 
@@ -273,6 +336,17 @@ export type VoiceOptions = {
    * the reply each came (ADR 0015). They never interrupt. Default true.
    */
   reactions?: boolean
+  /**
+   * Measures the room before hands-free listening and falls back to
+   * push-to-talk when it is too noisy. `true` for the defaults. Off by default.
+   */
+  noise?: boolean | VoiceNoiseOptions
+  /**
+   * Hands-free: drops voices quieter than the user's own (TV, people nearby)
+   * by loudness, learned from the user's accepted utterances. Opens a second
+   * microphone capture while listening. `true` for the defaults. Off by default.
+   */
+  levelGate?: boolean | LevelGateOptions
 }
 
 const toArray = <T>(value: T | T[] | undefined): T[] => (value === undefined ? [] : Array.isArray(value) ? value : [value])
@@ -361,16 +435,71 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     ttsStatus: {},
     synthesizing: false,
     effects: options.effects?.name,
+    checkingNoise: false,
+    noiseFallback: false,
   }
   let echo: EchoFilter | undefined = options.echo === false ? undefined : (options.echo ?? textEchoFilter())
   state.echo = echo?.name
   const listeners = new Set<() => void>()
+  /** When the bot last stopped speaking (epoch ms): its voice may still be in the level window. */
+  let spokeUntil = 0
   const set = (patch: Partial<VoiceState>) => {
     const next = { ...state, ...patch }
+    if (state.speaking && !next.speaking) spokeUntil = Date.now()
     state = { ...next, phase: phaseOf(next) }
     for (const listener of listeners) listener()
   }
   const decide = (decision: VoiceDecision) => ctx.emit('voice.decision', decision)
+
+  /* Noise check ---------------------------------------------------------- */
+
+  const noiseOptions: VoiceNoiseOptions | undefined =
+    options.noise === true ? {} : options.noise ? options.noise : undefined
+  let noiseRun: { controller: AbortController; done: Promise<NoiseReport | undefined> } | undefined
+  let noiseAt = 0
+
+  const measureNoise = (): Promise<NoiseReport | undefined> => {
+    if (noiseRun) return noiseRun.done
+    const controller = new AbortController()
+    const opts = noiseOptions ?? {}
+    const measure =
+      opts.measure ??
+      ((signal: AbortSignal) =>
+        checkNoise({ durationMs: opts.durationMs, thresholds: opts.thresholds, processing: opts.processing, signal }))
+    set({ checkingNoise: true })
+    const done = (async () => {
+      try {
+        const report = await measure(controller.signal)
+        noiseAt = Date.now()
+        set({ noise: report })
+        return report
+      } catch (error) {
+        if (!controller.signal.aborted) ctx.emit('error', { error, source: 'voice:noise' })
+        return undefined
+      } finally {
+        noiseRun = undefined
+        set({ checkingNoise: false })
+      }
+    })()
+    noiseRun = { controller, done }
+    return done
+  }
+
+  /** Before hands-free listening: false when listening should not start. */
+  const noiseAllowsListening = async (): Promise<boolean> => {
+    if (!noiseOptions || (noiseOptions.check ?? 'hands-free') !== 'hands-free' || state.mode !== 'hands-free') return true
+    // Another listen() is already waiting for this check and will start the session.
+    if (noiseRun) return false
+    const fresh = state.noise && Date.now() - noiseAt < (noiseOptions.maxAgeMs ?? 300_000)
+    const report = fresh ? state.noise : await measureNoise()
+    if (!report || !wantListening) return wantListening
+    const fallback = report.verdict === 'too-noisy' && (noiseOptions.tooNoisy ?? 'push-to-talk') === 'push-to-talk'
+    if (!fresh) ctx.emit('voice.noise', fallback ? { report, action: 'push-to-talk' } : { report })
+    if (!fallback) return true
+    wantListening = false
+    set({ mode: 'push-to-talk', noiseFallback: true })
+    return false
+  }
 
   /** Shows the error in the state (for the UI) and on the kernel bus (for the developer). */
   const fail = (error: SpeechError, patch: Partial<VoiceState> = {}, source = 'voice') => {
@@ -571,6 +700,83 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     }
   }
 
+  /* Level gate ----------------------------------------------------------- */
+
+  const gateOptions: LevelGateOptions | undefined =
+    options.levelGate === true ? {} : options.levelGate ? options.levelGate : undefined
+  const levelGate = gateOptions ? createLevelGate(gateOptions) : undefined
+  let monitor: { close?: () => void; closed: boolean } | undefined
+
+  const openMonitor = () => {
+    if (!levelGate || monitor || state.mode !== 'hands-free') return
+    const entry: { close?: () => void; closed: boolean } = { closed: false }
+    monitor = entry
+    const open = gateOptions?.open ?? ((onLevel: (db: number) => void) => monitorLevel(onLevel))
+    // The bot's own voice is not the user's: it is measured, but never learned from.
+    open((db) => levelGate.push(db))
+      .then((close) => {
+        if (entry.closed) return close()
+        entry.close = close
+        ctx.emit('voice.level', { event: 'monitor.open' })
+      })
+      .catch((error) => {
+        if (monitor === entry) monitor = undefined
+        ctx.emit('error', { error, source: 'voice:level-gate' })
+      })
+  }
+  const closeMonitor = () => {
+    const entry = monitor
+    monitor = undefined
+    if (!entry) return
+    entry.closed = true
+    if (!entry.close) return
+    entry.close()
+    ctx.emit('voice.level', { event: 'monitor.close' })
+  }
+
+  /**
+   * Hands-free text that came from a voice quieter than the user's: '' when
+   * the gate drops it. Push-to-talk is never gated: the user is pressing.
+   */
+  const withoutBackground = (text: string, final: boolean): string => {
+    if (!levelGate || !monitor || !text.trim() || state.mode !== 'hands-free') return text
+    if ((gateOptions?.scope ?? 'barge-in') === 'barge-in' && !botAnswering()) return text
+    if (levelGate.judge() !== 'background') return text
+    if (final) {
+      decide({
+        kind: 'ignore',
+        text,
+        reason: 'background',
+        levelDb: levelGate.peak(),
+        userLevelDb: levelGate.userLevelDb,
+      })
+    }
+    return ''
+  }
+
+  /** Levels for a decision, when the gate is listening. */
+  const levelReading = (): VoiceLevelReading =>
+    levelGate && monitor ? { levelDb: levelGate.peak(), userLevelDb: levelGate.userLevelDb } : {}
+
+  /** An utterance from the user was accepted: learn how loud they speak. */
+  const learnLevel = () => {
+    if (!levelGate || !monitor) return
+    // The window must hold the user's voice, not the bot's.
+    if (state.speaking || Date.now() - spokeUntil < (gateOptions?.lookbackMs ?? 3000)) {
+      ctx.emit('voice.level', { event: 'learn.skipped', reason: 'bot-speech' })
+      return
+    }
+    const levelDb = levelGate.peak()
+    if (levelDb === undefined) {
+      ctx.emit('voice.level', { event: 'learn.skipped', reason: 'no-audio' })
+      return
+    }
+    levelGate.learn()
+    const userLevelDb = levelGate.userLevelDb!
+    ctx.emit('voice.level', { event: 'learned', levelDb, userLevelDb, gateDb: levelGate.gateDb! })
+    if (userLevelDb !== state.userLevelDb) set({ userLevelDb })
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Barge-in                                                               */
   /* ---------------------------------------------------------------------- */
@@ -620,7 +826,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     }
     if (!final && words.length < (bargeInOptions.minWords ?? 2)) return 'pending'
     bargedIn = true
-    decide({ kind: 'interrupt', text })
+    decide({ kind: 'interrupt', text, ...levelReading() })
     // Interrupt first: the interceptor reads how much was spoken before speech stops.
     void ctx.app.interrupt({ by: 'voice' })
     service.cancelSpeech()
@@ -698,7 +904,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         {
           onPartial(heard) {
             if (!isCurrent() || entry.stopping) return
-            const text = withoutEcho(heard, false)
+            const text = withoutBackground(withoutEcho(heard, false), false)
             if (entry.held) return set({ partial: heldText(entry.held, text) })
             bargeInCheck(text, false)
             if (!handsFree) return set({ partial: text })
@@ -716,9 +922,11 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
           onFinal(text, meta) {
             if (entry.discarded) return
             const heard = text.trim()
-            const trimmed = withoutEcho(heard, true).trim()
+            const afterEcho = withoutEcho(heard, true).trim()
+            const trimmed = entry.held ? afterEcho : withoutBackground(afterEcho, true).trim()
             if (heard && !trimmed) {
-              decide({ kind: 'ignore', text: heard, reason: 'echo' })
+              // A background voice was already reported by the gate.
+              if (!afterEcho) decide({ kind: 'ignore', text: heard, reason: 'echo' })
               if (handsFree && !entry.held) {
                 turn.live = ''
                 turn.heardAt = 0
@@ -763,6 +971,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
               return
             }
             turn.texts.push(trimmed)
+            learnLevel()
             turn.live = ''
             turn.stt = provider.name
             // Recognizers deliver the final result some time after the user stops
@@ -823,6 +1032,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
             } else if (!wantListening && turn.texts.length > 0) {
               sendTurn('manual')
             }
+            if (!wantListening) closeMonitor()
           },
         },
       )
@@ -1247,10 +1457,15 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       } else if (state.speaking) {
         service.cancelSpeech()
       }
+      if (!(await noiseAllowsListening())) return
+      if (!wantListening || active) return
+      openMonitor()
       await startSession()
     },
     stop() {
       wantListening = false
+      noiseRun?.controller.abort()
+      closeMonitor()
       clearTimeout(restartTimer)
       const entry = active
       const press = holding
@@ -1276,6 +1491,8 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     },
     cancel() {
       wantListening = false
+      noiseRun?.controller.abort()
+      closeMonitor()
       clearTimeout(restartTimer)
       if (holding) release(holding, false)
       discardPending()
@@ -1309,11 +1526,17 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         if (wantListening) restartTimer = setTimeout(() => wantListening && !active && void startSession(), 250)
       }
     },
+    async checkNoise() {
+      const report = await measureNoise()
+      if (report) ctx.emit('voice.noise', { report })
+      return report
+    },
     async toggle() {
       if (state.listening || wantListening) service.stop()
       else await service.listen()
     },
     setMode(mode) {
+      if (state.noiseFallback) set({ noiseFallback: false })
       if (mode === state.mode) return
       const wasListening = wantListening
       service.stop()
@@ -1410,6 +1633,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
 
   ctx.onDispose(() => {
     disposed = true
+    closeMonitor()
     unfollowEffects?.()
     followTraces([])
     for (const controller of loadControllers) controller.abort()

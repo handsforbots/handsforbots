@@ -229,6 +229,105 @@ Every interruption, ignored backchannel or echo and end of turn is reported on `
 - Recognizers that open the microphone (`httpSTT`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`) use echo cancellation, noise suppression and automatic gain. Web Speech manages its own microphone; how well it ignores the bot's own voice depends on the device. The [echo filter](#echo-filter) covers what gets through. Test with and without headphones.
 - Safari on iOS ends recognition sessions on its own; hands-free restarts them, but test long sessions on real devices.
 
+### Noisy rooms
+
+The browser has no API that says "this room is too noisy": the page has to measure the audio itself. `checkNoise()` opens the microphone for a moment, measures it and closes it, so you can warn the user before the first turn goes wrong:
+
+```ts
+import { checkNoise } from '@handsforbots/voice'
+
+const report = await checkNoise({ durationMs: 1500 }) // ask the user to stay quiet meanwhile
+if (report.verdict !== 'quiet') showHint(report.reasons) // e.g. "move somewhere quieter or use a headset"
+```
+
+`measureNoise(stream, options)` does the same on a stream you already opened, and `createNoiseMeter()` / `assessNoise()` work on samples or frame levels you have (a recognizer that exposes audio, a recording), with no microphone at all.
+
+The report (`NoiseReport`) has the numbers and a verdict, `quiet`, `noisy` or `too-noisy`, with its `reasons`:
+
+| Field | Meaning |
+|---|---|
+| `noiseFloorDb` | 10th percentile of the 20 ms frame levels, in dBFS (0 is full scale): the room's noise |
+| `peakDb`, `dynamicRangeDb` | 95th percentile, and how far it sits above the floor |
+| `snrDb` | estimated signal-to-noise ratio; present only when the range is wide enough (`speechRangeDb`, 12 dB) to be the user's speech |
+| `fluctuationDb` | 75th minus 10th percentile: near 0 for steady noise (a fan), high for voices, TV or traffic |
+| `clippingRatio` | share of samples at full scale |
+
+| Reason | When (defaults) | Verdict |
+|---|---|---|
+| `loud-floor` | floor from -50 dBFS; from -35 dBFS | `noisy`; `too-noisy` |
+| `fluctuating` | no speech found and `fluctuationDb` from 6 dB, with the floor above -60 dBFS | `noisy` |
+| `low-snr` | speech found and `snrDb` under 15 dB, with the floor above -60 dBFS | `noisy` |
+| `clipping` | `clippingRatio` from 0.001 (too much gain, or shouting into the microphone) | `noisy` |
+| `silent-input` | `peakDb` at -90 dBFS or lower: muted microphone or wrong device | unchanged |
+
+Change any limit with `thresholds`. Treat the defaults as a starting point: dBFS is not sound pressure, and the same room reads differently on each microphone and gain, so calibrate with recordings from your users' devices. Fluctuating noise is the one to worry about: noise suppression removes a steady fan well, but not people talking nearby, and recognizers mistake them for the user.
+
+By default `checkNoise()` measures the raw signal (`processing: false`): noise suppression would hide steady noise, and automatic gain raises the floor while nobody speaks. `processing: true` measures what the microphone recognizers hear. Web Speech opens its own microphone, so with it the check is always a separate measurement.
+
+#### Checking before hands-free
+
+The voice plugin can run the check itself. Turn it on with the `noise` option (off by default, since it opens the microphone for a moment before listening):
+
+```ts
+voice({ stt, tts, mode: 'hands-free', noise: true })
+voice({ stt, tts, mode: 'hands-free', noise: { tooNoisy: 'warn', maxAgeMs: 60_000, thresholds: { noisyFloorDb: -45 } } })
+```
+
+- With `check: 'hands-free'` (default), `listen()` in hands-free measures the room first (`getState().checkingNoise` is `true`; the recognizer has not started yet), then listens. Push-to-talk is not checked.
+- `too-noisy` with `tooNoisy: 'push-to-talk'` (default): the mode becomes `push-to-talk`, `noiseFallback` is `true` and listening does not start. An open microphone in a loud room interrupts the bot and never ends the turn; holding to talk does not have that problem. `noiseFallback` is cleared at the next `setMode()`. `tooNoisy: 'warn'` only reports.
+- `noisy` (or `too-noisy` with `warn`): listening starts; the report is in `getState().noise` for the UI to warn the user.
+- A report newer than `maxAgeMs` (5 minutes) is reused, so pausing and resuming does not measure again.
+- `stop()`, `cancel()` or `toggle()` during the check cancel it, and nothing is heard. If the measurement fails (microphone denied, for example), the error goes to `h4b.on('error')` with `source: 'voice:noise'` and listening starts anyway: the recognizer reports its own microphone errors.
+- Each finished check emits `voice.noise` `{ report, action? }`, with `action: 'push-to-talk'` when the mode changed. `voice.checkNoise()` measures on demand (also with `check: 'manual'`, which never measures before listening).
+- `measure(signal)` replaces the measurement (a model, your server, a test) and must return a `NoiseReport`; `assessNoise()` builds one from frame levels.
+
+The widget shows the check: "Checking the background noise…" while it runs (the mic button has `aria-busy`), a hint while listening in a noisy room instead of "Listening…", and "Too noisy for hands-free. Hold the mic to talk." after the fallback. Change the texts with `strings: { noiseChecking, noiseHint, noiseTooLoud }`; style the hint with `.partial.noisy` through `::part()` or your own UI. A listening error replaces the hint.
+
+`httpSTT` ends an utterance on silence with `detectEndOfSpeech`, which now also follows the room: speech is a level above `threshold` (0.015 RMS) **and** above `margin` (3, about 10 dB) times the noise floor of the last `floorMs` (3000 ms, the minimum level heard in that window). In a noisy room the old fixed threshold took the noise for speech and the utterance only ended on its time limit. `margin: 0` keeps the fixed threshold.
+
+#### Voices nearby: the level gate
+
+The noise check says the room is noisy; it does not keep a TV or a colleague from interrupting the bot. The level gate does, without a model: the user talks into the microphone, so their speech is usually well above the voices around them. The gate learns how loud the user's accepted utterances are and drops speech much quieter than that.
+
+```ts
+voice({ stt, tts, mode: 'hands-free', levelGate: true })
+voice({ stt, tts, mode: 'hands-free', levelGate: { scope: 'all', gapDb: 12 } })
+```
+
+- Hands-free only. While listening it opens a second microphone capture (with the same processing as the recognizers) and reads its level every 50 ms; it closes when listening stops. Push-to-talk is never gated: the user is pressing.
+- **Learning:** each hands-free utterance that joins a turn adds the loud end (95th percentile) of the last `lookbackMs` (3000) of audio; the user's level is the median of the last `remember` (5). Utterances heard while the bot speaks, or within `lookbackMs` after, are not learned from. Until the first one, nothing is dropped. `getState().userLevelDb` shows the learned level.
+- **Judging:** when a transcript arrives, the loud end of the last `lookbackMs` is compared with `userLevelDb - gapDb` (10 dB). Below it, the speech is background.
+- `scope: 'barge-in'` (default): background speech heard while the bot answers neither interrupts it nor becomes a turn. `scope: 'all'`: background speech is also dropped while the bot is quiet, so it never starts or grows a turn.
+- Dropped finals go to `voice.decision` as `{ kind: 'ignore', reason: 'background', text, levelDb, userLevelDb }`. If the monitor cannot open, the error goes to `h4b.on('error')` with `source: 'voice:level-gate'` and listening goes on ungated.
+- `open(onLevel)` replaces the monitor (tests, or audio you already capture); `createLevelGate()` is the same logic for your own code.
+
+Limits, by design of a loudness rule:
+
+- It drops the user too when they speak much softer than usual or move away from the microphone; and it lets background voices through when they are as loud as the user. With `scope: 'all'` a wrongly learned level can keep dropping the user, which is why the default only guards barge-in: after the bot finishes, the user is heard and the level is learned again.
+- While the bot speaks through speakers, its voice is in the window too. Echo cancellation removes it when the bot plays through the page (`httpTTS`, the models in `voice-models`); `speechSynthesis` plays outside the browser's audio path, so with `webSpeechTTS` and speakers the bot's own voice can make a background voice look loud enough. Headphones avoid it.
+- Recognizers deliver transcripts late, and the window is a few seconds: speech from the user just before a background voice can make it pass.
+- Telling *who* speaks needs a model conditioned on the user's voice (see [references](./references.md#microphone-noise-check)); the gate only tells *how loud*.
+
+#### Debugging noise and the level gate
+
+Voice that "behaves strangely" in some places is often the room. Everything the noise check and the level gate decide is visible, with levels in dBFS and no audio:
+
+| Where | What |
+|---|---|
+| `getState()` | `noise` (the last report), `checkingNoise`, `noiseFallback`, `userLevelDb` |
+| `h4b.on('voice.noise', …)` | `{ report, action? }` after each check; `action: 'push-to-talk'` when the mode changed |
+| `h4b.on('voice.level', …)` | `monitor.open` / `monitor.close`; `learned` `{ levelDb, userLevelDb, gateDb }` each time an utterance teaches the gate; `learn.skipped` `{ reason: 'bot-speech' \| 'no-audio' }` |
+| `h4b.on('voice.decision', …)` | `ignore` with `reason: 'background'` and `levelDb` / `userLevelDb` for each dropped final; `interrupt` carries `levelDb` / `userLevelDb` too while the gate listens |
+| `h4b.on('error', …)` | `source: 'voice:noise'` (the check failed), `voice:level-gate` (the monitor did not open: no gating) |
+| `observability` | records all of the above (`voice.noise`, `voice.level.<event>`, `voice.decision` without the transcript unless `includeContent`) |
+
+| Symptom | Look at |
+|---|---|
+| Hands-free turned into push-to-talk | `voice.noise` with `action: 'push-to-talk'`: its `reasons` and `noiseFloorDb`. If the room was fine, the thresholds are too strict for that microphone |
+| The TV still interrupts the bot | the `interrupt` decision: `levelDb` near `userLevelDb` means the TV is as loud as the user (or the bot's own voice is in the window, with `webSpeechTTS` on speakers); no levels means the gate is off or its monitor failed |
+| The user's words are ignored | `background` decisions: `levelDb` far below `userLevelDb`. Check the `learned` events: a high `userLevelDb` (the user shouted, or learned while the TV was loud) drops normal speech; raise `gapDb` |
+| `userLevelDb` never appears | `learn.skipped` with `bot-speech` (the user only spoke over or right after the bot) or `no-audio` (the monitor is not reading), or a `voice:level-gate` error |
+
 ### Tuning
 
 | Symptom | Try |
@@ -238,4 +337,6 @@ Every interruption, ignored backchannel or echo and end of turn is reported on `
 | Bot interrupts itself | check that `voice.decision` shows `reason: 'echo'`; lower `echo.threshold` or raise `echo.tail`; headphones, a microphone recognizer with echo cancellation, a higher `minWords`, or `bargeIn: false` |
 | User speech dropped as echo | raise `echo.threshold` or `minRun`, lower `tail`, or `echo: false` with headphones |
 | "ok"/"yes" interrupt the bot | add them to `bargeIn.ignore` |
+| TV or people nearby interrupt the bot | `levelGate: true` (hands-free); `scope: 'all'` if they also start turns; headphones |
+| Recognition fails in some places | run [`checkNoise()`](#noisy-rooms) and suggest a quieter spot or a headset when it is not `quiet` |
 | Too many backend calls while thinking | keep `whileBusy` at `interrupt` or `merge` (resumption joins them) |

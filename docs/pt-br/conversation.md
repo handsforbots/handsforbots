@@ -229,6 +229,105 @@ Toda interrupção, backchannel ou eco ignorado e fim de turno é informado em `
 - Reconhecedores que abrem o microfone (`httpSTT`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`) usam cancelamento de eco, supressão de ruído e ganho automático. O Web Speech cuida do próprio microfone; o quanto ele ignora a voz do bot depende do aparelho. O [filtro de eco](#filtro-de-eco) cobre o que passar. Teste com e sem fone.
 - O Safari no iOS encerra as sessões de reconhecimento sozinho; o mãos-livres as reinicia, mas teste sessões longas em aparelhos reais.
 
+### Ambientes com ruído
+
+O navegador não tem uma API que diga "este ambiente tem ruído demais": a página precisa medir o áudio. O `checkNoise()` abre o microfone por um instante, mede e fecha, para você avisar a pessoa antes que o primeiro turno dê errado:
+
+```ts
+import { checkNoise } from '@handsforbots/voice'
+
+const relatorio = await checkNoise({ durationMs: 1500 }) // peça silêncio à pessoa enquanto isso
+if (relatorio.verdict !== 'quiet') mostrarDica(relatorio.reasons) // ex.: "vá para um lugar mais quieto ou use fone"
+```
+
+O `measureNoise(stream, opções)` faz o mesmo num stream que você já abriu, e o `createNoiseMeter()` / `assessNoise()` trabalham com amostras ou níveis de frame que você já tem (um reconhecedor que expõe o áudio, uma gravação), sem microfone nenhum.
+
+O relatório (`NoiseReport`) traz os números e um veredito, `quiet`, `noisy` ou `too-noisy`, com os motivos em `reasons`:
+
+| Campo | Significado |
+|---|---|
+| `noiseFloorDb` | percentil 10 dos níveis dos frames de 20 ms, em dBFS (0 é a escala cheia): o ruído do ambiente |
+| `peakDb`, `dynamicRangeDb` | percentil 95, e quanto ele fica acima do piso |
+| `snrDb` | relação sinal-ruído estimada; só aparece quando a faixa é larga o bastante (`speechRangeDb`, 12 dB) para ser a fala da pessoa |
+| `fluctuationDb` | percentil 75 menos o 10: perto de 0 para ruído constante (ventilador), alto para vozes, TV ou trânsito |
+| `clippingRatio` | fração das amostras na escala cheia |
+
+| Motivo | Quando (padrões) | Veredito |
+|---|---|---|
+| `loud-floor` | piso a partir de -50 dBFS; a partir de -35 dBFS | `noisy`; `too-noisy` |
+| `fluctuating` | sem fala detectada e `fluctuationDb` a partir de 6 dB, com piso acima de -60 dBFS | `noisy` |
+| `low-snr` | com fala e `snrDb` abaixo de 15 dB, com piso acima de -60 dBFS | `noisy` |
+| `clipping` | `clippingRatio` a partir de 0,001 (ganho alto demais, ou grito no microfone) | `noisy` |
+| `silent-input` | `peakDb` em -90 dBFS ou menos: microfone mudo ou aparelho errado | não muda |
+
+Mude qualquer limite com `thresholds`. Os padrões são um ponto de partida: dBFS não é pressão sonora, e o mesmo ambiente mede diferente em cada microfone e ganho, então calibre com gravações dos aparelhos de quem usa. O ruído que flutua é o que preocupa: a supressão de ruído tira bem um ventilador, mas não gente conversando por perto, e os reconhecedores confundem essas vozes com a da pessoa.
+
+Por padrão o `checkNoise()` mede o sinal cru (`processing: false`): a supressão de ruído esconderia o ruído constante, e o ganho automático sobe o piso enquanto ninguém fala. `processing: true` mede o que os reconhecedores de microfone ouvem. O Web Speech abre o próprio microfone, então com ele o teste é sempre uma medição à parte.
+
+#### Teste antes do mãos-livres
+
+O plugin de voz pode rodar o teste sozinho. Ligue com a opção `noise` (desligada por padrão, porque abre o microfone por um instante antes de ouvir):
+
+```ts
+voice({ stt, tts, mode: 'hands-free', noise: true })
+voice({ stt, tts, mode: 'hands-free', noise: { tooNoisy: 'warn', maxAgeMs: 60_000, thresholds: { noisyFloorDb: -45 } } })
+```
+
+- Com `check: 'hands-free'` (padrão), o `listen()` no mãos-livres mede o ambiente primeiro (`getState().checkingNoise` fica `true`; o reconhecedor ainda não começou) e depois ouve. O push-to-talk não é testado.
+- `too-noisy` com `tooNoisy: 'push-to-talk'` (padrão): o modo vira `push-to-talk`, `noiseFallback` fica `true` e a escuta não começa. Microfone aberto num ambiente barulhento interrompe o bot e nunca encerra o turno; segurar para falar não tem esse problema. O `noiseFallback` some no próximo `setMode()`. `tooNoisy: 'warn'` só informa.
+- `noisy` (ou `too-noisy` com `warn`): a escuta começa; o relatório fica em `getState().noise` para a interface avisar a pessoa.
+- Um relatório mais novo que `maxAgeMs` (5 minutos) é reaproveitado, então pausar e voltar não mede de novo.
+- `stop()`, `cancel()` ou `toggle()` durante o teste o cancelam, e nada é ouvido. Se a medição falhar (microfone negado, por exemplo), o erro vai para o `h4b.on('error')` com `source: 'voice:noise'` e a escuta começa assim mesmo: o reconhecedor informa os próprios erros de microfone.
+- Cada teste terminado emite `voice.noise` `{ report, action? }`, com `action: 'push-to-talk'` quando o modo mudou. O `voice.checkNoise()` mede quando você pedir (também com `check: 'manual'`, que nunca mede antes de ouvir).
+- `measure(signal)` substitui a medição (um modelo, o seu servidor, um teste) e deve devolver um `NoiseReport`; o `assessNoise()` monta um a partir dos níveis dos frames.
+
+O widget mostra o teste: "Verificando o ruído do ambiente…" enquanto ele roda (o botão do microfone fica com `aria-busy`), um aviso no lugar de "Ouvindo…" quando há ruído, e "Ruído demais para o mãos-livres. Segure o microfone para falar." depois da troca de modo. Mude os textos com `strings: { noiseChecking, noiseHint, noiseTooLoud }`; estilize o aviso com `.partial.noisy` via `::part()` ou na sua própria interface. Um erro de escuta substitui o aviso.
+
+O `httpSTT` encerra a fala por silêncio com o `detectEndOfSpeech`, que agora também acompanha o ambiente: é fala o nível acima de `threshold` (0,015 RMS) **e** acima de `margin` (3, cerca de 10 dB) vezes o piso de ruído dos últimos `floorMs` (3000 ms, o menor nível ouvido nessa janela). Num ambiente barulhento o limite fixo antigo tomava o ruído por fala, e a fala só acabava no limite de tempo. `margin: 0` mantém o limite fixo.
+
+#### Vozes por perto: o portão de nível
+
+O teste de ruído diz que o ambiente é barulhento; ele não impede que uma TV ou um colega interrompam o bot. O portão de nível impede, sem modelo: a pessoa fala no microfone, então a voz dela costuma ficar bem acima das vozes em volta. O portão aprende o volume das falas aceitas da pessoa e descarta fala bem mais baixa que isso.
+
+```ts
+voice({ stt, tts, mode: 'hands-free', levelGate: true })
+voice({ stt, tts, mode: 'hands-free', levelGate: { scope: 'all', gapDb: 12 } })
+```
+
+- Só no mãos-livres. Enquanto ouve, abre uma segunda captura do microfone (com o mesmo processamento dos reconhecedores) e lê o nível a cada 50 ms; fecha quando a escuta para. O push-to-talk nunca passa pelo portão: a pessoa está apertando o botão.
+- **Aprendizado:** cada fala do mãos-livres que entra num turno acrescenta o topo (percentil 95) dos últimos `lookbackMs` (3000) de áudio; o nível da pessoa é a mediana das últimas `remember` (5). Falas ouvidas enquanto o bot fala, ou até `lookbackMs` depois, não entram no aprendizado. Antes da primeira, nada é descartado. `getState().userLevelDb` mostra o nível aprendido.
+- **Julgamento:** quando chega uma transcrição, o topo dos últimos `lookbackMs` é comparado com `userLevelDb - gapDb` (10 dB). Abaixo disso, a fala é de fundo.
+- `scope: 'barge-in'` (padrão): fala de fundo ouvida enquanto o bot responde não o interrompe nem vira turno. `scope: 'all'`: a fala de fundo também é descartada com o bot calado, então nunca abre nem aumenta um turno.
+- Finais descartados vão ao `voice.decision` como `{ kind: 'ignore', reason: 'background', text, levelDb, userLevelDb }`. Se a captura não abrir, o erro vai para o `h4b.on('error')` com `source: 'voice:level-gate'` e a escuta segue sem portão.
+- `open(onLevel)` substitui a captura (testes, ou áudio que você já captura); `createLevelGate()` é a mesma lógica para o seu código.
+
+Limites, por ser uma regra de volume:
+
+- Descarta a pessoa também quando ela fala bem mais baixo que o normal ou se afasta do microfone; e deixa passar vozes de fundo tão altas quanto a dela. Com `scope: 'all'`, um nível aprendido errado pode continuar descartando a pessoa, e por isso o padrão só protege o barge-in: depois que o bot termina, a pessoa é ouvida e o nível é aprendido de novo.
+- Enquanto o bot fala pelo alto-falante, a voz dele também entra na janela. O cancelamento de eco a remove quando o bot toca pela página (`httpTTS`, os modelos do `voice-models`); o `speechSynthesis` toca fora do caminho de áudio do navegador, então com `webSpeechTTS` e alto-falante a própria voz do bot pode fazer uma voz de fundo parecer alta o bastante. Fone resolve.
+- Os reconhecedores entregam a transcrição com atraso, e a janela tem alguns segundos: uma fala da pessoa logo antes de uma voz de fundo pode fazê-la passar.
+- Saber *quem* fala exige um modelo condicionado à voz da pessoa (veja as [referências](./references.md#teste-de-ruído-do-microfone)); o portão só sabe *quão alto*.
+
+#### Depurando o ruído e o portão de nível
+
+Voz que "se comporta de um jeito estranho" em alguns lugares muitas vezes é o ambiente. Tudo o que o teste de ruído e o portão de nível decidem fica visível, com níveis em dBFS e sem áudio:
+
+| Onde | O quê |
+|---|---|
+| `getState()` | `noise` (o último relatório), `checkingNoise`, `noiseFallback`, `userLevelDb` |
+| `h4b.on('voice.noise', …)` | `{ report, action? }` depois de cada teste; `action: 'push-to-talk'` quando o modo mudou |
+| `h4b.on('voice.level', …)` | `monitor.open` / `monitor.close`; `learned` `{ levelDb, userLevelDb, gateDb }` a cada fala que ensina o portão; `learn.skipped` `{ reason: 'bot-speech' \| 'no-audio' }` |
+| `h4b.on('voice.decision', …)` | `ignore` com `reason: 'background'` e `levelDb` / `userLevelDb` para cada final descartado; o `interrupt` também traz `levelDb` / `userLevelDb` enquanto o portão escuta |
+| `h4b.on('error', …)` | `source: 'voice:noise'` (o teste falhou), `voice:level-gate` (a captura não abriu: sem portão) |
+| `observability` | grava tudo isso (`voice.noise`, `voice.level.<evento>`, `voice.decision` sem a transcrição, a não ser com `includeContent`) |
+
+| Sintoma | Olhe |
+|---|---|
+| O mãos-livres virou push-to-talk | `voice.noise` com `action: 'push-to-talk'`: os `reasons` e o `noiseFloorDb`. Se o ambiente estava bom, os limites estão rígidos demais para aquele microfone |
+| A TV ainda interrompe o bot | a decisão `interrupt`: `levelDb` perto do `userLevelDb` quer dizer que a TV está tão alta quanto a pessoa (ou que a voz do próprio bot está na janela, com `webSpeechTTS` no alto-falante); sem níveis, o portão está desligado ou a captura falhou |
+| As palavras da pessoa são ignoradas | decisões `background`: `levelDb` bem abaixo do `userLevelDb`. Veja os eventos `learned`: um `userLevelDb` alto (a pessoa gritou, ou aprendeu com a TV alta) descarta fala normal; aumente o `gapDb` |
+| O `userLevelDb` nunca aparece | `learn.skipped` com `bot-speech` (a pessoa só falou por cima do bot ou logo depois dele) ou `no-audio` (a captura não está lendo), ou um erro `voice:level-gate` |
+
 ### Ajustes
 
 | Sintoma | Tente |
@@ -238,4 +337,6 @@ Toda interrupção, backchannel ou eco ignorado e fim de turno é informado em `
 | O bot interrompe a si mesmo | ver se o `voice.decision` mostra `reason: 'echo'`; diminuir `echo.threshold` ou aumentar `echo.tail`; fone, um reconhecedor de microfone com cancelamento de eco, `minWords` maior, ou `bargeIn: false` |
 | Fala da pessoa descartada como eco | aumentar `echo.threshold` ou `minRun`, diminuir `tail`, ou `echo: false` com fone |
 | "ok"/"sim" interrompem o bot | acrescentá-los a `bargeIn.ignore` |
+| TV ou gente por perto interrompe o bot | `levelGate: true` (mãos-livres); `scope: 'all'` se também abrem turnos; fone |
+| O reconhecimento falha em alguns lugares | rode o [`checkNoise()`](#ambientes-com-ruído) e sugira um lugar mais quieto ou fone quando não der `quiet` |
 | Muitas chamadas ao backend enquanto ele pensa | manter `whileBusy` em `interrupt` ou `merge` (a retomada as une) |

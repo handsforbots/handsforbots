@@ -35,6 +35,12 @@ export type Strings = {
   voiceOutputBlocked: string
   /** The bot's voice failed; the reply is still on screen. */
   voiceSpeakFailed: string
+  /** The voice is measuring the room before hands-free listening. */
+  noiseChecking: string
+  /** Listening in a noisy room (`voice.getState().noise.verdict` is not `quiet`). */
+  noiseHint: string
+  /** Hands-free became push-to-talk because the room was too noisy. */
+  noiseTooLoud: string
   disclaimer: string
   attach: string
   camera: string
@@ -90,6 +96,9 @@ const pt: Strings = {
   voiceFailed: 'Não foi possível usar a voz agora.',
   voiceOutputBlocked: 'O navegador bloqueou o som. Toque na página para ouvir as respostas.',
   voiceSpeakFailed: 'Não consegui falar a resposta, mas ela está aqui em texto.',
+  noiseChecking: 'Verificando o ruído do ambiente…',
+  noiseHint: 'Ouvindo… Há ruído por perto: fale perto do microfone ou use fone.',
+  noiseTooLoud: 'Ruído demais para o mãos-livres. Segure o microfone para falar.',
   disclaimer: 'Isenção de responsabilidade',
   attach: 'Anexar arquivo',
   camera: 'Câmera',
@@ -144,6 +153,9 @@ export const STRINGS: Record<string, Strings> = {
     voiceFailed: 'Voice is not available right now.',
     voiceOutputBlocked: 'The browser blocked the sound. Tap the page to hear the answers.',
     voiceSpeakFailed: "I couldn't say the answer out loud, but it's here as text.",
+    noiseChecking: 'Checking the background noise…',
+    noiseHint: "Listening… It's noisy around you: speak close to the mic or use a headset.",
+    noiseTooLoud: 'Too noisy for hands-free. Hold the mic to talk.',
     disclaimer: 'Disclaimer',
     attach: 'Attach file',
     camera: 'Camera',

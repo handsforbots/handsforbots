@@ -162,6 +162,23 @@ function attach(
     // Cues (ADR 0018): codes only, so recorded as they come.
     onPlugin('cue.changed', (cue) => record('cue.changed', cue)),
     onPlugin('cue.repeat', (cue) => record('cue.repeat', cue)),
+    // Noise check: the report's numbers and verdict (no audio), and what the voice did.
+    onPlugin('voice.noise', ({ report, action }) => {
+      const r = (report ?? {}) as Record<string, unknown>
+      record('voice.noise', {
+        verdict: r.verdict,
+        reasons: r.reasons,
+        noiseFloorDb: r.noiseFloorDb,
+        peakDb: r.peakDb,
+        ...(r.snrDb === undefined ? {} : { snrDb: r.snrDb }),
+        fluctuationDb: r.fluctuationDb,
+        clippingRatio: r.clippingRatio,
+        durationMs: r.durationMs,
+        ...(action ? { action } : {}),
+      })
+    }),
+    // Level gate: `voice.level.monitor.open`, `voice.level.learned` (levels in dBFS), `voice.level.learn.skipped`.
+    onPlugin('voice.level', ({ event, ...rest }) => record(`voice.level.${String(event)}`, rest)),
     onPlugin('voice.decision', (decision) => {
       // The transcript is content: kept out unless `includeContent`.
       const { text, ...rest } = decision
