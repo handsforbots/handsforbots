@@ -1,0 +1,71 @@
+name: Release
+
+# Publishes to npm with trusted publishing (OIDC): no npm token is stored and
+# no 2FA prompt is needed. Each package must list this workflow as its trusted
+# publisher (scripts/npm-trust.sh, once). Push a tag `v<version>` matching the
+# packages' version, or run it by hand to retry or pick another dist-tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: npm dist-tag the new versions are published with
+        type: choice
+        options: [alpha, latest]
+        default: alpha
+      latest:
+        description: Also point the latest tag at the new versions
+        type: boolean
+        default: true
+      dry-run:
+        description: Pack and check everything, publish nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # No dependency cache in release builds.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # Trusted publishing needs npm 11.5.1+; dist-tag over OIDC, 11.21+.
+      - run: npm install -g npm@11
+      - run: pnpm install --frozen-lockfile
+      - name: Tag matches the packages' version
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="v$(node -p "require('./packages/core/package.json').version")"
+          if [ "$TAG" != "$version" ]; then echo "Tag $TAG does not match packages/core version $version"; exit 1; fi
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Publish new versions
+        env:
+          # A tag push publishes with `alpha` and moves `latest` too.
+          NPM_TAG: ${{ inputs.tag || 'alpha' }}
+          NPM_ALSO_TAGS: ${{ (github.event_name == 'push' || inputs.latest) && 'latest' || '' }}
+          DRY_RUN: ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: node scripts/publish.mjs $DRY_RUN

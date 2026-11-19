@@ -44,6 +44,8 @@ pnpm --filter @handsforbots/example-react-agui dev
 
 Rode `pnpm test` e `pnpm typecheck` antes de todo commit. O estado de base é tudo verde.
 
+Release: suba a versão de todos os pacotes `2.0.0-*` (e a fixada em `docs/*/packages.md`), commit `chore: release <versão> ...`, push, e envie a tag `v<versão>`. O `.github/workflows/release.yml` publica pelo trusted publishing (OIDC, sem token nem 2FA) com a tag `alpha` e move o `latest`; pula versões já publicadas. Detalhes e a configuração única no npm (`scripts/npm-trust.sh`, "Allow npm dist-tag"): `docs/*/development.md` § Publicando. Não publique à mão com `pnpm publish` em release normal.
+
 ## Convenções
 
 - TypeScript estrito (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`): imports relativos com `.js`, `import type` para tipos. 2 espaços, sem ponto e vírgula, aspas simples. Comentários de código e JSDoc em inglês.
