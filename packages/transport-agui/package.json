@@ -45,8 +45,8 @@
     "@ag-ui/core": "^1.0.1"
   },
   "devDependencies": {
-    "@ag-ui/client": "^1.0.1",
-    "@ag-ui/encoder": "^1.0.1",
+    "@ag-ui/client": "^1.0.4",
+    "@ag-ui/encoder": "^1.0.4",
     "@handsforbots/core": "workspace:^",
     "@handsforbots/testkit": "workspace:^",
     "zod": "^4.6.6"
