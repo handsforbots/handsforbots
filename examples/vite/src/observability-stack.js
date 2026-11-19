@@ -17,12 +17,12 @@ export async function maybeInitObservabilityStack() {
 		const [
 			{ WebTracerProvider },
 			{ SimpleSpanProcessor },
-			{ Resource },
+			{ resourceFromAttributes },
 			{ OTLPTraceExporter },
 			{ registerInstrumentations },
 			{ FetchInstrumentation },
 			{ ZoneContextManager },
-			{ SEMRESATTRS_SERVICE_NAME },
+			{ ATTR_SERVICE_NAME },
 			{ initializeFaro, getWebInstrumentations },
 			{ MeterProvider, PeriodicExportingMetricReader },
 			{ OTLPMetricExporter },
@@ -44,13 +44,15 @@ export async function maybeInitObservabilityStack() {
 			import('web-vitals'),
 		])
 
-		const resource = new Resource({
-			[SEMRESATTRS_SERVICE_NAME]: serviceName,
+		const resource = resourceFromAttributes({
+			[ATTR_SERVICE_NAME]: serviceName,
 		})
 
 		const otlpExporter = new OTLPTraceExporter({ url: otelEndpoint })
-		const provider = new WebTracerProvider({ resource })
-		provider.addSpanProcessor(new SimpleSpanProcessor(otlpExporter))
+		const provider = new WebTracerProvider({
+			resource,
+			spanProcessors: [new SimpleSpanProcessor(otlpExporter)],
+		})
 		provider.register({
 			contextManager: new ZoneContextManager(),
 		})
