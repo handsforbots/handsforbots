@@ -45,7 +45,7 @@
     "react": ">=18"
   },
   "devDependencies": {
-    "@copilotkit/react-core": "^1.77.0",
+    "@copilotkit/react-core": "^1.87.1",
     "@handsforbots/core": "workspace:^",
     "@handsforbots/react": "workspace:^",
     "@testing-library/react": "^16.3.0",
@@ -53,7 +53,7 @@
     "jsdom": "^27.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "rxjs": "7.8.1"
+    "rxjs": "7.8.2"
   },
   "dependencies": {
     "@handsforbots/transport-agui": "workspace:^"
