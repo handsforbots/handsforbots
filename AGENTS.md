@@ -16,7 +16,7 @@
 
 ## Working on v2
 
-- Requirements: Node 20+, pnpm 10. `pnpm install`, then `pnpm test` and `pnpm typecheck` before every commit (baseline: all green).
+- Requirements: Node 22.22+ or 24.15+, pnpm 10. `pnpm install`, then `pnpm test` and `pnpm typecheck` before every commit (baseline: all green).
 - Architecture and decisions: `ROADMAP.md`, `docs/adr/`. Conventions, layout and the contracts the docs rely on: `.claude/skills/handsforbots-maintainer/SKILL.md`.
 - Public behavior changes update `docs/en-us` **and** `docs/pt-br` in the same commit, plus `skills/` when integrators are affected.
 - Every behavior has a test; time-dependent tests wait for conditions, never fixed delays.

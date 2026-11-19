@@ -5,7 +5,7 @@ description: Como trabalhar no monorepo do Hands for Bots v2 - kernel (@handsfor
 
 # Hands for Bots v2 — manutenção
 
-Monorepo pnpm (Node 20+, pnpm 10) com um kernel headless em TypeScript e um pacote por capacidade. A v1 foi removida e não há compatibilidade (ADR 0007). Arquitetura, decisões e estado do projeto: `ROADMAP.md` e `docs/adr/` (em português). Leia o ADR relevante antes de mudar um comportamento do kernel; para mudar uma decisão, escreva um ADR novo que substitua o antigo.
+Monorepo pnpm (Node 22.22+ ou 24.15+, pnpm 10) com um kernel headless em TypeScript e um pacote por capacidade. A v1 foi removida e não há compatibilidade (ADR 0007). Arquitetura, decisões e estado do projeto: `ROADMAP.md` e `docs/adr/` (em português). Leia o ADR relevante antes de mudar um comportamento do kernel; para mudar uma decisão, escreva um ADR novo que substitua o antigo.
 
 ## Mapa
 

@@ -43,6 +43,7 @@
     "vitest": ">=3"
   },
   "devDependencies": {
-    "@handsforbots/core": "workspace:^"
+    "@handsforbots/core": "workspace:^",
+    "vitest": "^5.1.0"
   }
 }

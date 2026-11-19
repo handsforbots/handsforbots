@@ -1,6 +1,6 @@
 # Desenvolvimento
 
-Requisitos: Node 20+ e pnpm 10.
+Requisitos: Node 22.22+ ou 24.15+ (o que o Vitest 5 e o jsdom suportam; o Node 20 já saiu de suporte) e pnpm 10.
 
 ```bash
 pnpm install
