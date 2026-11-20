@@ -36,7 +36,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `voice-models` | `piperTTS`, `kokoroTTS`, `transformersTTS`, `workerTTS`, `serveTTS`, `espeakPhonemizer`, `piperVoice`, `kokoroModel`, `huggingFace`, `fetchModel` | `core`, `voice`; the app supplies `onnxruntime-web`, a phonemizer build or `@huggingface/transformers` | — | Neural TTS in the page |
 | `voice-effects` | `voiceEffects`, `presets`, `defineEffect`, `validateChain`, `toSSML`, `toFFmpeg` | — (`voice` optional, types only) | — | Effects chains for speech, also outside H4B |
 | `keyboard` | `keyboard({ talk?, interrupt?, palette?, target? })` | `core` (`voice` optional: the talk shortcut needs it) | — | Hold-to-talk, interrupt, palette event |
-| `inputs` | `camera(...)`, `files(...)`, `gui(...)`, `sensors(...)` | `core` | — | Camera, files, route/selection/declarative HTML/idle, sensors |
+| `inputs` | `camera(...)`, `files(...)`, `gui(...)`, `sensors(...)` | `core` | — | Camera, files, route (path only by default), selection and declarative HTML (both opt-in), idle, sensors |
 | `guided` | `guided({ tours?, autoStart?, sectionsAttribute?, gallery?, ... })` | `core` | `menu` | Tours, highlights, `show_section`, `image_gallery` |
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
 | `mcp-apps` | `mcpAppRenderer({ allowTools? })`, `mountMcpApp(h4b, props, opts)` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |

@@ -55,7 +55,7 @@ Rules that matter:
 - **Args and results are history.** They are persisted (encrypted in the browser by default with `storage-local`, readable by any script on the page; or on your server with `storage-backend`) and sent to the backend. Keep them small, JSON-only, free of secrets; give them a human `label` if the timeline should show text. Redact with a `request.before` interceptor when needed.
 - **`exposeTo: ['user']` hides the action from the assistant's tools, not its recorded calls.** OpenAI-style transports send past calls as `tool_calls`; verify the backend accepts calls to tools absent from `tools`.
 - **Each `runAction` is a turn of its own** (two messages: call + result). The `memory` plugin keeps the last 100 turns (`createH4B({ memory: { keep } })`) and sends the last 20 to the model, older ones as a summary; storage lasts while its key does (cookie, 30 min idle), or `retention: { ttlMinutes }` / `'tab'`. Size these for the timeline, or mirror decisions to your backend if they must outlive the conversation. See skill `handsforbots-persistence`.
-- `<button data-h4b-command="name" data-h4b-args='{"…":…}'>` with `gui()` from `@handsforbots/inputs` records without code.
+- `<button data-h4b-command="name" data-h4b-args='{"…":…}'>` with `gui({ declarative: true })` from `@handsforbots/inputs` records without code (clicks the person made only).
 
 ## Building the timeline
 

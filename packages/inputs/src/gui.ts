@@ -1,20 +1,42 @@
 import { definePlugin, type Part } from '@handsforbots/core'
+import { isTrustedPointerEvent } from './user-event.js'
+
+export type GuiRouteOptions = {
+  query?: boolean
+  hash?: boolean
+}
 
 export type GuiOptions = {
-  /** Keep the current route (path + title) as context. Default true. */
-  route?: boolean
-  /** Keep the user's text selection as context ("explain this"). Default true. */
+  /**
+   * Keep the current route (pathname and title) as context. Default true (pathname only).
+   * Pass `{ query: true }` and/or `{ hash: true }` to include those URL parts.
+   */
+  route?: boolean | GuiRouteOptions
+  /** Keep the user's text selection as context ("explain this"). Default false. */
   selection?: boolean
   /**
-   * Declarative hooks in the page (default true):
+   * Declarative hooks in the page (default false):
    *   <button data-h4b-say="Quero falar com um atendente">  → sends that text
    *   <button data-h4b-command="open_order" data-h4b-args='{"id":"1042"}'> → runs a direct action
    *   <section data-h4b-context="checkout" data-h4b-value='{"step":2}'> → context while present
+   * Only trusted UI events (`isTrusted`) are handled.
    */
   declarative?: boolean
   /** Re-engage after inactivity (v1 Poke): sends `signal` text after `minutes` without input. */
   idle?: { minutes: number; text: string; once?: boolean }
-  root?: Document
+  /** Limit declarative listeners and context scan to this subtree. Default: `document`. */
+  root?: Element | Document
+}
+
+const RESERVED_CONTEXT_NAMES = new Set(['route', 'selection'])
+
+function routePath(win: Window, route: boolean | GuiRouteOptions | undefined): string {
+  let path = win.location.pathname
+  if (typeof route === 'object') {
+    if (route.query) path += win.location.search
+    if (route.hash) path += win.location.hash
+  }
+  return path
 }
 
 /** GUI events as signals: the successor of v1 Poke. */
@@ -22,7 +44,9 @@ export const gui = definePlugin<GuiOptions | undefined>({
   name: 'input-gui',
   apply(ctx, options = {}) {
     if (typeof document === 'undefined') return
-    const doc = options.root ?? document
+    const { root } = options
+    const doc = root instanceof Document ? root : (root?.ownerDocument ?? document)
+    const scope = root ?? doc
     const win = doc.defaultView ?? window
 
     const context = (key: string, parts: Part[] | undefined) =>
@@ -30,7 +54,7 @@ export const gui = definePlugin<GuiOptions | undefined>({
 
     if (options.route !== false) {
       const update = () =>
-        context('gui.route', [{ type: 'data', name: 'route', value: { path: win.location.pathname + win.location.search + win.location.hash, title: doc.title } }])
+        context('gui.route', [{ type: 'data', name: 'route', value: { path: routePath(win, options.route), title: doc.title } }])
       update()
       // SPAs change routes through the History API without events: wrap it while mounted.
       const history = win.history
@@ -54,7 +78,7 @@ export const gui = definePlugin<GuiOptions | undefined>({
       })
     }
 
-    if (options.selection !== false) {
+    if (options.selection === true) {
       let timer: ReturnType<typeof setTimeout> | undefined
       const onSelection = () => {
         clearTimeout(timer)
@@ -70,8 +94,9 @@ export const gui = definePlugin<GuiOptions | undefined>({
       })
     }
 
-    if (options.declarative !== false) {
+    if (options.declarative === true) {
       const onClick = (event: Event) => {
+        if (!isTrustedPointerEvent(event)) return
         const target = (event.target as Element | null)?.closest?.('[data-h4b-say],[data-h4b-command]') as HTMLElement | null
         if (!target) return
         const say = target.dataset.h4bSay
@@ -89,12 +114,18 @@ export const gui = definePlugin<GuiOptions | undefined>({
         }
         void ctx.app.runAction(action, args, { origin: 'user' })
       }
-      doc.addEventListener('click', onClick)
+      scope.addEventListener('click', onClick)
 
       const sync = () => {
         const seen = new Set<string>()
-        for (const element of doc.querySelectorAll<HTMLElement>('[data-h4b-context]')) {
-          const key = `gui.${element.dataset.h4bContext}`
+        for (const element of scope.querySelectorAll<HTMLElement>('[data-h4b-context]')) {
+          const name = element.dataset.h4bContext
+          if (!name) continue
+          if (RESERVED_CONTEXT_NAMES.has(name)) {
+            ctx.emit('error', { error: new Error(`Reserved data-h4b-context name: ${name}`), source: 'input-gui' })
+            continue
+          }
+          const key = `gui.${name}`
           seen.add(key)
           let value: unknown = element.dataset.h4bValue ?? element.textContent?.trim().slice(0, 500)
           try {
@@ -105,7 +136,7 @@ export const gui = definePlugin<GuiOptions | undefined>({
           const current = ctx.app.context.find((s) => s.key === key)
           const part = current?.parts[0]
           if (part?.type !== 'data' || JSON.stringify(part.value) !== JSON.stringify(value)) {
-            context(key, [{ type: 'data', name: element.dataset.h4bContext!, value }])
+            context(key, [{ type: 'data', name, value }])
           }
         }
         for (const signal of ctx.app.context) {
@@ -115,15 +146,17 @@ export const gui = definePlugin<GuiOptions | undefined>({
         }
       }
       sync()
+      const observeTarget =
+        scope instanceof Document ? (scope.body ?? scope.documentElement) : scope
       const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(() => sync()) : undefined
-      observer?.observe(doc.body ?? doc.documentElement, {
+      observer?.observe(observeTarget, {
         subtree: true,
         childList: true,
         attributes: true,
         attributeFilter: ['data-h4b-context', 'data-h4b-value'],
       })
       ctx.onDispose(() => {
-        doc.removeEventListener('click', onClick)
+        scope.removeEventListener('click', onClick)
         observer?.disconnect()
       })
     }

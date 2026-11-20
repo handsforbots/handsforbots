@@ -237,13 +237,13 @@ Fontes (`ModelSource`): uma URL (absoluta ou relativa à página), `huggingFace(
 
 ## keyboard
 
-`keyboard({ talk?: 'Alt+KeyM', interrupt?: 'Escape', palette?: 'Mod+KeyK', target? })`. Segure `talk` para falar, enviado ao soltar (alterna em mãos-livres), `interrupt` para a fala e cancela o turno atual, `palette` emite `keyboard.palette` para a sua paleta de comandos. `false` desliga um atalho.
+`keyboard({ talk?: 'Alt+KeyM', interrupt?: 'Escape', palette?: 'Mod+KeyK', target? })`. Segure `talk` para falar, enviado ao soltar (alterna em mãos-livres), `interrupt` para a fala e cancela o turno atual, `palette` emite `keyboard.palette` para a sua paleta de comandos. `false` desliga um atalho. Os atalhos ignoram eventos sintéticos (`isTrusted`), composição de IME e eventos sem `key`; `talk` e `interrupt` não agem em inputs, textareas, selects e contenteditable.
 
 ## inputs
 
 - `camera({ facingMode?, maxSide?: 1280, mimeType?, quality? })`: serviço `open(video?)`, `capture(pergunta?)` (envia uma foto), `frame()`, `startFrames(intervalMs)` (último quadro como contexto `camera.frame`), `stopFrames()`, `close()`.
 - `files({ accept?, maxSizeMB?: 10, maxFiles?: 5 })`: serviço `pick(pergunta?)`, `attach(arquivos, pergunta?)`.
-- `gui({ route?, selection?, declarative?, idle? })`: rota e seleção como contexto; atributos `data-h4b-say`, `data-h4b-command` + `data-h4b-args`, `data-h4b-context` + `data-h4b-value`; `idle: { minutes, text }` reengaja uma vez após inatividade.
+- `gui({ route?, selection?, declarative?, idle?, root? })`: a rota como contexto (`gui.route`, ligado por padrão: só o caminho e o título; `route: { query: true, hash: true }` acrescenta essas partes, que muitas vezes levam tokens); o texto selecionado como contexto (`gui.selection`, até 1000 caracteres) só com `selection: true`; os atributos `data-h4b-say`, `data-h4b-command` + `data-h4b-args`, `data-h4b-context` + `data-h4b-value` só com `declarative: true`, e só para cliques feitos pela pessoa (`event.isTrusted`; `el.click()` de um script não faz nada). `data-h4b-context="route"` e `"selection"` são reservados e ignorados com `error`. `root` limita os atributos declarativos a um elemento. `idle: { minutes, text }` reengaja uma vez após inatividade.
 - `sensors({ enable?, throttleMs? })`: `geolocation`, `orientation`, `network` como sinais de contexto, opt-in via `enable` ou pelo serviço.
 
 ## guided

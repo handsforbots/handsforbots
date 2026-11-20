@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { createH4B, type Transport } from '@handsforbots/core'
 import type { VoiceService, VoiceState } from '@handsforbots/voice'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as userEvent from '../src/user-event.js'
 import { keyboard, parseCombo } from '../src/index.js'
 
 function fakeVoice(mode: VoiceState['mode'] = 'push-to-talk', speaking = false) {
@@ -33,6 +34,15 @@ function fakeVoice(mode: VoiceState['mode'] = 'push-to-talk', speaking = false) 
 const press = (type: 'keydown' | 'keyup', init: KeyboardEventInit) =>
   window.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }))
 
+const trustedPress = (type: 'keydown' | 'keyup', init: KeyboardEventInit) => {
+  vi.spyOn(userEvent, 'isTrustedKeyboardEvent').mockReturnValue(true)
+  window.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }))
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 async function setup(voice?: VoiceService, options = {}) {
   const h4b = createH4B({ plugins: [keyboard(options)] })
   if (voice) h4b.provide('voice', voice)
@@ -50,11 +60,11 @@ describe('keyboard', () => {
   it('holds to talk in push-to-talk mode', async () => {
     const voice = fakeVoice()
     const h4b = await setup(voice)
-    press('keydown', { code: 'KeyM', key: 'µ', altKey: true })
-    press('keydown', { code: 'KeyM', key: 'µ', altKey: true, repeat: true })
+    trustedPress('keydown', { code: 'KeyM', key: 'µ', altKey: true })
+    trustedPress('keydown', { code: 'KeyM', key: 'µ', altKey: true, repeat: true })
     expect(voice.listen).toHaveBeenCalledOnce()
     expect(voice.listen).toHaveBeenCalledWith({ until: 'stop' })
-    press('keyup', { code: 'KeyM', key: 'm' }) // Alt already released
+    trustedPress('keyup', { code: 'KeyM', key: 'm' }) // Alt already released
     expect(voice.stop).toHaveBeenCalledOnce()
     await h4b.stop()
   })
@@ -62,8 +72,8 @@ describe('keyboard', () => {
   it('toggles listening in hands-free mode', async () => {
     const voice = fakeVoice('hands-free')
     const h4b = await setup(voice)
-    press('keydown', { code: 'KeyM', key: 'm', altKey: true })
-    press('keyup', { code: 'KeyM', key: 'm' })
+    trustedPress('keydown', { code: 'KeyM', key: 'm', altKey: true })
+    trustedPress('keyup', { code: 'KeyM', key: 'm' })
     expect(voice.toggle).toHaveBeenCalledOnce()
     expect(voice.stop).not.toHaveBeenCalled()
     await h4b.stop()
@@ -83,10 +93,54 @@ describe('keyboard', () => {
     await new Promise((r) => setTimeout(r, 5))
     const interrupted = vi.fn()
     h4b.on('keyboard.interrupt', interrupted)
-    press('keydown', { key: 'Escape', code: 'Escape' })
+    trustedPress('keydown', { key: 'Escape', code: 'Escape' })
     expect((await turn).status.phase).toBe('aborted')
     expect(voice.cancelSpeech).toHaveBeenCalled()
     expect(interrupted).toHaveBeenCalledOnce()
+    await h4b.stop()
+  })
+
+  it('ignores untrusted, composing, and keyless keyboard events', async () => {
+    const voice = fakeVoice()
+    const h4b = await setup(voice)
+    press('keydown', { code: 'KeyM', key: 'm', altKey: true })
+    expect(voice.listen).not.toHaveBeenCalled()
+    trustedPress('keydown', { code: 'KeyM', key: 'm', altKey: true, isComposing: true } as KeyboardEventInit)
+    expect(voice.listen).not.toHaveBeenCalled()
+    trustedPress('keydown', { code: 'KeyM', keyCode: 229, altKey: true })
+    expect(voice.listen).not.toHaveBeenCalled()
+    trustedPress('keydown', { code: 'KeyM', key: 'm', altKey: true })
+    expect(voice.listen).toHaveBeenCalledOnce()
+    await h4b.stop()
+  })
+
+  it('does not seize Alt+M or Escape inside editable fields', async () => {
+    const voice = fakeVoice('push-to-talk', true)
+    const transport: Transport = {
+      name: 'hang',
+      async *run(_r, signal) {
+        await new Promise((resolve) => signal.addEventListener('abort', resolve))
+      },
+    }
+    document.body.innerHTML = '<input id="f" />'
+    const h4b = await setup(voice)
+    h4b.provide('transport', transport)
+    const interrupted = vi.fn()
+    h4b.on('keyboard.interrupt', interrupted)
+    const input = document.getElementById('f')!
+    input.focus()
+    const turn = h4b.ask('demora')
+    await new Promise((r) => setTimeout(r, 5))
+    const onInput = (init: KeyboardEventInit) => {
+      vi.spyOn(userEvent, 'isTrustedKeyboardEvent').mockReturnValue(true)
+      input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+    }
+    onInput({ key: 'Escape', code: 'Escape' })
+    expect(interrupted).not.toHaveBeenCalled()
+    expect(h4b.getSnapshot().turn?.phase).not.toBe('aborted')
+    onInput({ code: 'KeyM', key: 'm', altKey: true })
+    expect(voice.listen).not.toHaveBeenCalled()
+    void turn
     await h4b.stop()
   })
 
@@ -94,11 +148,11 @@ describe('keyboard', () => {
     const h4b = await setup(undefined, { talk: false })
     const palette = vi.fn()
     h4b.on('keyboard.palette', palette)
-    press('keydown', { code: 'KeyK', key: 'k', ctrlKey: true })
-    press('keydown', { code: 'KeyK', key: 'k', metaKey: true })
+    trustedPress('keydown', { code: 'KeyK', key: 'k', ctrlKey: true })
+    trustedPress('keydown', { code: 'KeyK', key: 'k', metaKey: true })
     expect(palette).toHaveBeenCalledOnce()
     await h4b.stop()
-    press('keydown', { code: 'KeyK', key: 'k', ctrlKey: true, metaKey: true })
+    trustedPress('keydown', { code: 'KeyK', key: 'k', ctrlKey: true, metaKey: true })
     expect(palette).toHaveBeenCalledOnce()
   })
 })

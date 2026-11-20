@@ -1,4 +1,5 @@
 import { definePlugin } from '@handsforbots/core'
+import { isTrustedKeyboardEvent } from './user-event.js'
 // Type-only: brings the optional `voice` service into `Services`.
 import type {} from '@handsforbots/voice'
 
@@ -45,12 +46,40 @@ export function parseCombo(combo: string): Combo {
 }
 
 export function matches(event: KeyboardEvent, combo: Combo, { ignoreModifiers = false } = {}): boolean {
+  if (typeof event.key !== 'string') return false
   const keyMatches = event.code === combo.key || event.key.toLowerCase() === combo.key.toLowerCase()
   if (!keyMatches) return false
   if (ignoreModifiers) return true
   return (
     event.altKey === combo.alt && event.ctrlKey === combo.ctrl && event.metaKey === combo.meta && event.shiftKey === combo.shift
   )
+}
+
+function targetElement(event: Event): Element | null {
+  const path = event.composedPath()
+  const first = path[0]
+  if (first instanceof Element) return first
+  return event.target instanceof Element ? event.target : null
+}
+
+function isEditableTarget(event: Event): boolean {
+  const el = targetElement(event)
+  if (!el) return false
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true
+  if (el instanceof HTMLElement && el.isContentEditable) return true
+  const root = el.getRootNode()
+  if (root instanceof ShadowRoot) {
+    const host = root.host
+    if (host instanceof HTMLElement && host.isContentEditable) return true
+  }
+  return Boolean(el.closest('[contenteditable=""], [contenteditable="true"]'))
+}
+
+function rejectKeyboardEvent(event: KeyboardEvent): boolean {
+  if (!isTrustedKeyboardEvent(event)) return true
+  if (event.isComposing || event.keyCode === 229) return true
+  if (typeof event.key !== 'string') return true
+  return false
 }
 
 export const keyboard = definePlugin<KeyboardOptions | undefined>({
@@ -65,8 +94,11 @@ export const keyboard = definePlugin<KeyboardOptions | undefined>({
 
     const onKeyDown = (raw: Event) => {
       const event = raw as KeyboardEvent
+      if (rejectKeyboardEvent(event)) return
       const voice = ctx.get('voice')
+      const editable = isEditableTarget(event)
       if (talk && voice && matches(event, talk)) {
+        if (editable) return
         event.preventDefault()
         if (event.repeat || holding) return
         if (voice.getState().mode === 'hands-free') {
@@ -79,6 +111,7 @@ export const keyboard = definePlugin<KeyboardOptions | undefined>({
         return
       }
       if (interrupt && matches(event, interrupt)) {
+        if (editable) return
         const busy = ctx.app.busy
         const speaking = voice?.getState().speaking
         if (!busy && !speaking) return // let Escape do its usual job
@@ -97,6 +130,7 @@ export const keyboard = definePlugin<KeyboardOptions | undefined>({
     // Releasing the key (even with modifiers already up) ends push-to-talk.
     const onKeyUp = (raw: Event) => {
       const event = raw as KeyboardEvent
+      if (rejectKeyboardEvent(event)) return
       if (!holding || !talk || !matches(event, talk, { ignoreModifiers: true })) return
       holding = false
       ctx.get('voice')?.stop()

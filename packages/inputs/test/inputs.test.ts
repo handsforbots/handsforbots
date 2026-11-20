@@ -2,6 +2,7 @@
 import { createH4B, textOf, type Transport, type TurnRequest } from '@handsforbots/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { camera, files, gui, sensors } from '../src/index.js'
+import * as userEvent from '../src/user-event.js'
 
 function recorder() {
   const requests: TurnRequest[] = []
@@ -10,6 +11,11 @@ function recorder() {
 }
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
+
+const trustedClick = (el: Element) => {
+  vi.spyOn(userEvent, 'isTrustedPointerEvent').mockReturnValue(true)
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+}
 
 afterEach(() => {
   vi.useRealTimers()
@@ -73,12 +79,21 @@ describe('camera', () => {
 })
 
 describe('gui (Poke successor)', () => {
-  it('keeps the route as context, including SPA navigation', async () => {
-    const h4b = await createH4B({ plugins: [gui({ selection: false })] }).start()
+  it('keeps the route pathname as context, including SPA navigation', async () => {
+    const h4b = await createH4B({ plugins: [gui()] }).start()
     const route = () => (h4b.context.find((s) => s.key === 'gui.route')?.parts[0] as any)?.value.path
     expect(route()).toBe('/')
-    history.pushState(null, '', '/pedidos?status=late')
-    expect(route()).toBe('/pedidos?status=late')
+    history.pushState(null, '', '/pedidos?status=late#tab')
+    expect(route()).toBe('/pedidos')
+    await h4b.stop()
+  })
+
+  it('can include query and hash in route context when configured', async () => {
+    const h4b = await createH4B({ plugins: [gui({ route: { query: true, hash: true } })] }).start()
+    history.pushState(null, '', '/pedidos?status=late#tab')
+    const path = (h4b.context.find((s) => s.key === 'gui.route')?.parts[0] as any)?.value.path
+    expect(path).toBe('/pedidos?status=late#tab')
+    await h4b.stop()
   })
 
   it('supports declarative say, command and context attributes', async () => {
@@ -89,23 +104,70 @@ describe('gui (Poke successor)', () => {
       <button id="late" data-h4b-command="filter" data-h4b-args='{"status":"late"}'>Atrasados</button>
       <section data-h4b-context="checkout" data-h4b-value='{"step":2}'></section>`
     const h4b = await createH4B({
-      plugins: [gui({ route: false, selection: false })],
+      plugins: [gui({ route: false, declarative: true })],
       actions: [{ name: 'filter', description: 'Filter', handler: run }],
     }).start()
     h4b.provide('transport', transport)
     expect(h4b.context.find((s) => s.key === 'gui.checkout')?.parts[0]).toEqual({ type: 'data', name: 'checkout', value: { step: 2 } })
 
-    document.getElementById('help')!.click()
+    trustedClick(document.getElementById('help')!)
     await h4b.when('turn.status', (s) => s.phase === 'done')
     expect(textOf(requests[0]!.messages[0]!)).toBe('Quero ajuda com o pagamento')
 
-    document.getElementById('late')!.click()
+    trustedClick(document.getElementById('late')!)
     await h4b.when('turn.status', (s) => s.phase === 'done' && s.route === 'direct')
     expect(run).toHaveBeenCalledWith({ status: 'late' }, expect.objectContaining({ origin: 'user' }))
 
     document.querySelector('section')!.remove()
     await tick()
     expect(h4b.context.find((s) => s.key === 'gui.checkout')).toBeUndefined()
+  })
+
+  it('does not run declarative hooks by default (XSS-safe)', async () => {
+    const run = vi.fn()
+    document.body.innerHTML = `<span data-h4b-command="transfer" data-h4b-args='{"to":"attacker","amount":999}'></span>`
+    const { requests, transport } = recorder()
+    const h4b = await createH4B({
+      plugins: [gui({ route: false })],
+      actions: [{ name: 'transfer', description: 'Transfer', handler: run }],
+    }).start()
+    h4b.provide('transport', transport)
+    document.querySelector('span')!.click()
+    await tick()
+    expect(run).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(0)
+    await h4b.stop()
+  })
+
+  it('ignores non-trusted declarative clicks when declarative is enabled', async () => {
+    const run = vi.fn()
+    document.body.innerHTML = `<button id="x" data-h4b-command="transfer" data-h4b-args='{"to":"attacker"}'>Go</button>`
+    const h4b = await createH4B({
+      plugins: [gui({ route: false, declarative: true })],
+      actions: [{ name: 'transfer', description: 'Transfer', handler: run }],
+    }).start()
+    document.getElementById('x')!.click()
+    await tick()
+    expect(run).not.toHaveBeenCalled()
+    trustedClick(document.getElementById('x')!)
+    await tick()
+    expect(run).toHaveBeenCalledOnce()
+    await h4b.stop()
+  })
+
+  it('rejects reserved data-h4b-context names such as route', async () => {
+    const errors: string[] = []
+    history.replaceState(null, '', '/safe')
+    document.body.innerHTML = `<section data-h4b-context="route" data-h4b-value='{"path":"/evil"}'></section>`
+    const h4b = await createH4B({
+      plugins: [gui({ declarative: true })],
+      onError: (_error, source) => errors.push(source),
+    }).start()
+    await tick()
+    const route = (h4b.context.find((s) => s.key === 'gui.route')?.parts[0] as any)?.value
+    expect(route.path).toBe('/safe')
+    expect(errors).toContain('input-gui')
+    await h4b.stop()
   })
 
   it('re-engages after inactivity, once', async () => {

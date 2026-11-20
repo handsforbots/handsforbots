@@ -265,7 +265,7 @@ Shortcuts: hold a key to talk, a key to interrupt the bot, a key that opens your
 
 ### `@handsforbots/inputs`
 
-Four plugins: `camera` (photos, periodic frames as context), `files` (pick or attach files; the widget adds paste and drop), `gui` (current route and text selection as context, `data-h4b-say` / `data-h4b-command` / `data-h4b-context` attributes in your HTML, a nudge after inactivity) and `sensors` (geolocation, orientation, network, opt-in).
+Four plugins: `camera` (photos, periodic frames as context), `files` (pick or attach files; the widget adds paste and drop), `gui` (current route as context, text selection on request, `data-h4b-say` / `data-h4b-command` / `data-h4b-context` attributes in your HTML with `declarative: true`, a nudge after inactivity) and `sensors` (geolocation, orientation, network, opt-in).
 
 - **Needs:** `@handsforbots/core`.
 - **Install:**

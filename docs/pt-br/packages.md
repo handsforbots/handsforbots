@@ -265,7 +265,7 @@ Atalhos: segurar uma tecla para falar, uma tecla para interromper o bot, uma tec
 
 ### `@handsforbots/inputs`
 
-Quatro plugins: `camera` (fotos, quadros periódicos como contexto), `files` (escolher ou anexar arquivos; o widget acrescenta colar e arrastar), `gui` (a rota atual e o texto selecionado como contexto, atributos `data-h4b-say` / `data-h4b-command` / `data-h4b-context` no seu HTML, um lembrete depois de um tempo parado) e `sensors` (geolocalização, orientação, rede, só com opt-in).
+Quatro plugins: `camera` (fotos, quadros periódicos como contexto), `files` (escolher ou anexar arquivos; o widget acrescenta colar e arrastar), `gui` (a rota atual como contexto, o texto selecionado se pedido, atributos `data-h4b-say` / `data-h4b-command` / `data-h4b-context` no seu HTML com `declarative: true`, um lembrete depois de um tempo parado) e `sensors` (geolocalização, orientação, rede, só com opt-in).
 
 - **Precisa de:** `@handsforbots/core`.
 - **Instalação:**

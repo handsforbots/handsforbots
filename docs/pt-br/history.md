@@ -76,7 +76,7 @@ h4b.actions.register({
 void h4b.runAction('record_decision', { tipo: 'plano', valor: 'pro', rotulo: 'Escolheu o plano Pro' })
 ```
 
-Os botões declarativos do plugin `gui()` de `@handsforbots/inputs` fazem o mesmo sem código: `<button data-h4b-command="filter_orders" data-h4b-args='{"status":"late"}'>`.
+Os botões declarativos do plugin `gui({ declarative: true })` de `@handsforbots/inputs` fazem o mesmo sem código: `<button data-h4b-command="filter_orders" data-h4b-args='{"status":"late"}'>`.
 
 ### O que saber antes
 
