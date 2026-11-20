@@ -256,7 +256,7 @@ Sources (`ModelSource`): a URL (absolute or relative to the page), `huggingFace(
 
 ## mcp-apps
 
-Renders [MCP Apps](https://modelcontextprotocol.io) (`ui://` resources, `text/html;profile=mcp-app`) that your backend, acting as MCP client, sends as `ui.render` with component `mcp-app` and props `{ html, toolName?, input?, result?, csp? }`. The app runs in a sandboxed iframe (`allow-scripts`, opaque origin) with a restrictive CSP, placed before any of the app's markup (after a leading doctype, or with `<!doctype html>` added), so no script in the app runs before it; H4B is its host: `ui/initialize`, tool input/result after `initialized`, `tools/call` mapped to H4B actions in `allowTools` (origin `agent`, recorded in history), `ui/message` as user input, `ui/open-link` (http/https only), `ui/update-model-context` as a context signal, `size-changed`.
+Renders [MCP Apps](https://modelcontextprotocol.io) (`ui://` resources, `text/html;profile=mcp-app`) that your backend, acting as MCP client, sends as `ui.render` with component `mcp-app` and props `{ html, toolName?, input?, result?, csp? }`. The app runs in a sandboxed iframe (`allow-scripts`, opaque origin) with a restrictive CSP, placed before any of the app's markup (after a leading doctype, or with `<!doctype html>` added), so no script in the app runs before it; H4B is its host: `ui/initialize`, tool input/result after `initialized`, `tools/call` mapped to H4B actions in `allowTools` (origin `agent`, recorded in history), `ui/message` as user input, `ui/open-link` (http/https only), `ui/update-model-context` as a context signal (disable with `allowModelContext: false`), `size-changed`.
 
 ```ts
 widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] }) } })
