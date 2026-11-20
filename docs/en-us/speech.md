@@ -158,6 +158,7 @@ An effects chain is plain JSON. Effect types and parameter names follow the Web 
 ```
 
 - Effects run in order. Omitted parameters take their defaults; values out of range are rejected by `validateChain` (`set` throws with every problem listed).
+- Limits: prosody `rate` 0.25–4, `pitch` −24 to 24 semitones, `volume` −24 to 24 dB; at most 32 effects per chain (`MAX_CHAIN_EFFECTS`) and 1024 `dispersion` stages in total (`MAX_DISPERSION_STAGES_TOTAL`).
 - `bypass: true` keeps an effect in the chain but silent; `id` lets you address it.
 - Change the chain while the bot talks: `fx.set(chain | 'preset')`, `fx.update('comp', { ratio: 4 })`, `fx.update(0, { bypass: true })`, `fx.setProsody({ pitch: -3 })`. The next sentence uses it.
 - `fx.definitions()` describes every effect type and parameter (label, range, default, units, slider skew), so an editor can be generated instead of written. The lab does exactly that.
@@ -242,11 +243,14 @@ For cloud engines behind `httpTTS({ prosody: true, body })`: Azure, Google and P
 ### FFmpeg
 
 ```ts
+import { execFile } from 'node:child_process'
 import { toFFmpeg } from '@handsforbots/voice-effects'
 
-const { filter, command, warnings } = toFFmpeg(fx.get(), { sampleRate: 22050 })
-command('in.wav', 'out.wav') // ffmpeg -i "in.wav" -af "highpass=f=500:t=q:w=1,…" "out.wav"
+const { filter, args, warnings } = toFFmpeg(fx.get(), { sampleRate: 22050 })
+execFile('ffmpeg', args('in.wav', 'out.wav')) // ['-i', 'in.wav', '-af', 'highpass=f=500:t=q:w=1,…', 'out.wav']
 ```
+
+`toFFmpeg` validates the chain first and throws with every problem listed, so a chain that came from a request cannot smuggle filters into the graph. Run FFmpeg with `args(input, output)` (the arguments: `['-i', input, '-af', filter, output]`) and `execFile`/`spawn`, **never through a shell**. Paths that start with `-` are refused (write `./-file`). `command(input, output)` is deprecated: it quotes for a POSIX shell, but a shell adds nothing here. The `ffmpeg(params)` of your own effects must return a single filter: commas, semicolons, brackets, quotes and line breaks are refused.
 
 The same chain on a server: pre-render audio, process files produced by a backend engine, or check a chain with the tools sound engineers use. Every built-in effect maps to FFmpeg filters (`highpass`, `equalizer`, `acompressor`, `alimiter`, `vibrato`, `tremolo`, `chorus`, `aecho`, `asoftclip`…); pitch uses `asetrate` + `aresample`, rate uses `atempo`. Where FFmpeg only approximates the Web Audio result (its compressor detects levels differently, the reverb becomes a set of echoes), `warnings` says so; `ringmod` has no FFmpeg filter and is skipped with a warning. The test suite runs every preset through a real FFmpeg.
 

@@ -10,6 +10,14 @@ export const createRegistry = (extra: EffectDefinition[] = []): Registry =>
 
 const RESERVED = new Set(['type', 'id', 'bypass'])
 const PROSODY = ['rate', 'pitch', 'volume'] as const
+export const MAX_CHAIN_EFFECTS = 32
+/** Sum of `dispersion.stages` across the chain (non-bypassed). */
+export const MAX_DISPERSION_STAGES_TOTAL = 1024
+const PROSODY_RANGES = {
+  rate: { min: 0.25, max: 4 },
+  pitch: { min: -24, max: 24 },
+  volume: { min: -24, max: 24 },
+} as const
 
 /** Problems with a chain, as readable sentences (empty = valid). */
 export function validateChain(chain: unknown, registry: Registry = createRegistry()): string[] {
@@ -23,10 +31,16 @@ export function validateChain(chain: unknown, registry: Registry = createRegistr
       for (const [key, value] of Object.entries(c.prosody)) {
         if (!(PROSODY as readonly string[]).includes(key)) errors.push(`prosody.${key} is not rate, pitch or volume`)
         else if (typeof value !== 'number' || !Number.isFinite(value)) errors.push(`prosody.${key} must be a number`)
-        else if (key === 'rate' && value <= 0) errors.push('prosody.rate must be above 0')
+        else if (key === 'rate' && (value < PROSODY_RANGES.rate.min || value > PROSODY_RANGES.rate.max))
+          errors.push(`prosody.rate must be between ${PROSODY_RANGES.rate.min} and ${PROSODY_RANGES.rate.max}`)
+        else if (key === 'pitch' && (value < PROSODY_RANGES.pitch.min || value > PROSODY_RANGES.pitch.max))
+          errors.push(`prosody.pitch must be between ${PROSODY_RANGES.pitch.min} and ${PROSODY_RANGES.pitch.max} semitones`)
+        else if (key === 'volume' && (value < PROSODY_RANGES.volume.min || value > PROSODY_RANGES.volume.max))
+          errors.push(`prosody.volume must be between ${PROSODY_RANGES.volume.min} and ${PROSODY_RANGES.volume.max} dB`)
       }
   }
   if (!Array.isArray(c.effects)) return [...errors, 'effects must be an array']
+  if (c.effects.length > MAX_CHAIN_EFFECTS) errors.push(`effects must have at most ${MAX_CHAIN_EFFECTS} items`)
   c.effects.forEach((spec, index) => {
     const at = `effects[${index}]`
     if (!spec || typeof spec !== 'object') return errors.push(`${at} must be an object`)
@@ -34,7 +48,7 @@ export function validateChain(chain: unknown, registry: Registry = createRegistr
     if (!definition) return errors.push(`${at}: unknown effect type "${String(spec.type)}"`)
     for (const [key, value] of Object.entries(spec)) {
       if (RESERVED.has(key)) continue
-      const info = definition.params[key]
+      const info = Object.hasOwn(definition.params, key) ? definition.params[key] : undefined
       if (!info) {
         errors.push(`${at}.${key}: "${definition.type}" has no such parameter`)
         continue
@@ -47,6 +61,20 @@ export function validateChain(chain: unknown, registry: Registry = createRegistr
     if (spec.bypass !== undefined && typeof spec.bypass !== 'boolean') errors.push(`${at}.bypass must be a boolean`)
     if (spec.id !== undefined && typeof spec.id !== 'string') errors.push(`${at}.id must be a string`)
   })
+  const dispersionDef = registry.get('dispersion')
+  if (dispersionDef) {
+    const stagesInfo = dispersionDef.params.stages
+    let dispersionStages = 0
+    for (const spec of c.effects) {
+      if (!spec || typeof spec !== 'object' || spec.bypass) continue
+      if (spec.type !== 'dispersion') continue
+      const raw = Object.hasOwn(spec, 'stages') ? spec.stages : stagesInfo?.defaultValue
+      dispersionStages += typeof raw === 'number' && Number.isFinite(raw) ? Math.round(raw) : stagesInfo?.defaultValue ?? 0
+    }
+    if (dispersionStages > MAX_DISPERSION_STAGES_TOTAL) {
+      errors.push(`dispersion stages total ${dispersionStages} exceeds ${MAX_DISPERSION_STAGES_TOTAL}`)
+    }
+  }
   return errors
 }
 
@@ -54,7 +82,7 @@ export function validateChain(chain: unknown, registry: Registry = createRegistr
 export function paramsOf(spec: EffectSpec, definition: EffectDefinition): EffectParams {
   const params: EffectParams = {}
   for (const [key, info] of Object.entries(definition.params)) {
-    const raw = spec[key]
+    const raw = Object.hasOwn(spec, key) ? spec[key] : undefined
     let value = typeof raw === 'number' ? raw : typeof raw === 'boolean' ? Number(raw) : info.defaultValue
     if (info.type === 'int' || info.type === 'choice' || info.type === 'boolean') value = Math.round(value)
     params[key] = Math.min(info.maxValue, Math.max(info.minValue, value))
@@ -161,8 +189,8 @@ export type VoiceEffects = SpeechEffects & {
 
 export function resolveChain(chain: EffectChain | PresetName): EffectChain {
   if (typeof chain !== 'string') return chain
+  if (!Object.hasOwn(presets, chain)) throw new TypeError(`Unknown preset "${chain}"`)
   const preset = presets[chain]
-  if (!preset) throw new TypeError(`Unknown preset "${chain}"`)
   return preset
 }
 

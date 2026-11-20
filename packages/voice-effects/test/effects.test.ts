@@ -35,7 +35,7 @@ describe('the chain format', () => {
       }),
     ).toEqual([
       'version must be 1',
-      'prosody.rate must be above 0',
+      'prosody.rate must be between 0.25 and 4',
       'prosody.tone is not rate, pitch or volume',
       'effects[0]: unknown effect type "flanger"',
       'effects[1].frequency = 5 is outside 20–20000',
@@ -179,7 +179,8 @@ describe('FFmpeg', () => {
     const out = toFFmpeg(chain, { sampleRate: 22050 })
     expect(out.filter).toBe('asetrate=44100,aresample=22050,atempo=0.625,volume=-2dB,highpass=f=100:t=q:w=1,tremolo=f=4:d=0.5')
     expect(out.warnings).toEqual(['robo: no FFmpeg equivalent, skipped'])
-    expect(out.command('in.wav', 'out.wav')).toBe(`ffmpeg -i "in.wav" -af "${out.filter}" "out.wav"`)
+    expect(out.command('in.wav', 'out.wav')).toBe(`ffmpeg -i 'in.wav' -af '${out.filter}' 'out.wav'`)
+    expect(out.args('in.wav', 'out.wav')).toEqual(['-i', 'in.wav', '-af', out.filter, 'out.wav'])
     expect(toFFmpeg({ version: 1, prosody: { rate: 0.3 }, effects: [] }).filter).toBe('atempo=0.5,atempo=0.6')
     expect(toFFmpeg('clean').filter).toBe('anull')
   })

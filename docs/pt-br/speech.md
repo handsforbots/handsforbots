@@ -159,6 +159,7 @@ Uma cadeia de efeitos é JSON puro. Os tipos de efeito e os nomes dos parâmetro
 ```
 
 - Os efeitos rodam em ordem. Parâmetros omitidos usam o padrão; valores fora da faixa são recusados pelo `validateChain` (o `set` lança com todos os problemas listados).
+- Limites: prosódia `rate` de 0,25 a 4, `pitch` de −24 a 24 semitons, `volume` de −24 a 24 dB; no máximo 32 efeitos por cadeia (`MAX_CHAIN_EFFECTS`) e 1024 estágios de `dispersion` no total (`MAX_DISPERSION_STAGES_TOTAL`).
 - `bypass: true` mantém um efeito na cadeia, mas desligado; `id` permite endereçá-lo.
 - Mude a cadeia enquanto o bot fala: `fx.set(cadeia | 'preset')`, `fx.update('comp', { ratio: 4 })`, `fx.update(0, { bypass: true })`, `fx.setProsody({ pitch: -3 })`. A próxima frase já usa.
 - `fx.definitions()` descreve cada tipo de efeito e parâmetro (rótulo, faixa, padrão, unidade, curva do slider), então um editor pode ser gerado em vez de escrito. O laboratório faz exatamente isso.
@@ -243,11 +244,14 @@ Para motores na nuvem por trás de `httpTTS({ prosody: true, body })`: Azure, Go
 ### FFmpeg
 
 ```ts
+import { execFile } from 'node:child_process'
 import { toFFmpeg } from '@handsforbots/voice-effects'
 
-const { filter, command, warnings } = toFFmpeg(fx.get(), { sampleRate: 22050 })
-command('entrada.wav', 'saida.wav') // ffmpeg -i "entrada.wav" -af "highpass=f=500:t=q:w=1,…" "saida.wav"
+const { filter, args, warnings } = toFFmpeg(fx.get(), { sampleRate: 22050 })
+execFile('ffmpeg', args('entrada.wav', 'saida.wav')) // ['-i', 'entrada.wav', '-af', 'highpass=f=500:t=q:w=1,…', 'saida.wav']
 ```
+
+O `toFFmpeg` valida a cadeia antes e lança com todos os problemas listados, então uma cadeia vinda de uma requisição não consegue enfiar filtros no grafo. Rode o FFmpeg com `args(entrada, saída)` (os argumentos: `['-i', entrada, '-af', filtro, saída]`) e `execFile`/`spawn`, **nunca por um shell**. Caminhos que começam com `-` são recusados (escreva `./-arquivo`). O `command(entrada, saída)` está obsoleto: põe aspas para um shell POSIX, mas aqui um shell não acrescenta nada. O `ffmpeg(params)` dos seus efeitos deve devolver um único filtro: vírgulas, ponto e vírgula, colchetes, aspas e quebras de linha são recusados.
 
 A mesma cadeia num servidor: pré-renderizar áudio, processar arquivos de um motor no backend ou conferir uma cadeia com as ferramentas de quem trabalha com som. Todo efeito embutido tem filtros FFmpeg correspondentes (`highpass`, `equalizer`, `acompressor`, `alimiter`, `vibrato`, `tremolo`, `chorus`, `aecho`, `asoftclip`…); a altura usa `asetrate` + `aresample`, a velocidade usa `atempo`. Onde o FFmpeg só se aproxima do resultado do Web Audio (o compressor dele mede o nível de outro jeito, o reverb vira um conjunto de ecos), `warnings` avisa; `ringmod` não tem filtro no FFmpeg e é pulado com um aviso. Os testes passam todos os presets por um FFmpeg de verdade.
 

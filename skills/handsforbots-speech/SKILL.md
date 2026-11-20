@@ -103,7 +103,7 @@ fx.set({ version: 1, effects: [{ type: 'lowpass', frequency: 900 }, { type: 'rev
 ## Bridges
 
 - `toSSML(text, prosody, { language?, voice?, pitch: 'st' | '%', fragment? })` for cloud engines; use `pitch: '%'` for Polly. With `httpTTS({ prosody: true, body: (text, o) => ({ ssml: toSSML(text, o.prosody) }) })` the server receives SSML. Only prosody exists in SSML.
-- `toFFmpeg(chain | preset, { sampleRate })` → `{ filter, warnings, command(input, output) }` to apply the same chain on a server or in a build script. Read `warnings`: some effects are approximations, `ringmod` is skipped.
+- `toFFmpeg(chain | preset, { sampleRate })` → `{ filter, warnings, args(input, output), command(input, output) }` to apply the same chain on a server or in a build script. It validates the chain and throws on any problem (prosody rate 0.25–4, pitch ±24 st, volume ±24 dB, at most 32 effects). Run `execFile('ffmpeg', args(input, output))`, never through a shell (`command` is deprecated); paths starting with `-` are refused; a custom `ffmpeg(params)` must return one filter without `,;[]'"` or line breaks. Read `warnings`: some effects are approximations, `ringmod` is skipped.
 - `fx.render(audio)` renders offline (tails included) for pre-generated lines or downloads.
 
 ## Verify

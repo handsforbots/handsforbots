@@ -44,12 +44,12 @@ export function chainSchema(registry: Registry = createRegistry()): Record<strin
         type: 'object',
         additionalProperties: false,
         properties: {
-          rate: { type: 'number', exclusiveMinimum: 0, description: 'multiplier, SSML rate="120%" = 1.2' },
-          pitch: { type: 'number', description: 'semitones, SSML pitch="+2st" = 2' },
-          volume: { type: 'number', description: 'dB, SSML volume="+6dB" = 6' },
+          rate: { type: 'number', minimum: 0.25, maximum: 4, description: 'multiplier, SSML rate="120%" = 1.2' },
+          pitch: { type: 'number', minimum: -24, maximum: 24, description: 'semitones, SSML pitch="+2st" = 2' },
+          volume: { type: 'number', minimum: -24, maximum: 24, description: 'dB, SSML volume="+6dB" = 6' },
         },
       },
-      effects: { type: 'array', items: { oneOf: effect } },
+      effects: { type: 'array', maxItems: 32, items: { oneOf: effect } },
     },
   }
 }

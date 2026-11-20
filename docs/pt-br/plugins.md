@@ -232,7 +232,7 @@ Fontes (`ModelSource`): uma URL (absoluta ou relativa à página), `huggingFace(
 - Tipos de efeito: `highpass`, `lowpass`, `bandpass`, `peaking`, `lowshelf`, `highshelf`, `notch`, `allpass`, `gain`, `compressor`, `limiter`, `gate`, `varispeed`, `vibrato`, `tremolo`, `chorus`, `delay`, `reverb`, `distortion`, `ringmod`, `dispersion`. Acrescente os seus com `defineEffect({ type, label, params, process?, build?, tail?, speed?, ffmpeg? })`.
 - Presets (`presets`): `clean`, `denoise`, `radio`, `telephone`, `megaphone`, `robot`, `underwater`, `cave`, `ice`, `chipmunk`, `giant`.
 - `validateChain(cadeia)` lista todos os problemas; `chainSchema()` é o JSON Schema; `fx.render(áudio)` renderiza offline (com as caudas).
-- Pontes: `toSSML(texto, prosódia, { language?, voice?, pitch?: 'st' | '%', fragment? })` e `toFFmpeg(cadeia | preset, { sampleRate?, prosody? })` → `{ filter, warnings, command(entrada, saída) }`.
+- Pontes: `toSSML(texto, prosódia, { language?, voice?, pitch?: 'st' | '%', fragment? })` e `toFFmpeg(cadeia | preset, { sampleRate?, prosody? })` → `{ filter, warnings, args(entrada, saída), command(entrada, saída) }` (valida a cadeia antes; rode `execFile('ffmpeg', args(...))`, nunca um shell; `command` está obsoleto).
 - O pacote só precisa do `@handsforbots/voice` para tipos: cadeias, SSML e exportação para FFmpeg funcionam também fora do H4B (um script de build, um servidor).
 
 ## keyboard
