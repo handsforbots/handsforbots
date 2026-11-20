@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  parseSessionSnapshot,
   sameRetention,
   storableSnapshot,
   type Retention,
@@ -50,7 +51,9 @@ export type LocalStorage = Storage & {
 }
 
 type Plain = { version: 1; savedAt: number; snapshot: SessionSnapshot }
-type Sealed = { version: 2; savedAt: number; iv: string; data: string }
+/** Legacy encrypted envelope (no AAD); discarded on read (alpha, D4). */
+type SealedLegacy = { version: 2; savedAt: number; iv: string; data: string }
+type Sealed = { version: 3; savedAt: number; threadId: string; iv: string; data: string }
 
 export const storageLocal = definePlugin<LocalStorageOptions | undefined>({
   name: 'storage-local',
@@ -58,7 +61,26 @@ export const storageLocal = definePlugin<LocalStorageOptions | undefined>({
   consent: 'persistence',
   apply(ctx, options = {}) {
     const keySource = options.keySource ?? cookieKey()
-    const storage = createLocalStorage({ ...options, keySource })
+    const base = createLocalStorage({ ...options, keySource })
+    const storage: LocalStorage = {
+      ...base,
+      async load() {
+        try {
+          const snapshot = await base.load()
+          if (!snapshot) return null
+          const parsed = parseSessionSnapshot(snapshot)
+          if (!parsed) {
+            ctx.emit('error', { error: new Error('Invalid session snapshot was rejected.'), source: 'storage-local' })
+            await base.clear()
+            return null
+          }
+          return parsed
+        } catch (error) {
+          ctx.emit('error', { error, source: 'storage-local' })
+          return null
+        }
+      },
+    }
     const choices = choicesOf(options)
     const listeners = new Set<() => void>()
     const control: RetentionControl = {
@@ -135,8 +157,13 @@ export function createLocalStorage(options: LocalStorageOptions = {}): LocalStor
     const raw = area(r)?.getItem(key)
     if (!raw) return null
     try {
-      const stored = JSON.parse(raw) as Plain | Sealed
-      if (stored.version === (encrypt ? 2 : 1)) return stored
+      const stored = JSON.parse(raw) as Plain | Sealed | SealedLegacy
+      if (encrypt) {
+        if (stored.version === 3 && typeof (stored as Sealed).threadId === 'string') return stored as Sealed
+        if (stored.version === 2) area(r)?.removeItem(key)
+        return null
+      }
+      if (stored.version === 1 && 'snapshot' in stored) return stored as Plain
     } catch {
       /* corrupted */
     }
@@ -145,7 +172,7 @@ export function createLocalStorage(options: LocalStorageOptions = {}): LocalStor
   }
 
   const expired = (stored: Plain | Sealed, r: Retention) =>
-    (ttlOf(r) > 0 && Date.now() - stored.savedAt > ttlOf(r)) || (stored.version === 2 && !!keys.gone?.())
+    (ttlOf(r) > 0 && Date.now() - stored.savedAt > ttlOf(r)) || (stored.version === 3 && !!keys.gone?.())
 
   return {
     get retention() {
@@ -173,18 +200,28 @@ export function createLocalStorage(options: LocalStorageOptions = {}): LocalStor
         area(r)?.removeItem(key)
         return null
       }
-      if (stored.version === 1) return stored.snapshot
+      if (stored.version === 1) {
+        const parsed = parseSessionSnapshot(stored.snapshot)
+        if (!parsed) area(r)?.removeItem(key)
+        return parsed ?? null
+      }
       const cryptoKey = await keys.get(false)
+      if (!cryptoKey) {
+        area(r)?.removeItem(key)
+        return null
+      }
       try {
-        if (!cryptoKey) throw new Error('no key')
+        const aad = sealAad(stored.savedAt, stored.threadId)
         const json = await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: fromBase64(stored.iv) },
+          { name: 'AES-GCM', iv: fromBase64(stored.iv), additionalData: aad },
           cryptoKey,
           fromBase64(stored.data),
         )
-        return JSON.parse(new TextDecoder().decode(json)) as SessionSnapshot
+        const parsed = parseSessionSnapshot(JSON.parse(new TextDecoder().decode(json)))
+        if (!parsed || parsed.threadId !== stored.threadId) throw new Error('snapshot mismatch')
+        return parsed
       } catch {
-        area(r)?.removeItem(key) // its key no longer exists
+        area(r)?.removeItem(key)
         return null
       }
     },
@@ -201,13 +238,21 @@ export function createLocalStorage(options: LocalStorageOptions = {}): LocalStor
         area(r)?.removeItem(key)
         throw new Error('[h4b] storage-local: no encryption key (needs Web Crypto and the key source); the conversation was not saved')
       }
+      const savedAt = Date.now()
       const iv = crypto.getRandomValues(new Uint8Array(12))
+      const aad = sealAad(savedAt, clean.threadId)
       const data = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
+        { name: 'AES-GCM', iv, additionalData: aad },
         cryptoKey,
         new TextEncoder().encode(JSON.stringify(clean)),
       )
-      const stored: Sealed = { version: 2, savedAt: Date.now(), iv: toBase64(iv), data: toBase64(new Uint8Array(data)) }
+      const stored: Sealed = {
+        version: 3,
+        savedAt,
+        threadId: clean.threadId,
+        iv: toBase64(iv),
+        data: toBase64(new Uint8Array(data)),
+      }
       area(r)?.setItem(key, JSON.stringify(stored))
     },
     clear() {
@@ -253,45 +298,80 @@ export type CookieKeyOptions = {
  * requests to its path.
  */
 export function cookieKey(options: CookieKeyOptions = {}): KeySource {
-  const name = options.name ?? 'h4b-key'
+  const baseName = options.name ?? 'h4b-key'
   const ttlMinutes = options.ttlMinutes ?? 30
   const importer = keyImporter()
+  // __Host- forbids Domain and any Path but /, so an explicit domain or path keeps the plain name.
+  const hostOnly = !options.domain && (options.path ?? '/') === '/'
+  const https = () => hostOnly && typeof location !== 'undefined' && location.protocol === 'https:'
+  const secureContext = () => typeof location !== 'undefined' && location.protocol === 'https:'
+  const cookieName = () => (https() ? `__Host-${baseName}` : baseName)
 
   const write = (raw: string) => {
-    const secure = typeof location !== 'undefined' && location.protocol === 'https:'
-    document.cookie = [
-      `${name}=${raw}`,
-      `Path=${options.path ?? '/'}`,
-      options.domain ? `Domain=${options.domain}` : '',
-      `SameSite=${options.sameSite ?? 'Strict'}`,
-      ttlMinutes > 0 ? `Max-Age=${Math.round(ttlMinutes * 60)}` : '',
-      secure ? 'Secure' : '',
-    ]
-      .filter(Boolean)
-      .join('; ')
+    const secure = https()
+    const name = cookieName()
+    document.cookie = secure
+      ? [
+          `${name}=${raw}`,
+          'Path=/',
+          `SameSite=${options.sameSite ?? 'Strict'}`,
+          ttlMinutes > 0 ? `Max-Age=${Math.round(ttlMinutes * 60)}` : '',
+          'Secure',
+        ]
+          .filter(Boolean)
+          .join('; ')
+      : [
+          `${name}=${raw}`,
+          `Path=${options.path ?? '/'}`,
+          options.domain ? `Domain=${options.domain}` : '',
+          `SameSite=${options.sameSite ?? 'Strict'}`,
+          ttlMinutes > 0 ? `Max-Age=${Math.round(ttlMinutes * 60)}` : '',
+          secureContext() ? 'Secure' : '',
+        ]
+          .filter(Boolean)
+          .join('; ')
+  }
+
+  const drop = () => {
+    if (typeof document === 'undefined') return
+    const name = cookieName()
+    document.cookie = https()
+      ? [`${name}=`, 'Path=/', 'Max-Age=0', 'Secure'].join('; ')
+      : [
+          `${name}=`,
+          `Path=${options.path ?? '/'}`,
+          options.domain ? `Domain=${options.domain}` : '',
+          'Max-Age=0',
+        ]
+          .filter(Boolean)
+          .join('; ')
   }
 
   return {
     ttlMinutes,
-    gone: () => typeof document !== 'undefined' && !readCookie(name),
+    gone: () => {
+      if (typeof document === 'undefined') return false
+      const read = readCookieExact(cookieName())
+      return read === undefined || read === 'tampered'
+    },
     forget() {
-      if (typeof document === 'undefined') return
-      document.cookie = [
-        `${name}=`,
-        `Path=${options.path ?? '/'}`,
-        options.domain ? `Domain=${options.domain}` : '',
-        'Max-Age=0',
-      ]
-        .filter(Boolean)
-        .join('; ')
+      drop()
     },
     async get(create) {
       if (typeof document === 'undefined') return null
-      let raw = readCookie(name)
+      let raw = readCookieExact(cookieName())
+      if (raw === 'tampered') {
+        drop()
+        return null
+      }
       if (raw) write(raw)
       else if (create) {
         write(toBase64(crypto.getRandomValues(new Uint8Array(32))))
-        raw = readCookie(name) // another tab may have written first; cookies may be blocked
+        raw = readCookieExact(cookieName())
+        if (raw === 'tampered') {
+          drop()
+          return null
+        }
       }
       return raw ? importer(raw) : null
     },
@@ -354,12 +434,24 @@ function keyImporter() {
   }
 }
 
-function readCookie(name: string): string | undefined {
+function readCookieExact(name: string): string | undefined | 'tampered' {
+  let value: string | undefined
+  let count = 0
   for (const pair of document.cookie.split(';')) {
-    const [k, ...v] = pair.trim().split('=')
-    if (k === name) return v.join('=') || undefined
+    const trimmed = pair.trim()
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const k = trimmed.slice(0, eq)
+    if (k !== name) continue
+    count++
+    value = trimmed.slice(eq + 1) || undefined
   }
-  return undefined
+  if (count > 1) return 'tampered'
+  return value
+}
+
+function sealAad(savedAt: number, threadId: string): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(JSON.stringify({ version: 3, savedAt, threadId }))
 }
 
 /** base64url, safe inside a cookie value. */

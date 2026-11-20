@@ -252,7 +252,7 @@ Sources (`ModelSource`): a URL (absolute or relative to the page), `huggingFace(
 
 ## expose-webmcp
 
-`webmcp({ include?: 'explicit' | 'all', prefix?, modelContext? })`. Publishes actions to browser agents through `document.modelContext` (Chrome origin trial). By default only actions with `exposeTo` including `'agent'`. Calls go through the kernel: validation, interceptors, confirmation, and a visible trace in history (route `agent`).
+`webmcp({ include?: 'explicit' | 'all', prefix?, modelContext? })`. Publishes actions to browser agents through `document.modelContext` (Chrome origin trial). By default only actions with `exposeTo` including `'agent'`. Calls go through the kernel: validation, interceptors, confirmation when the action asks for it, and a visible trace in history (route `agent`). A tool refuses to run if its action was removed, replaced or is no longer exposed to `agent`, even while the browser still lists it.
 
 ## mcp-apps
 
@@ -345,8 +345,9 @@ storageLocal({ retention: 'tab', userChoices: ['key', { ttlMinutes: 5 }] })
 | `userChoices` | `[]` | Retentions the end user may pick; the widget shows them |
 | `key` | `'h4b:conversation'` | |
 
-- The cookie key is renewed on every load and save (`Max-Age`, `SameSite=Strict`, `Secure` on https). It is readable by the page's scripts and travels with requests to its `path` (about 60 bytes).
-- `backendKey` protocol: `GET url` → `200 { "key": "<base64url, 32 bytes>" }` (renewing it) or `404`; `POST url` → `200` with the existing key or a new one. The server finds the user by its own session (HttpOnly cookie, sent with `credentials: 'same-origin'`). The key is fetched on every load and save and kept only in memory.
+- The cookie key is renewed on every load and save (`Max-Age`, `SameSite=Strict`, `Secure` on https). On https, without `domain` or a `path` other than `/`, the cookie is named `__Host-h4b-key`, so a sibling subdomain cannot plant one; if two cookies with the key's name show up, the key and the conversation are dropped. It is readable by the page's scripts and travels in the `Cookie` header of every request to its `path` (about 60 bytes); use `backendKey` if that is a problem.
+- The saved record is versioned and binds its time and thread id to the encryption (AES-GCM additional data), so editing `savedAt` in `localStorage` to extend the deadline makes it unreadable. Records from earlier alphas are discarded. A malformed conversation is refused with `error` (`source: 'storage-local'`), and so is a failure of the key source; the record is kept for the next load.
+- `backendKey` protocol: `GET url` → `200 { "key": "<base64url, 32 bytes>" }` (renewing it) or `404`; `POST url` → `200` with the existing key or a new one. The server finds the user by its own session (HttpOnly cookie, sent with `credentials: 'same-origin'`). The key is fetched on every load and save and kept only in memory. Don't answer this endpoint with permissive CORS (`Access-Control-Allow-Origin` echoing any origin with credentials): another site could read the key.
 - Without a key the data can't be read: it is deleted on the next load or by the sweep that runs every minute. If there's no key source (no Web Crypto, cookies blocked), nothing is saved and `save()` reports an `error` with source `storage`.
 - Blobs are replaced by placeholders.
 - **It doesn't protect against XSS:** a script injected in the page can read the key. It limits how long the conversation stays readable in the browser.
@@ -370,7 +371,7 @@ Both storages provide the `retention` service (`RetentionControl` in `core`): `c
 
 ## tab-sync
 
-`tabSync({ mode?: 'sync', channel?, throttleMs?, context? })`.
+`tabSync({ mode?: 'sync', channel?, throttleMs?, context? })`. Every H4B app on the same origin shares the default channel `h4b:default`: give each app its own `channel` (`tabSync({ channel: 'shop' })`) so they don't merge conversations. Snapshots from other tabs are checked (`parseSessionSnapshot`) before they are applied; the executed call ids are merged, so a call another tab ran is not run again.
 
 | `mode` | Behavior |
 |---|---|
@@ -388,12 +389,12 @@ Rule sets and helpers for `createH4B({ consent })` (the mechanism itself is in `
 
 - `lgpd`, `gdpr`, `ccpa`, `optIn` and `presets` (all four): starting points with the purposes `persistence`, `review` and `analytics`; also as `@handsforbots/consent/rules/*.json`.
 - `loadConsentRules(url, { parse?, fetch? })`: fetches one rule set or a list (JSON, or YAML with `parse: YAML.parse`) and validates it.
-- `regionFromMeta(name = 'h4b-region')`, `regionFromUrl(url)`: the visitor's region, from the page or an endpoint of yours.
+- `regionFromMeta(name = 'h4b-region')`, `regionFromUrl(url)`: the visitor's region, from the page or an endpoint of yours. `regionFromMeta` reads only `<meta>` inside `<head>` and gives no region when there is more than one with the name, so injected HTML cannot pick the regime; prefer `regionFromUrl` or a region your server decides.
 - `redact({ patterns?, custom?, replace?, media?: 'omit' | 'keep', hooks?: ['storage.before'], when? })`: anonymizes emails, phone numbers, CPF, CNPJ and card numbers (and media) in what is stored, optionally only while a purpose (e.g. `review`) is granted. Also `redactText`, `redactMessages`, `redactor`, `PATTERNS`.
 
 ## testkit
 
-For plugin and transport authors: `scriptedTransport`, `reply`, `citedReply` (sources, clean text and citations, like a RAG backend), `eventually`, `waitForIdle` and `transportConformance(name, { create(scenario) })`, a Vitest suite (text answer, client action round trip, backend error, abort) that every transport in this repository passes.
+For plugin and transport authors: `scriptedTransport`, `reply`, `citedReply` (sources, clean text and citations, like a RAG backend), `eventually`, `waitForIdle` and `transportConformance(name, { create(scenario) })`, a Vitest suite (text answer, client action round trip, backend error, abort, and `duplicateCall`: the same `callId` delivered twice runs once; skip it with `skip: ['duplicateCall']` if your protocol cannot express it) that every transport in this repository passes.
 
 ## observability
 

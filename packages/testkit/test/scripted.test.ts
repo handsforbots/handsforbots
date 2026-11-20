@@ -12,8 +12,10 @@ function reference(scenario: string): Transport {
         await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))))
       }
       const last = request.messages.at(-1)!
-      if (scenario === 'tool' && last.role === 'user') {
-        yield { type: 'action.call', callId: 'c1', name: 'conformance_echo', args: { value: 'ping' } }
+      if ((scenario === 'tool' || scenario === 'duplicateCall') && last.role === 'user') {
+        const call = { type: 'action.call' as const, callId: scenario === 'duplicateCall' ? 'dup' : 'c1', name: 'conformance_echo', args: { value: 'ping' } }
+        yield call
+        if (scenario === 'duplicateCall') yield call
         return
       }
       if (last.role === 'tool') return yield* reply(`echo returned ${JSON.stringify(last.result)}`)

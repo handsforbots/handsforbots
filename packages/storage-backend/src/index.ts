@@ -1,6 +1,7 @@
 import {
   createId,
   definePlugin,
+  parseSessionSnapshot,
   sameRetention,
   storableSnapshot,
   type Retention,
@@ -49,7 +50,20 @@ export const storageBackend = definePlugin<BackendStorageOptions>({
   apply(ctx, options) {
     const consent = ctx.app.consent
     const granted = () => (consent.enabled ? consent.purposes.filter((p) => consent.granted(p)) : undefined)
-    const storage = createBackendStorage({ consentPurposes: granted, ...options })
+    const base = createBackendStorage({ consentPurposes: granted, ...options })
+    const storage: BackendStorage = {
+      ...base,
+      async load() {
+        const snapshot = await base.load()
+        if (!snapshot) return null
+        const parsed = parseSessionSnapshot(snapshot)
+        if (!parsed) {
+          ctx.emit('error', { error: new Error('Invalid session snapshot was rejected.'), source: 'storage-backend' })
+          return null
+        }
+        return parsed
+      },
+    }
     const choices = choicesOf(options)
     const listeners = new Set<() => void>()
     const control: RetentionControl = {
@@ -180,8 +194,7 @@ export function createBackendStorage(options: BackendStorageOptions): BackendSto
       area(before)?.removeItem(idKey)
     },
     async load() {
-      const snapshot = await request('GET', retention())
-      return snapshot?.threadId && Array.isArray(snapshot.messages) ? snapshot : null
+      return request('GET', retention())
     },
     async save(snapshot) {
       await request('PUT', retention(), storableSnapshot(snapshot))

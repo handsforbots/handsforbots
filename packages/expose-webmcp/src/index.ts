@@ -82,9 +82,14 @@ export const webmcp = definePlugin<WebMCPOptions | undefined>({
             description: action.description,
             inputSchema: action.parameters ?? toJsonSchema(action.input) ?? { type: 'object', properties: {} },
             annotations: { readOnlyHint: action.readOnly ?? false },
-            // Runs through the kernel queue: validation, `action.before`, confirmation
-            // for the `agent` origin, and a visible trace in history.
+            // Runs through the kernel queue: validation, `action.before`, user confirmation
+            // when required, and a visible trace in history.
             execute: async (input) => {
+              const entry = registered.get(name)
+              const live = ctx.app.actions.list('agent').find((a) => a.name === action.name)
+              if (!entry || entry.action !== action || entry.controller !== controller || live !== action || !visible(action)) {
+                throw new Error('Tool is no longer available to agents')
+              }
               const outcome = await ctx.app.runAction(action.name, input ?? {}, { origin: 'agent' })
               if (outcome.error) throw new Error(outcome.error)
               return typeof outcome.result === 'string' ? outcome.result : JSON.stringify(outcome.result ?? null)
@@ -93,9 +98,11 @@ export const webmcp = definePlugin<WebMCPOptions | undefined>({
           { signal: controller.signal },
         ),
       ).catch((error) => {
-        registered.delete(name)
+        if (registered.get(name)?.controller === controller) {
+          registered.delete(name)
+          changed()
+        }
         ctx.emit('error', { error, source: `webmcp:${name}` })
-        changed()
       })
     }
 

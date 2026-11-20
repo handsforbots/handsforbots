@@ -206,7 +206,16 @@ export class ConsentManager implements ConsentControl {
     const channel = new BroadcastChannel(`h4b-consent:${this.channelName}`)
     ;(channel as { unref?: () => void }).unref?.() // never keeps a Node process alive
     channel.addEventListener('message', ({ data }) => {
-      if (data?.type === 'h4b:consent' && data.decisions) void this.record(data.decisions, false)
+      if (!data || typeof data !== 'object' || data.type !== 'h4b:consent') return
+      if (!data.decisions || typeof data.decisions !== 'object' || Array.isArray(data.decisions)) return
+      const decisions: Record<string, ConsentState> = {}
+      for (const [purpose, state] of Object.entries(data.decisions as Record<string, unknown>)) {
+        if (typeof purpose !== 'string' || !purpose) continue
+        if (!STATES.includes(state as ConsentState)) continue
+        decisions[purpose] = state as ConsentState
+      }
+      if (Object.keys(decisions).length === 0) return
+      void this.record(decisions, false)
     })
     this.channel = channel as unknown as ChannelLike
   }

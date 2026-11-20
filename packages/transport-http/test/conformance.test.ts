@@ -13,21 +13,32 @@ function backend(scenario: string, dialect: 'generic' | 'openai') {
     const messages = body.messages ?? body.context?.conversation_history ?? []
     const last = (body.messages ?? []).at(-1)
     const toolResult = last?.role === 'tool' ? last.content : undefined
-    const wantsTool = scenario === 'tool' && !toolResult
+    const wantsTool = (scenario === 'tool' || scenario === 'duplicateCall') && !toolResult
     if (dialect === 'openai') {
       return Response.json({
         choices: [
           {
             message: wantsTool
-              ? { content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'conformance_echo', arguments: '{"value":"ping"}' } }] }
+              ? {
+                  content: null,
+                  tool_calls: (scenario === 'duplicateCall'
+                    ? [
+                        { id: 'dup', type: 'function', function: { name: 'conformance_echo', arguments: '{"value":"ping"}' } },
+                        { id: 'dup', type: 'function', function: { name: 'conformance_echo', arguments: '{"value":"ping"}' } },
+                      ]
+                    : [{ id: 'c1', type: 'function', function: { name: 'conformance_echo', arguments: '{"value":"ping"}' } }]),
+                }
               : { content: toolResult ? `echo returned ${toolResult}` : 'hello' },
           },
         ],
       })
     }
     void messages
+    const echoCall = { id: scenario === 'duplicateCall' ? 'dup' : 'c1', name: 'conformance_echo', arguments: { value: 'ping' } }
     return Response.json(
-      wantsTool ? { tool_calls: [{ id: 'c1', name: 'conformance_echo', arguments: { value: 'ping' } }] } : { response: toolResult ? `echo returned ${toolResult}` : 'hello' },
+      wantsTool
+        ? { tool_calls: scenario === 'duplicateCall' ? [echoCall, echoCall] : [echoCall] }
+        : { response: toolResult ? `echo returned ${toolResult}` : 'hello' },
     )
   }) as typeof fetch
 }

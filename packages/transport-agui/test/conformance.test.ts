@@ -16,12 +16,14 @@ function agent(scenario: string): AguiRunner {
             const last = input.messages.at(-1)
             const events: BaseEvent[] = [ev(EventType.RUN_STARTED, { threadId: input.threadId, runId: input.runId })]
             if (scenario === 'error') events.push(ev(EventType.RUN_ERROR, { message: 'agent failed' }))
-            else if (scenario === 'tool' && last?.role === 'user') {
-              events.push(
-                ev(EventType.TOOL_CALL_START, { toolCallId: 'c1', toolCallName: 'conformance_echo' }),
-                ev(EventType.TOOL_CALL_ARGS, { toolCallId: 'c1', delta: '{"value":"ping"}' }),
-                ev(EventType.TOOL_CALL_END, { toolCallId: 'c1' }),
-              )
+            else if ((scenario === 'tool' || scenario === 'duplicateCall') && last?.role === 'user') {
+              const id = scenario === 'duplicateCall' ? 'dup' : 'c1'
+              const toolCall = [
+                ev(EventType.TOOL_CALL_START, { toolCallId: id, toolCallName: 'conformance_echo' }),
+                ev(EventType.TOOL_CALL_ARGS, { toolCallId: id, delta: '{"value":"ping"}' }),
+                ev(EventType.TOOL_CALL_END, { toolCallId: id }),
+              ]
+              events.push(...toolCall, ...(scenario === 'duplicateCall' ? toolCall : []))
             } else {
               const text = last?.role === 'tool' ? `echo returned ${last.content}` : 'hello'
               events.push(ev(EventType.TEXT_MESSAGE_CHUNK, { messageId: 'm', delta: text }))

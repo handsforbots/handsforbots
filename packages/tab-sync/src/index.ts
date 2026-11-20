@@ -1,4 +1,6 @@
-import { createId, definePlugin, type Message, type PluginContext, type Route, type SessionSnapshot } from '@handsforbots/core'
+import { createId, definePlugin, parseSessionSnapshot, type Message, type PluginContext, type Route, type SessionSnapshot } from '@handsforbots/core'
+
+const MAX_SEEN_CALL_IDS = 1000
 
 /**
  * - `sync`: tabs share one conversation (default).
@@ -100,8 +102,16 @@ function sync(ctx: PluginContext, options: TabSyncOptions, channel: ChannelLike,
 
   const apply = (incoming: SessionSnapshot) => {
     const local = ctx.app.conversation.snapshot()
-    const next =
-      incoming.threadId === local.threadId ? { ...incoming, messages: merge(local.messages, incoming.messages) } : incoming
+    const sameThread = incoming.threadId === local.threadId
+    const next = sameThread
+      ? {
+          ...incoming,
+          messages: merge(local.messages, incoming.messages),
+          ...(local.seenCallIds || incoming.seenCallIds
+            ? { seenCallIds: mergeSeenCallIds(local.seenCallIds, incoming.seenCallIds) }
+            : {}),
+        }
+      : incoming
     applying = true
     try {
       ctx.app.conversation.restore(next)
@@ -113,9 +123,15 @@ function sync(ctx: PluginContext, options: TabSyncOptions, channel: ChannelLike,
   }
 
   const onMessage = ({ data }: { data: any }) => {
-    if (data?.type !== 'h4b:snapshot' || data.from === tabId) return
-    if (ctx.app.busy) deferred = data.snapshot
-    else apply(data.snapshot)
+    if (!data || typeof data !== 'object' || data.type !== 'h4b:snapshot') return
+    if (typeof data.from !== 'string' || data.from === tabId) return
+    const parsed = parseSessionSnapshot(data.snapshot)
+    if (!parsed) {
+      ctx.emit('error', { error: new Error('Invalid tab-sync snapshot was rejected.'), source: 'tab-sync' })
+      return
+    }
+    if (ctx.app.busy) deferred = parsed
+    else apply(parsed)
   }
 
   ctx.on('turn.status', (status) => {
@@ -152,8 +168,10 @@ function notify(ctx: PluginContext, options: TabSyncOptions, channel: ChannelLik
   })
 
   const onMessage = ({ data }: { data: any }) => {
-    if (data?.type !== 'h4b:activity' || data.from === tabId) return
-    const entry = { ...(data.activity as TabActivity), tab: data.from as string, at: data.at as number }
+    if (!data || typeof data !== 'object' || data.type !== 'h4b:activity') return
+    if (typeof data.from !== 'string' || data.from === tabId) return
+    if (!data.activity || typeof data.activity !== 'object' || typeof data.at !== 'number' || !Number.isFinite(data.at)) return
+    const entry = { ...(data.activity as TabActivity), tab: data.from, at: data.at }
     ctx.emit('tabs.activity', entry)
     if (limit <= 0) return
     recent.push(entry)
@@ -171,6 +189,17 @@ function notify(ctx: PluginContext, options: TabSyncOptions, channel: ChannelLik
     channel.removeEventListener('message', onMessage)
     if (recent.length) ctx.app.removeContext('tab-sync.activity')
   })
+}
+
+function mergeSeenCallIds(local?: string[], incoming?: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const id of [...(local ?? []), ...(incoming ?? [])]) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out.slice(-MAX_SEEN_CALL_IDS)
 }
 
 /** Union by id (incoming wins for the same id), ordered by creation time. */

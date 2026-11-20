@@ -17,7 +17,7 @@ import { storageBackend } from '@handsforbots/storage-backend'
 const h4b = createH4B({
   consent: {
     rules: presets,                 // or await loadConsentRules('/rules.yml', { parse: YAML.parse })
-    region: regionFromMeta(),       // or 'BR', or regionFromUrl('/api/geo') (async)
+    region: regionFromMeta(),       // or 'BR', or regionFromUrl('/api/geo') (async; preferred when the page may carry HTML you don't control)
     initial: decisionsFromTheToolCookie(), // { persistence: true, review: false } — lets storage mount on start()
     manage: () => tool.open(),      // widget shows a button instead of its own checkboxes
   },

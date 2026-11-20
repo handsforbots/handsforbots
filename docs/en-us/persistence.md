@@ -79,7 +79,7 @@ storageLocal({ keySource: backendKey({ url: '/api/h4b/key' }) }) // key on the s
 storageLocal({ encrypt: false })                                 // plain JSON (only for non-sensitive demos)
 ```
 
-`backendKey` protocol: `GET url` → `200 { "key": "<base64url, 32 random bytes>" }` (and renew its expiry) or `404`; `POST url` → `200` with the existing key or a new one. Identify the user by your own session cookie (sent with `credentials: 'same-origin'`).
+`backendKey` protocol: `GET url` → `200 { "key": "<base64url, 32 random bytes>" }` (and renew its expiry) or `404`; `POST url` → `200` with the existing key or a new one. Identify the user by your own session cookie (sent with `credentials: 'same-origin'`), and never answer it with permissive CORS with credentials.
 
 ```ts
 // Express: one key per session, expiring after 30 minutes without use

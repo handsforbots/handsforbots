@@ -21,4 +21,5 @@ transportConformance('rasa', {
       fetch: rasaServer(scenario),
       reportActionResults: (results) => `/echo_result${JSON.stringify(results[0]!.result)}`,
     }),
+  skip: ['duplicateCall'],
 })

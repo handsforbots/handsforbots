@@ -135,7 +135,7 @@ O `parseConsentRules(dados)` valida um conjunto e diz qual campo está errado. O
 
 O navegador não consegue dizer com segurança de onde vem a visita. O seu servidor ou a CDN conseguem:
 
-- **Meta tag:** escreva o cabeçalho de geolocalização da CDN (`CF-IPCountry`, `CloudFront-Viewer-Country`, `X-Vercel-IP-Country`…) na página como `<meta name="h4b-region" content="BR">` e use `regionFromMeta()`.
+- **Meta tag:** escreva o cabeçalho de geolocalização da CDN (`CF-IPCountry`, `CloudFront-Viewer-Country`, `X-Vercel-IP-Country`…) na página como `<meta name="h4b-region" content="BR">` e use `regionFromMeta()`. Só conta uma tag dessas dentro do `<head>`; se a página pode trazer HTML que você não controla, prefira `regionFromUrl`.
 - **Endpoint:** o `regionFromUrl('/api/geo')` pergunta a um endpoint seu. Uma falha conta como região desconhecida, então só valem os conjuntos com `*`.
 - **Mudança de região:** o `h4b.consent.setRegion(codigo)` troca o conjunto depois, por exemplo quando se descobre o país de quem fez login. As decisões já tomadas continuam valendo.
 

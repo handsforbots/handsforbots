@@ -39,7 +39,10 @@ export async function loadConsentRules(url: string, options: LoadRulesOptions = 
  */
 export function regionFromMeta(name = 'h4b-region'): string | undefined {
   if (typeof document === 'undefined') return undefined
-  const content = document.querySelector(`meta[name="${name.replace(/["\\]/g, '\\$&')}"]`)?.getAttribute('content')?.trim()
+  const escaped = name.replace(/["\\]/g, '\\$&')
+  const metas = document.head?.querySelectorAll(`meta[name="${escaped}"]`)
+  if (metas?.length !== 1) return undefined
+  const content = metas[0]?.getAttribute('content')?.trim()
   return content || undefined
 }
 

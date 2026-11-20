@@ -95,7 +95,7 @@ export async function waitForIdle(h4b: H4B, timeout = 5000): Promise<void> {
  * - `error`: fail (HTTP 500, RUN_ERROR…).
  * - `hang`: never answer until the request is aborted.
  */
-export type ConformanceScenario = 'text' | 'tool' | 'error' | 'hang'
+export type ConformanceScenario = 'text' | 'tool' | 'error' | 'hang' | 'duplicateCall'
 
 export type ConformanceOptions = {
   /** Builds a transport wired to a fake backend that behaves as `scenario` says. */
@@ -165,6 +165,15 @@ export function transportConformance(name: string, options: ConformanceOptions) 
       h4b.abort()
       const result = await pending
       expect(result.status.phase).toBe('aborted')
+    })
+
+    run('duplicateCall')('runs a client action once when the same callId is replayed', async () => {
+      const { h4b, echoes } = await setup('duplicateCall')
+      await h4b.ask('one')
+      await waitForIdle(h4b)
+      await h4b.ask('two')
+      await waitForIdle(h4b)
+      expect(echoes).toEqual(['ping'])
     })
   })
 }

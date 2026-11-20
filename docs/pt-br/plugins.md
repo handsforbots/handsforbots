@@ -252,7 +252,7 @@ Fontes (`ModelSource`): uma URL (absoluta ou relativa à página), `huggingFace(
 
 ## expose-webmcp
 
-`webmcp({ include?: 'explicit' | 'all', prefix?, modelContext? })`. Publica ações para agentes do navegador via `document.modelContext` (origin trial do Chrome). Por padrão, só ações cujo `exposeTo` inclua `'agent'`. As chamadas passam pelo kernel: validação, interceptadores, confirmação e registro visível no histórico (rota `agent`).
+`webmcp({ include?: 'explicit' | 'all', prefix?, modelContext? })`. Publica ações para agentes do navegador via `document.modelContext` (origin trial do Chrome). Por padrão, só ações cujo `exposeTo` inclua `'agent'`. As chamadas passam pelo kernel: validação, interceptadores, confirmação quando a ação pede, e registro visível no histórico (rota `agent`). Uma ferramenta se recusa a rodar se a ação dela foi removida, trocada ou deixou de ser exposta a `agent`, mesmo que o navegador ainda a liste.
 
 ## mcp-apps
 
@@ -345,8 +345,9 @@ storageLocal({ retention: 'tab', userChoices: ['key', { ttlMinutes: 5 }] })
 | `userChoices` | `[]` | Retenções que quem usa o site pode escolher; o widget as mostra |
 | `key` | `'h4b:conversation'` | |
 
-- A chave no cookie é renovada a cada carregamento e gravação (`Max-Age`, `SameSite=Strict`, `Secure` em https). Ela é legível pelos scripts da página e vai junto nas requisições ao `path` (uns 60 bytes).
-- Protocolo do `backendKey`: `GET url` → `200 { "key": "<base64url, 32 bytes>" }` (renovando) ou `404`; `POST url` → `200` com a chave existente ou uma nova. O servidor reconhece o usuário pela própria sessão (cookie HttpOnly, enviado com `credentials: 'same-origin'`). A chave é buscada a cada carregamento e gravação e fica só em memória.
+- A chave no cookie é renovada a cada carregamento e gravação (`Max-Age`, `SameSite=Strict`, `Secure` em https). Em https, sem `domain` nem `path` diferente de `/`, o cookie se chama `__Host-h4b-key`, para que um subdomínio vizinho não consiga plantar um; se aparecerem dois cookies com o nome da chave, a chave e a conversa são descartadas. Ela é legível pelos scripts da página e vai no cabeçalho `Cookie` de toda requisição ao `path` (uns 60 bytes); use `backendKey` se isso for um problema.
+- O registro salvo é versionado e amarra seu horário e o id da conversa à cifragem (dados adicionais do AES-GCM), então editar `savedAt` no `localStorage` para estender o prazo o torna ilegível. Registros de alphas anteriores são descartados. Uma conversa malformada é recusada com `error` (`source: 'storage-local'`), e uma falha da fonte de chave também; o registro fica para o próximo carregamento.
+- Protocolo do `backendKey`: `GET url` → `200 { "key": "<base64url, 32 bytes>" }` (renovando) ou `404`; `POST url` → `200` com a chave existente ou uma nova. O servidor reconhece o usuário pela própria sessão (cookie HttpOnly, enviado com `credentials: 'same-origin'`). A chave é buscada a cada carregamento e gravação e fica só em memória. Não responda esse endpoint com CORS permissivo (`Access-Control-Allow-Origin` ecoando qualquer origem com credenciais): outro site poderia ler a chave.
 - Sem chave, o dado não pode ser lido: ele é apagado no próximo carregamento ou pela varredura que roda a cada minuto. Se não houver fonte de chave (sem Web Crypto, cookies bloqueados), nada é salvo e o `save()` reporta um `error` com origem `storage`.
 - Blobs viram marcadores.
 - **Não protege contra XSS:** um script injetado na página consegue ler a chave. Isto limita o tempo em que a conversa fica legível no navegador.
@@ -370,7 +371,7 @@ Os dois storages fornecem o serviço `retention` (`RetentionControl` no `core`):
 
 ## tab-sync
 
-`tabSync({ mode?: 'sync', channel?, throttleMs?, context? })`.
+`tabSync({ mode?: 'sync', channel?, throttleMs?, context? })`. Todo app H4B na mesma origem divide o canal padrão `h4b:default`: dê a cada app o seu `channel` (`tabSync({ channel: 'loja' })`) para que não misturem conversas. Snapshots de outras abas são conferidos (`parseSessionSnapshot`) antes de aplicados; os ids de chamadas já executadas são unidos, então uma chamada que outra aba rodou não roda de novo.
 
 | `mode` | Comportamento |
 |---|---|
@@ -388,12 +389,12 @@ Conjuntos de regras e utilitários para o `createH4B({ consent })` (o mecanismo 
 
 - `lgpd`, `gdpr`, `ccpa`, `optIn` e `presets` (os quatro): pontos de partida com as finalidades `persistence`, `review` e `analytics`; também em `@handsforbots/consent/rules/*.json`.
 - `loadConsentRules(url, { parse?, fetch? })`: busca um conjunto ou uma lista (JSON, ou YAML com `parse: YAML.parse`) e valida.
-- `regionFromMeta(name = 'h4b-region')`, `regionFromUrl(url)`: a região de quem visita, pela página ou por um endpoint seu.
+- `regionFromMeta(name = 'h4b-region')`, `regionFromUrl(url)`: a região de quem visita, pela página ou por um endpoint seu. `regionFromMeta` só lê `<meta>` dentro do `<head>` e não dá região quando há mais de uma com o nome, então HTML injetado não escolhe o regime; prefira `regionFromUrl` ou uma região decidida pelo seu servidor.
 - `redact({ patterns?, custom?, replace?, media?: 'omit' | 'keep', hooks?: ['storage.before'], when? })`: anonimiza e-mails, telefones, CPF, CNPJ e números de cartão (e mídia) no que é guardado, opcionalmente só enquanto uma finalidade (por exemplo `review`) estiver concedida. Também `redactText`, `redactMessages`, `redactor`, `PATTERNS`.
 
 ## testkit
 
-Para quem escreve plugins e transportes: `scriptedTransport`, `reply`, `citedReply` (fontes, texto limpo e citações, como um backend com RAG), `eventually`, `waitForIdle` e `transportConformance(nome, { create(cenário) })`, uma suíte Vitest (resposta em texto, ida e volta de ação, erro do backend, cancelamento) em que todos os transportes deste repositório passam.
+Para quem escreve plugins e transportes: `scriptedTransport`, `reply`, `citedReply` (fontes, texto limpo e citações, como um backend com RAG), `eventually`, `waitForIdle` e `transportConformance(nome, { create(cenário) })`, uma suíte Vitest (resposta em texto, ida e volta de ação, erro do backend, cancelamento, e `duplicateCall`: o mesmo `callId` entregue duas vezes roda uma vez; pule com `skip: ['duplicateCall']` se o seu protocolo não consegue expressá-lo) em que todos os transportes deste repositório passam.
 
 ## observability
 

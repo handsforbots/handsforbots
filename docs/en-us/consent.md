@@ -135,7 +135,7 @@ createH4B({
 
 The browser cannot tell reliably where a visit comes from. Your server or CDN can:
 
-- **Meta tag:** write the CDN's geo header (`CF-IPCountry`, `CloudFront-Viewer-Country`, `X-Vercel-IP-Country`…) into the page as `<meta name="h4b-region" content="BR">` and use `regionFromMeta()`.
+- **Meta tag:** write the CDN's geo header (`CF-IPCountry`, `CloudFront-Viewer-Country`, `X-Vercel-IP-Country`…) into the page as `<meta name="h4b-region" content="BR">` and use `regionFromMeta()`. Only one such tag inside `<head>` counts; if the page can carry HTML you don't control, prefer `regionFromUrl`.
 - **Endpoint:** `regionFromUrl('/api/geo')` asks an endpoint of yours. A failure counts as an unknown region, so only `*` rule sets apply.
 - **Region changes:** `h4b.consent.setRegion(code)` switches the rule set later, for example when a signed-in person's country is known. Decisions already made are kept.
 

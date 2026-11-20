@@ -62,7 +62,7 @@ storageLocal({ retention: 'key', userChoices: ['tab', { ttlMinutes: 5 }] })
 ```
 
 - The point of the encryption is a **guaranteed deadline**: when the key is gone (cookie expired, server dropped it), the data is unreadable and is deleted on the next load or by the 1-minute sweep.
-- `backendKey` endpoint: `GET` → `200 { key }` (renew) or `404`; `POST` → `200 { key }` (existing or new); `DELETE` (consent withdrawn) drops it. 32 random bytes, base64url. Identify the user by the server's own session cookie.
+- `backendKey` endpoint: `GET` → `200 { key }` (renew) or `404`; `POST` → `200 { key }` (existing or new); `DELETE` (consent withdrawn) drops it. 32 random bytes, base64url. Identify the user by the server's own session cookie; no permissive CORS with credentials on it. The default cookie key is `__Host-h4b-key` on https (plain `h4b-key` with an explicit `domain`/`path`); records from earlier alphas are discarded.
 - No Web Crypto or no cookies → nothing is saved; `save()` reports `error` source `storage`. Don't silently switch to `encrypt: false` for real users.
 - Blobs become `omitted_media` placeholders.
 - **Not an XSS defense**: scripts on the page can read the key and `h4b.messages`.
@@ -81,7 +81,7 @@ Endpoint contract (implement all three; with consent on, requests also carry `X-
 
 ## Tabs
 
-`tabSync({ mode })`: `'sync'` (default, one shared conversation), `'notify'` (own conversation per tab; others get `tabs.activity` and the context signal `tab-sync.activity` with the last 10 activities), `'off'`. With `notify`/`off`, use `retention: 'tab'` or tabs overwrite each other's stored conversation.
+`tabSync({ mode })`: `'sync'` (default, one shared conversation), `'notify'` (own conversation per tab; others get `tabs.activity` and the context signal `tab-sync.activity` with the last 10 activities), `'off'`. Give each app on the origin its own `channel` (default `h4b:default` is shared). With `notify`/`off`, use `retention: 'tab'` or tabs overwrite each other's stored conversation.
 
 ## Pitfalls
 

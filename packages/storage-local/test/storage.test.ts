@@ -38,7 +38,7 @@ describe('storage-local', () => {
     const first = await bot()
     await say(first, 'segredo')
     const raw = localStorage.getItem('h4b:conversation')!
-    expect(JSON.parse(raw).version).toBe(2)
+    expect(JSON.parse(raw).version).toBe(3)
     expect(raw).not.toContain('segredo')
     expect(document.cookie).toMatch(/h4b-key=[\w-]{43}/)
     const second = await bot()
