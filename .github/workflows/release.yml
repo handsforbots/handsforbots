@@ -44,10 +44,11 @@ jobs:
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       # No dependency cache in release builds.
+      # No registry-url: setup-node would write an .npmrc that expects
+      # NODE_AUTH_TOKEN, and that empty token blocks trusted publishing.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       # Trusted publishing needs npm 11.5.1+; dist-tag over OIDC, 11.21+.
       - run: npm install -g npm@11
