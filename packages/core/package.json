@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/core",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "description": "⭐ Start here. Hands for Bots kernel: users, the GUI and agents act on the same page through one action layer. Install this first, then one transport.",
   "keywords": [
     "handsforbots",

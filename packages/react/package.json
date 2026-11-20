@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/react",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "description": "UI. React bindings for Hands for Bots: provider and hooks for messages, actions, context and stimuli.",
   "keywords": [
     "handsforbots",

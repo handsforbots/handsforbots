@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/copilotkit",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "description": "UI. CopilotKit bridge for Hands for Bots: actions as frontend tools, context, and voice/menu/sensor input through the CopilotKit agent.",
   "keywords": [
     "handsforbots",
