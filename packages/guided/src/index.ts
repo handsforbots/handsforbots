@@ -76,13 +76,17 @@ const languageKey = (language?: string) => ((language ?? 'en').toLowerCase().sta
 
 /** querySelector that also looks inside open shadow roots (e.g. the <h4b-chat> widget). */
 export function queryDeep(selector: string, root: Document | ShadowRoot = document): Element | null {
-  const direct = root.querySelector(selector)
-  if (direct) return direct
-  for (const element of root.querySelectorAll('*')) {
-    if (element.shadowRoot) {
-      const found = queryDeep(selector, element.shadowRoot)
-      if (found) return found
+  try {
+    const direct = root.querySelector(selector)
+    if (direct) return direct
+    for (const element of root.querySelectorAll('*')) {
+      if (element.shadowRoot) {
+        const found = queryDeep(selector, element.shadowRoot)
+        if (found) return found
+      }
     }
+  } catch {
+    return null
   }
   return null
 }

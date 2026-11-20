@@ -272,4 +272,11 @@ describe('cues', () => {
     expect(await mount({ tone: { values: ['a', 'b'], default: 'a', repeat: { a: { levels: [3, 2] } } } })).toMatch(/ascending/)
     expect(await mount({ tone: { values: ['a b'], default: 'a b' } })).toMatch(/code/)
   })
+
+  it('does not crash when untrusted cues contain Object.prototype keys like constructor or __proto__', async () => {
+    const { h4b, say } = await setup([reply('oi')])
+    await say('vai')
+    h4b.emit('stimulus', { turnId: 't1', stimulus: { type: 'ui.effect', name: 'cues', value: { ['__proto__']: 'evil', constructor: 'evil' } as any } })
+    expect(h4b.get('cues')!.getState().tone).toBeDefined()
+  })
 })

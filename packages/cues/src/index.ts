@@ -331,7 +331,7 @@ const definition: PluginDefinition<CuesOptions> = {
       }
       for (const [name, raw] of Object.entries(input)) {
         if (name === 'messageId') continue
-        const channel = channels[name]
+        const channel = Object.hasOwn(channels, name) ? channels[name] : undefined
         if (!channel) {
           report(new Error(`Unknown cue channel "${name}" was dropped.`))
           continue
@@ -484,7 +484,7 @@ const definition: PluginDefinition<CuesOptions> = {
         if (!hit) continue
         const priority = rule.priority ?? 0
         for (const [name, value] of Object.entries(rule.set)) {
-          const channel = channels[name]
+          const channel = Object.hasOwn(channels, name) ? channels[name] : undefined
           if (!channel || !channel.values.includes(value)) {
             report(new Error(`Rule sets "${name}" to "${value}", which is not declared; ignored.`))
             continue

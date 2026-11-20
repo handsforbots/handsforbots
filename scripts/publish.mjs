@@ -49,7 +49,16 @@ function main() {
   for (const { dir, manifest } of todo) {
     execFileSync('pnpm', ['pack', '--pack-destination', out], { cwd: dir, stdio: 'inherit' })
     const tarball = join(out, `${manifest.name.replace(/^@/, '').replace('/', '-')}-${manifest.version}.tgz`)
-    const args = ['publish', tarball, '--tag', tag, '--access', 'public', ...(dryRun ? ['--dry-run'] : [])]
+    const args = [
+      'publish',
+      tarball,
+      '--tag',
+      tag,
+      '--access',
+      'public',
+      ...(process.env.CI ? ['--provenance'] : []),
+      ...(dryRun ? ['--dry-run'] : []),
+    ]
     console.log(`npm ${args.join(' ')}`)
     execFileSync('npm', args, { stdio: 'inherit' })
     if (dryRun) continue

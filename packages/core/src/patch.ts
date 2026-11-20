@@ -36,15 +36,24 @@ export function applyPatch<T>(document: T, operations: JsonPatchOperation[]): T 
 function parse(path: string): string[] {
   if (path === '') return []
   if (!path.startsWith('/')) throw new Error(`Invalid JSON pointer "${path}"`)
-  return path
+  const segments = path
     .slice(1)
     .split('/')
     .map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'))
+  for (const segment of segments) {
+    if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') {
+      throw new Error(`Dangerous JSON pointer segment "${segment}"`)
+    }
+  }
+  return segments
 }
 
 function getAt(doc: unknown, path: string[]): unknown {
   let current: any = doc
-  for (const key of path) current = current?.[key]
+  for (const key of path) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return undefined
+    current = current?.[key]
+  }
   return current
 }
 
@@ -52,6 +61,9 @@ function setAt(doc: unknown, path: string[], value: unknown, mode: 'add' | 'repl
   if (path.length === 0) return value
   const parent: any = getAt(doc, path.slice(0, -1))
   const key = path[path.length - 1]!
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    throw new Error(`Dangerous JSON pointer key "${key}"`)
+  }
   if (parent === null || typeof parent !== 'object') throw new Error(`Invalid JSON patch path /${path.join('/')}`)
   if (Array.isArray(parent)) {
     const index = key === '-' ? parent.length : Number(key)
@@ -67,6 +79,9 @@ function removeAt(doc: unknown, path: string[]): unknown {
   if (path.length === 0) return undefined
   const parent: any = getAt(doc, path.slice(0, -1))
   const key = path[path.length - 1]!
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    throw new Error(`Dangerous JSON pointer key "${key}"`)
+  }
   if (Array.isArray(parent)) parent.splice(Number(key), 1)
   else if (parent && typeof parent === 'object') delete parent[key]
   return doc

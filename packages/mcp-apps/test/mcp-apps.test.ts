@@ -129,4 +129,17 @@ describe('MCP Apps host', () => {
     expect(filter).not.toHaveBeenCalled()
     expect(received).toEqual([])
   })
+
+  it('allows or forbids model context updates via allowModelContext', async () => {
+    const allowed = await setup()
+    allowed.send({ id: 20, method: 'ui/update-model-context', params: { structuredContent: { test: true } } })
+    const res1 = await allowed.reply(20)
+    expect(res1.error).toBeUndefined()
+    expect(allowed.h4b.context.some((s) => s.key === 'mcp-app.sales_chart')).toBe(true)
+
+    const forbidden = await setup({ allowModelContext: false })
+    forbidden.send({ id: 21, method: 'ui/update-model-context', params: { structuredContent: { test: true } } })
+    const res2 = await forbidden.reply(21)
+    expect(res2.error).toMatchObject({ code: -32601 })
+  })
 })

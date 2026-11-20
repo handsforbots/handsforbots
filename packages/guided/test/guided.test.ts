@@ -125,4 +125,9 @@ describe('page tools (v1 ShowRelevantContent and ImageGallery successors)', () =
       props: { title: 'Cozinhas', images: [{ src: 'https://x.test/c1.jpg', alt: 'Cozinha 1' }, { src: 'https://x.test/c2.jpg', alt: '' }], texts: ['Projeto integrado.'] },
     })
   })
+
+  it('handles invalid CSS selectors gracefully without throwing DOMException', async () => {
+    const { service } = await setup()
+    expect(service.highlight(':invalid[', 'explicação')).toBe(false)
+  })
 })

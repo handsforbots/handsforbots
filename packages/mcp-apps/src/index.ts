@@ -18,6 +18,8 @@ export type McpAppOptions = {
   allowTools?: string[]
   /** Let the app add messages to the conversation (ui/message). Default true. */
   allowMessages?: boolean
+  /** Let the app update the model context (ui/update-model-context). Default true. */
+  allowModelContext?: boolean
   maxHeight?: number
   initialHeight?: number
 }
@@ -137,6 +139,7 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
           return respond(id, {})
         }
         case 'ui/update-model-context':
+          if (options.allowModelContext === false) return fail(id, -32601, 'Model context updates are disabled')
           h4b.signal({
             kind: 'context',
             key: `mcp-app.${props.toolName ?? 'app'}`,

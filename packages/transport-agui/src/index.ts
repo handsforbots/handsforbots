@@ -129,7 +129,12 @@ function parseSSEBlock(block: string): BaseEvent | undefined {
     .filter((line) => line.startsWith('data:'))
     .map((line) => line.slice(5).replace(/^ /, ''))
     .join('\n')
-  return data ? (JSON.parse(data) as BaseEvent) : undefined
+  if (!data || data === '[DONE]') return undefined
+  try {
+    return JSON.parse(data) as BaseEvent
+  } catch {
+    return undefined
+  }
 }
 
 /* -------------------------------------------------------------------------- */
