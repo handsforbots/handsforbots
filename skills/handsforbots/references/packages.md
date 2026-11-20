@@ -39,7 +39,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `inputs` | `camera(...)`, `files(...)`, `gui(...)`, `sensors(...)` | `core` | — | Camera, files, route (path only by default), selection and declarative HTML (both opt-in), idle, sensors |
 | `guided` | `guided({ tours?, autoStart?, sectionsAttribute?, gallery?, targetsAttribute?, allowAssistantSelectors?, ... })` | `core` | `menu` | Tours, highlights, `show_section`, `image_gallery`; the assistant targets `data-h4b-target` names |
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
-| `mcp-apps` | `mcpAppRenderer({ allowTools? })`, `mountMcpApp(h4b, props, opts)` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
+| `mcp-apps` | `mcpAppRenderer({ allowTools?, allowMessages?, allowModelContext?, allowForms?, allowDomains?, confirmLink? })`, `mountMcpApp(h4b, props, opts)`, `unmountMcpApp` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
 | `cues` | `cues({ channels, rules?, classify?, report?, action?, sync? })`; `/server`: `readCuesState` | `core` | — | Closed-vocabulary presentation states |
 | `conversation-state` | `conversationState({...})`, `httpStateUpdater`; `/server`: `readConversationState`, `stateUpdateSchema`, `conversationStatePrompt` | `core` | — | Checked, sourced conversation state |
 | `memory` | `memory({...})`, `httpSummarizer`, `localSummary`, `groupTurns` | `core` | — | Turns sent and kept, compaction (mounted by default) |

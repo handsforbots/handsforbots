@@ -151,7 +151,7 @@ widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] 
 // own UI: element.append(mountMcpApp(h4b, props, { allowTools: ['filter_orders'] }))
 ```
 
-The app runs in a sandboxed iframe (opaque origin) with a restrictive CSP built from `csp` (`connectDomains`, `resourceDomains`, `frameDomains`), injected before any of the app's markup; an app without a doctype gets `<!doctype html>`. `tools/call` from the app runs only the H4B actions in `allowTools` (none by default), with origin `agent`, recorded in history. `ui/message` adds a user message (`allowMessages: false` blocks it); `ui/open-link` opens http(s) only; `ui/update-model-context` becomes a context signal (`allowModelContext: false` blocks it). Both are prompt-injection paths for an app you don't trust.
+The app runs in a sandboxed iframe (opaque origin) with a restrictive CSP built from `csp` (`connectDomains`, `resourceDomains`, `frameDomains`), injected before any of the app's markup (`form-action 'none'`; forms only with `allowForms: true`; declared domains must be `https://` hosts, narrowed by `allowDomains`). The bridge closes when the app navigates or reloads its frame, or leaves the page (`unmountMcpApp(element)` by hand). `tools/call` from the app runs only the H4B actions in `allowTools` (none by default), with origin `agent`, recorded in history. `ui/message` adds a user message and `ui/update-model-context` becomes a context signal, both **off by default** (`allowMessages: true`, `allowModelContext: true`; rate and size limited): they are prompt-injection paths. `ui/open-link` opens http(s) without credentials, rate limited; `confirmLink(url)` can ask the person.
 
 ## Checklist
 
