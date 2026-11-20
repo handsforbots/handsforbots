@@ -14,7 +14,7 @@
     "@handsforbots/voice": "workspace:^",
     "@handsforbots/voice-effects": "workspace:^",
     "@handsforbots/voice-models": "workspace:^",
-    "onnxruntime-web": "^1.30.0"
+    "onnxruntime-web": "^1.31.1"
   },
   "devDependencies": {
     "vite": "^8.3.2"

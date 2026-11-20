@@ -17,11 +17,11 @@
     "@handsforbots/react": "workspace:^",
     "@handsforbots/transport-agui": "workspace:^",
     "@handsforbots/voice": "workspace:^",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@ag-ui/core": "^1.0.1",
+    "@ag-ui/core": "^1.0.4",
     "@ag-ui/encoder": "^1.0.4",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
