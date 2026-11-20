@@ -52,7 +52,7 @@ Chat-format history includes recorded actions as assistant `tool_calls` + `tool`
 
 1. Not registered → `not_found`. Not in `exposeTo` for this origin → `forbidden`.
 2. `action.before` interceptors (may rewrite; `null` → `declined`).
-3. Schema validation (`input` Standard Schema) → `invalid_args`. With only `parameters` (JSON Schema), arguments are **not** validated at runtime.
+3. Schema validation → `invalid_args`: `input` (Standard Schema), or with only `parameters` the JSON Schema subset H4B emits (`type`, `enum`, `const`, `required`, `properties`, `additionalProperties`, `items`, numeric/length/item limits; `pattern` and other keywords are ignored).
 4. Confirmation when `destructive: true` or `confirm: 'always'`: the `confirm` service decides; **no service → declined**.
 5. Handler; thrown errors become `failed`.
 

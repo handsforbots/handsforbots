@@ -3,6 +3,8 @@ import { createId } from './id.js'
 import { applyPatch } from './patch.js'
 import type { AssistantMessage, JsonPatchOperation, Message, SessionSnapshot } from './types.js'
 
+const MAX_SEEN_CALL_IDS = 1000
+
 /**
  * Conversation store. Every change replaces the affected objects, so
  * snapshots can be compared by reference (React's useSyncExternalStore).
@@ -16,6 +18,7 @@ export class Conversation {
   /** Opaque slot for the `conversation-state` plugin (ADR 0019); saved and restored with the conversation. */
   conversationState: unknown = undefined
   private _attributes: ConversationAttributes = EMPTY_ATTRIBUTES
+  private _seenCallIds: string[] = []
 
   constructor(
     threadId: string | undefined,
@@ -53,6 +56,9 @@ export class Conversation {
     this.conversationState = snapshot.conversationState
     const hadAttributes = Object.keys(this._attributes).length > 0
     this._attributes = cleanAttributes(snapshot.attributes)
+    this._seenCallIds = Array.isArray(snapshot.seenCallIds)
+      ? snapshot.seenCallIds.filter((id): id is string => typeof id === 'string').slice(-MAX_SEEN_CALL_IDS)
+      : this.collectCallIds(this._messages)
     this.onMessages(this._messages)
     this.onState(this._state)
     if (hadAttributes || Object.keys(this._attributes).length > 0) this.onAttributes(this._attributes, 'restored')
@@ -66,6 +72,7 @@ export class Conversation {
     this.conversationState = undefined
     const hadAttributes = Object.keys(this._attributes).length > 0
     this._attributes = EMPTY_ATTRIBUTES
+    this._seenCallIds = []
     this.onMessages(this._messages)
     this.onState(this._state)
     if (hadAttributes) this.onAttributes(this._attributes, 'reset')
@@ -79,7 +86,29 @@ export class Conversation {
       ...(this.memory === undefined ? {} : { memory: this.memory }),
       ...(this.conversationState === undefined ? {} : { conversationState: this.conversationState }),
       ...(Object.keys(this._attributes).length === 0 ? {} : { attributes: this._attributes }),
+      ...(this._seenCallIds.length === 0 ? {} : { seenCallIds: this._seenCallIds }),
     }
+  }
+
+  rememberCallId(callId: string) {
+    if (!callId || this._seenCallIds.includes(callId)) return
+    this._seenCallIds = [...this._seenCallIds, callId].slice(-MAX_SEEN_CALL_IDS)
+  }
+
+  hasSeenCallId(callId: string): boolean {
+    return this._seenCallIds.includes(callId)
+  }
+
+  private collectCallIds(messages: Message[]): string[] {
+    const ids: string[] = []
+    for (const message of messages) {
+      if (message.role === 'assistant') {
+        for (const call of message.toolCalls ?? []) ids.push(call.id)
+      } else if (message.role === 'tool') {
+        ids.push(message.toolCallId)
+      }
+    }
+    return [...new Set(ids)].slice(-MAX_SEEN_CALL_IDS)
   }
 
   append<M extends Message>(message: M): M {

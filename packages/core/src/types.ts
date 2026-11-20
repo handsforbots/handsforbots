@@ -349,6 +349,8 @@ export type SessionSnapshot = {
   conversationState?: unknown
   /** Conversation attributes (ADR 0017): codes such as an experiment's variant. */
   attributes?: ConversationAttributes
+  /** Action call ids already handled in this conversation (kernel deduplication). */
+  seenCallIds?: string[]
 }
 
 export type Storage = {

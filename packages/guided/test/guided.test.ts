@@ -50,7 +50,7 @@ describe('guided', () => {
     const outcome = await h4b.runAction('guided_tour', { steps: [{ text: 'Olhe aqui', target: '#save_button' }] }, { origin: 'assistant' })
     expect(outcome).toEqual({ result: { started: true, steps: 1 } })
     expect(card()!.textContent).toContain('Olhe aqui')
-    expect((await h4b.runAction('guided_tour', { name: 'nope' })).error).toContain('Unknown tour')
+    expect((await h4b.runAction('guided_tour', { name: 'nope' })).error).toContain('must be one of')
   })
 
   it('highlights elements, including inside shadow roots', async () => {

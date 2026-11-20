@@ -42,6 +42,7 @@ import type {
   UserMessage,
   WhileBusy,
 } from './types.js'
+import { parseSessionSnapshot } from './session-snapshot.js'
 import { textOf } from './util.js'
 
 /** What conversational triggers do while the kernel is busy (ADR 0011). */
@@ -123,6 +124,10 @@ type RoundState = {
   lastAssistantId?: string
   pending: ToolCall[]
   resolved: Set<string>
+  callIdsInRound: Set<string>
+  /** Rejected stimulus message ids mapped to the assistant message that received their content. */
+  redirectedMessageIds: Map<string, string>
+  rejectedMessageErrors: Set<string>
   error?: string
 }
 
@@ -238,7 +243,7 @@ export class H4B {
     if (storage) {
       try {
         const snapshot = await storage.load()
-        if (snapshot) this.restore(snapshot)
+        if (snapshot) this.restoreFromStorage(snapshot)
       } catch (error) {
         this.emit('error', { error, source: 'storage' })
       }
@@ -329,7 +334,7 @@ export class H4B {
       const stored = await storage.load()
       const typed = this.conversation.messages.some((m) => m.role === 'user')
       if (this.running) return // the job saves when it ends
-      if (stored && !typed) this.restore(stored)
+      if (stored && !typed) this.restoreFromStorage(stored)
       else if (this.conversation.messages.length > 0) await this.persist()
     } catch (error) {
       this.emit('error', { error, source: 'storage' })
@@ -898,9 +903,14 @@ export class H4B {
   }
 
   /** Exposures belong to the conversation that was on screen, not to the one restored. */
-  private restore(snapshot: SessionSnapshot) {
+  private restoreFromStorage(snapshot: unknown) {
+    const parsed = parseSessionSnapshot(snapshot)
+    if (!parsed) {
+      this.emit('error', { error: new Error('Invalid session snapshot was rejected.'), source: 'storage' })
+      return
+    }
     this._exposures = []
-    this.conversation.restore(snapshot)
+    this.conversation.restore(parsed)
   }
 
   /** Exposures of the conversation on screen (see `expose`). Cleared by `reset()` and by a restore. */
@@ -1017,7 +1027,7 @@ export class H4B {
     const turnId = createId('turn')
     const controller = new AbortController()
     this.controller = controller
-    const round: RoundState = { turnId, route: 'push', pending: [], resolved: new Set() }
+    const round: RoundState = { turnId, route: 'push', pending: [], resolved: new Set(), callIdsInRound: new Set(), redirectedMessageIds: new Map(), rejectedMessageErrors: new Set() }
     this.setStatus(turnId, 'acting', 'push')
     try {
       for await (const stimulus of job.stimuli) {
@@ -1046,7 +1056,7 @@ export class H4B {
     const controller = new AbortController()
     this.controller = controller
     const route: Route = job.origin === 'agent' ? 'agent' : 'direct'
-    const round: RoundState = { turnId, route, pending: [], resolved: new Set() }
+    const round: RoundState = { turnId, route, pending: [], resolved: new Set(), callIdsInRound: new Set(), redirectedMessageIds: new Map(), rejectedMessageErrors: new Set() }
     const call: ToolCall = { id: createId('call'), name: job.name, args: job.args }
     let outcome: ActionOutcome = {}
     this.setStatus(turnId, 'acting', route)
@@ -1096,7 +1106,7 @@ export class H4B {
 
   /** Direct command: run the action without a transport, recorded as a synthetic tool call. */
   private async runDirect(turnId: string, match: Match, abortSignal: AbortSignal) {
-    const round: RoundState = { turnId, route: 'direct', pending: [], resolved: new Set() }
+    const round: RoundState = { turnId, route: 'direct', pending: [], resolved: new Set(), callIdsInRound: new Set(), redirectedMessageIds: new Map(), rejectedMessageErrors: new Set() }
     const callId = createId('call')
     const args = match.args ?? {}
     await this.deliver(turnId, { type: 'action.call', callId, name: match.action, args }, round)
@@ -1124,7 +1134,7 @@ export class H4B {
     const maxRoundtrips = this.options.maxActionRoundtrips ?? 5
 
     for (let roundIndex = 0; roundIndex <= maxRoundtrips; roundIndex++) {
-      const round: RoundState = { turnId, route: 'transport', pending: [], resolved: new Set() }
+      const round: RoundState = { turnId, route: 'transport', pending: [], resolved: new Set(), callIdsInRound: new Set(), redirectedMessageIds: new Map(), rejectedMessageErrors: new Set() }
       const request = await this.runHooks('request.before', {
         threadId: this.conversation.threadId,
         turnId,
@@ -1164,6 +1174,7 @@ export class H4B {
     round: RoundState,
   ): Promise<ActionOutcome> {
     let outcome: ActionOutcome
+    let toolError: string | undefined
     try {
       const result = await this.actions.invoke(call.name, call.args, {
         origin,
@@ -1173,15 +1184,23 @@ export class H4B {
       })
       outcome = { result }
     } catch (error) {
-      outcome = { error: (error as Error)?.message ?? String(error) }
+      if (error instanceof ActionError) {
+        outcome = { error: error.message }
+        if (error.code === 'failed') toolError = `Action "${call.name}" failed`
+      } else {
+        outcome = { error: (error as Error)?.message ?? String(error) }
+        toolError = `Action "${call.name}" failed`
+      }
     }
+    this.conversation.rememberCallId(call.id)
     this.emit('action.invoked', { name: call.name, origin, callId: call.id, ...outcome })
     this.conversation.append<ToolMessage>({
       id: createId('msg'),
       role: 'tool',
       toolCallId: call.id,
       name: call.name,
-      ...outcome,
+      ...(outcome.result !== undefined ? { result: outcome.result } : {}),
+      ...(outcome.error !== undefined ? { error: toolError ?? outcome.error } : {}),
       route: round.route,
       turnId: round.turnId,
       createdAt: Date.now(),
@@ -1199,8 +1218,7 @@ export class H4B {
     return outcome
   }
 
-  private ensureAssistant(round: RoundState, messageId?: string): string {
-    const id = messageId ?? round.lastAssistantId ?? createId('msg')
+  private openAssistant(round: RoundState, id: string): string {
     if (!this.conversation.find(id)) {
       this.conversation.append<AssistantMessage>({
         id,
@@ -1216,8 +1234,44 @@ export class H4B {
     return id
   }
 
+  private redirectRejectedMessageId(round: RoundState, rejected: string): string {
+    let replacement = round.redirectedMessageIds.get(rejected)
+    if (!replacement) {
+      replacement = createId('msg')
+      round.redirectedMessageIds.set(rejected, replacement)
+      if (!round.rejectedMessageErrors.has(rejected)) {
+        round.rejectedMessageErrors.add(rejected)
+        this.emit('error', {
+          error: new Error(`Rejected stimulus message id "${rejected}" (not an assistant message of the current turn).`),
+          source: 'stimulus',
+        })
+      }
+    }
+    return this.openAssistant(round, replacement)
+  }
+
+  private resolveAssistantMessageId(round: RoundState, messageId?: string): string {
+    if (messageId) {
+      const redirected = round.redirectedMessageIds.get(messageId)
+      if (redirected) return redirected
+
+      const existing = this.conversation.find(messageId)
+      if (existing) {
+        if (existing.role === 'assistant' && existing.turnId === round.turnId) {
+          round.lastAssistantId = messageId
+          return messageId
+        }
+        return this.redirectRejectedMessageId(round, messageId)
+      }
+      return this.openAssistant(round, messageId)
+    }
+    return this.openAssistant(round, round.lastAssistantId ?? createId('msg'))
+  }
+
   /** A call id runs at most once per conversation, so a transport that repeats `action.call` can't run an action twice. */
-  private hasToolCall(callId: string): boolean {
+  private hasToolCall(callId: string, round: RoundState): boolean {
+    if (round.callIdsInRound.has(callId)) return true
+    if (this.conversation.hasSeenCallId(callId)) return true
     return this.conversation.messages.some(
       (m) => (m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId)) || (m.role === 'tool' && m.toolCallId === callId),
     )
@@ -1233,16 +1287,16 @@ export class H4B {
     const conversation = this.conversation
     switch (stimulus.type) {
       case 'message.start':
-        this.ensureAssistant(round, stimulus.messageId)
+        this.resolveAssistantMessageId(round, stimulus.messageId)
         break
       case 'message.delta': {
-        const id = this.ensureAssistant(round, stimulus.messageId)
+        const id = this.resolveAssistantMessageId(round, stimulus.messageId)
         if ((conversation.find(id) as AssistantMessage).interrupted) return
         conversation.appendText(id, stimulus.delta)
         break
       }
       case 'message.part': {
-        const id = this.ensureAssistant(round, stimulus.messageId)
+        const id = this.resolveAssistantMessageId(round, stimulus.messageId)
         if ((conversation.find(id) as AssistantMessage).interrupted) return
         const part = stimulus.part
         conversation.update<AssistantMessage>(id, (m) => {
@@ -1252,7 +1306,7 @@ export class H4B {
         break
       }
       case 'message.citations': {
-        const id = this.ensureAssistant(round, stimulus.messageId)
+        const id = this.resolveAssistantMessageId(round, stimulus.messageId)
         if ((conversation.find(id) as AssistantMessage).interrupted) return
         const citations = (Array.isArray(stimulus.citations) ? stimulus.citations : []).filter(isCitation)
         if (citations.length !== (stimulus.citations?.length ?? 0)) {
@@ -1271,18 +1325,22 @@ export class H4B {
         })
         break
       }
-      case 'message.end':
-        conversation.update<AssistantMessage>(stimulus.messageId, (m) => ({ ...m, streaming: false }))
+      case 'message.end': {
+        const id = this.resolveAssistantMessageId(round, stimulus.messageId)
+        conversation.update<AssistantMessage>(id, (m) => ({ ...m, streaming: false }))
         break
+      }
       case 'action.call': {
-        if (this.hasToolCall(stimulus.callId)) {
+        if (this.hasToolCall(stimulus.callId, round)) {
           this.emit('error', {
             error: new Error(`Action call "${stimulus.callId}" (${stimulus.name}) was already received; the repeat was ignored.`),
             source: 'action.call',
           })
           break
         }
-        const id = this.ensureAssistant(round, stimulus.messageId)
+        round.callIdsInRound.add(stimulus.callId)
+        this.conversation.rememberCallId(stimulus.callId)
+        const id = this.resolveAssistantMessageId(round, stimulus.messageId)
         const call: ToolCall = { id: stimulus.callId, name: stimulus.name, args: stimulus.args }
         conversation.update<AssistantMessage>(id, (m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), call] }))
         round.pending.push(call)
@@ -1305,7 +1363,7 @@ export class H4B {
         break
       case 'ui.render':
         if (!stimulus.slot || stimulus.slot === 'message') {
-          const id = this.ensureAssistant(round, stimulus.messageId)
+          const id = this.resolveAssistantMessageId(round, stimulus.messageId)
           const part = { type: 'data' as const, name: 'ui', value: { component: stimulus.component, props: stimulus.props } }
           conversation.update<AssistantMessage>(id, (m) => ({ ...m, parts: [...m.parts, part] }))
         }

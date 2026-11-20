@@ -1,4 +1,5 @@
 import type { ActionInvocation } from './registry.js'
+import { JsonSchemaValidationError, validateJsonSchema } from './json-schema.js'
 import { toJsonSchema, validate } from './standard-schema.js'
 import type {
   ActionCallContext,
@@ -93,6 +94,13 @@ export class ActionRegistry {
         parsed = await validate(action.input, parsed)
       } catch (error) {
         throw new ActionError(`Invalid arguments for "${name}": ${(error as Error).message}`, 'invalid_args')
+      }
+    } else if (action.parameters) {
+      try {
+        parsed = validateJsonSchema(action.parameters, parsed)
+      } catch (error) {
+        const detail = error instanceof JsonSchemaValidationError ? error.message : (error as Error).message
+        throw new ActionError(`Invalid arguments for "${name}": ${detail}`, 'invalid_args')
       }
     }
 

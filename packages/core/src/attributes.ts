@@ -48,7 +48,7 @@ export function mergeAttributes(
       delete next[key]
       continue
     }
-    if (!isAttributeValue(value) || (!(key in next) && Object.keys(next).length >= MAX_ATTRIBUTES)) {
+    if (!isAttributeValue(value) || (!Object.hasOwn(next, key) && Object.keys(next).length >= MAX_ATTRIBUTES)) {
       rejected.push(key)
       continue
     }

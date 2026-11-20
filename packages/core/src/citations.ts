@@ -400,6 +400,26 @@ export type InlineCitationsOptions = {
 
 export type InlineCitationsChunk = { text: string; citations: Citation[] }
 
+function trimTrailingSpaces(text: string): string {
+  let end = text.length
+  while (end > 0) {
+    const c = text.charCodeAt(end - 1)
+    if (c !== 0x20 && c !== 0x09) break
+    end--
+  }
+  return end === text.length ? text : text.slice(0, end)
+}
+
+function trailingSpaces(text: string): string {
+  let start = text.length
+  while (start > 0) {
+    const c = text.charCodeAt(start - 1)
+    if (c !== 0x20 && c !== 0x09) break
+    start--
+  }
+  return text.slice(start)
+}
+
 /**
  * Removes citation markers such as `[c3]` from streamed text and turns them
  * into point citations (ADR 0014). For backends and transports whose model
@@ -449,8 +469,7 @@ export function inlineCitations(options: InlineCitationsOptions = {}) {
       if (found === -2 && !final) break
       if (typeof found === 'object') {
         // Drop the spaces right before the marker ("word [c3]." → "word.").
-        const trimmed = out.replace(/[ \t]+$/, '')
-        out = trimmed
+        out = trimTrailingSpaces(out)
         const at = emitted + out.length
         if (last && last.end === at) {
           if (!last.sourceIds.includes(found.id)) last.sourceIds.push(found.id)
@@ -467,7 +486,7 @@ export function inlineCitations(options: InlineCitationsOptions = {}) {
     pending = s.slice(i)
     if (!final) {
       // Hold trailing spaces: a marker may follow and remove them.
-      const held = /[ \t]+$/.exec(out)?.[0] ?? ''
+      const held = trailingSpaces(out)
       if (held) {
         out = out.slice(0, out.length - held.length)
         pending = held + pending

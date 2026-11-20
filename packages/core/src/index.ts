@@ -58,6 +58,8 @@ export {
 export { Conversation } from './conversation.js'
 export { EventBus, type Listener } from './events.js'
 export { createId } from './id.js'
+export { JsonSchemaValidationError, validateJsonSchema } from './json-schema.js'
+export { parseSessionSnapshot } from './session-snapshot.js'
 export { applyPatch } from './patch.js'
 export { toJsonSchema, validate, ValidationError, type StandardSchemaV1 } from './standard-schema.js'
 export type {
