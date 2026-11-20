@@ -2,6 +2,9 @@ import { isErrorEvent } from './isErrorEvent.js'
 import { sevoAttributes } from './telemetryAttributes.js'
 import { buildTurnRootSpan } from './turnSpanNaming.js'
 
+const DEFAULT_OPEN_TURN_TTL_MS = 30 * 60_000
+const DEFAULT_MAX_OPEN_TURNS = 512
+
 /**
  * Maps semantic events to a hierarchical span tree via an injected span backend.
  * Backend-agnostic — OpenTelemetry adapter lives in exporters/otel.js.
@@ -11,6 +14,9 @@ export function createTraceMapper(options = {}) {
 	const backend = options.backend
 	const onTurnContext = options.onTurnContext || null
 	const turnRootSpan = options.turnRootSpan
+	const openTurnTtlMs = options.openTurnTtlMs ?? DEFAULT_OPEN_TURN_TTL_MS
+	const maxOpenTurns = options.maxOpenTurns ?? DEFAULT_MAX_OPEN_TURNS
+	const now = typeof options.now === 'function' ? options.now : () => Date.now()
 	if (!backend) {
 		throw new Error('createTraceMapper requires a span backend')
 	}
@@ -21,13 +27,17 @@ export function createTraceMapper(options = {}) {
 	return {
 		handleEvent(event) {
 			if (!event) return
+			pruneOpenTurns()
 
 			switch (event.type) {
 				case 'turn.start':
 					startTurn(event)
 					break
 				case 'turn.end':
-					endTurn(event)
+					endTurn(event, 'completed')
+					break
+				case 'turn.abandoned':
+					endTurn(event, 'abandoned')
 					break
 				case 'phase.start':
 					startPhase(event)
@@ -55,6 +65,33 @@ export function createTraceMapper(options = {}) {
 		},
 	}
 
+	function pruneOpenTurns() {
+		const at = now()
+		for (const [turnId, state] of turns) {
+			if (at - state.startedAt > openTurnTtlMs) {
+				forceCloseTurn(turnId, state, 'ttl_expired')
+			}
+		}
+		while (turns.size > maxOpenTurns) {
+			const oldest = turns.entries().next().value
+			if (!oldest) break
+			forceCloseTurn(oldest[0], oldest[1], 'map_cap')
+		}
+	}
+
+	function forceCloseTurn(turnId, state, reason) {
+		for (const phaseRef of state.phaseSpans.values()) {
+			try { backend.endSpan(phaseRef) } catch { /* noop */ }
+		}
+		state.phaseSpans.clear()
+		try {
+			backend.setAttribute(state.rootSpan, 'turn.close_reason', reason)
+			backend.endSpan(state.rootSpan)
+		} catch { /* noop */ }
+		turns.delete(turnId)
+		onTurnContext?.(turnId, null)
+	}
+
 	function startTurn(event) {
 		const root = buildTurnRootSpan(event, turnRootSpan)
 		const rootSpan = backend.startSpan(root.name, root.attributes, undefined, { kind: root.kind })
@@ -62,11 +99,12 @@ export function createTraceMapper(options = {}) {
 			rootSpan,
 			phaseSpans: new Map(),
 			lastPhaseEndedAt: null,
+			startedAt: now(),
 		})
 		onTurnContext?.(event.turnId, backend.getPropagationContext?.(rootSpan))
 	}
 
-	function endTurn(event) {
+	function endTurn(event, status) {
 		const state = turns.get(event.turnId)
 		if (!state) return
 
@@ -80,8 +118,12 @@ export function createTraceMapper(options = {}) {
 		}
 
 		if (state.lastPhaseEndedAt != null) {
-			const renderMs = Math.max(0, Date.now() - state.lastPhaseEndedAt)
+			const renderMs = Math.max(0, now() - state.lastPhaseEndedAt)
 			backend.setAttribute(state.rootSpan, 'phase.render_ms', renderMs)
+		}
+
+		if (status === 'abandoned') {
+			backend.setAttribute(state.rootSpan, 'turn.status', 'abandoned')
 		}
 
 		backend.endSpan(state.rootSpan)
@@ -118,7 +160,7 @@ export function createTraceMapper(options = {}) {
 
 		backend.endSpan(phaseSpan)
 		state.phaseSpans.delete(event.phase)
-		state.lastPhaseEndedAt = Date.now()
+		state.lastPhaseEndedAt = now()
 	}
 
 	function recordBusEvent(event) {
@@ -164,4 +206,5 @@ export function createTraceMapper(options = {}) {
  * @property {*} rootSpan
  * @property {Map<string, *>} phaseSpans
  * @property {number | null} lastPhaseEndedAt
+ * @property {number} startedAt
  */

@@ -4,10 +4,19 @@ import {
   type CreateObservabilityOptions,
   type Observability,
 } from '@handsforbots/semantic-event-observability'
+import {
+  sanitizeCuePayload,
+  sanitizeErrorValue,
+  sanitizeSpeechPayload,
+  sanitizeTtsPayload,
+  sanitizeTurnError,
+} from './redact.js'
 
 export type ObservabilityOptions = CreateObservabilityOptions & {
   /** Record message text and action arguments. Default false (privacy). */
   includeContent?: boolean
+  /** Record navigator userAgent and language as `client.environment`. Default false. */
+  clientEnvironment?: boolean
 }
 
 declare module '@handsforbots/core' {
@@ -46,7 +55,7 @@ export const observability = definePlugin<ObservabilityOptions | undefined>({
   name: 'observability',
   provides: ['observability'],
   apply(ctx, options = {}) {
-    const { includeContent = false, ...config } = options
+    const { includeContent = false, clientEnvironment = false, ...config } = options
     const obs = createObservability({
       environment: 'production',
       exporters: ['memory'],
@@ -57,7 +66,7 @@ export const observability = definePlugin<ObservabilityOptions | undefined>({
     })
     ctx.provide('observability', obs)
     void obs.init().catch((error) => ctx.emit('error', { error, source: 'observability' }))
-    const trigger = attach(ctx.app, obs, includeContent, ctx.on.bind(ctx))
+    const trigger = attach(ctx.app, obs, includeContent, clientEnvironment, ctx.on.bind(ctx))
     const experiments = trackExperiments(ctx.app, obs, ctx.on.bind(ctx), trigger.record)
     ctx.onDispose(() => {
       experiments.dispose()
@@ -73,6 +82,7 @@ function attach(
   h4b: H4B,
   obs: Observability,
   includeContent: boolean,
+  clientEnvironment: boolean,
   on: H4B['on'],
 ): { dispose(): void; record: (name: string, payload?: Record<string, unknown>) => void } {
   const bus = { on: () => {}, trigger: (_name: string, _args?: unknown): unknown => undefined }
@@ -86,9 +96,10 @@ function attach(
   const offs: (() => void)[] = []
   const VISIBLE = new Set(['message.delta', 'message.part', 'ui.render', 'ui.effect', 'action.call', 'action.result', 'audio'])
 
-  // Which browser: many failures (audio, workers, speech) happen in one engine only.
-  const nav = (globalThis as { navigator?: { userAgent?: string; language?: string } }).navigator
-  if (nav?.userAgent) record('client.environment', { userAgent: nav.userAgent, language: nav.language })
+  if (clientEnvironment) {
+    const nav = (globalThis as { navigator?: { userAgent?: string; language?: string } }).navigator
+    if (nav?.userAgent) record('client.environment', { userAgent: nav.userAgent, language: nav.language })
+  }
 
   offs.push(
     on('turn.status', (status) => {
@@ -107,7 +118,10 @@ function attach(
         const route = openTurns.get(status.turnId)
         if (route) record(`route.${route}.end`, labels)
         openTurns.delete(status.turnId)
-        record(`turn.${status.phase}`, { ...labels, ...(status.error ? { error: status.error } : {}) })
+        record(`turn.${status.phase}`, {
+          ...labels,
+          ...(status.error ? { error: includeContent ? status.error : sanitizeTurnError(status.error) } : {}),
+        })
         const t = timing.get(status.turnId)
         timing.delete(status.turnId)
         if (t) obs.recordMetric('h4b_turn_duration_ms', status.at - t.start, { route: status.route ?? 'none', phase: status.phase })
@@ -124,7 +138,7 @@ function attach(
       record(event.error ? 'action.failed' : 'action.invoked', {
         action: event.name,
         origin: event.origin,
-        ...(event.error ? { error: event.error } : {}),
+        ...(event.error ? { error: includeContent ? event.error : sanitizeTurnError(event.error) } : {}),
       }),
     ),
     on('stimulus', ({ turnId, stimulus }) => {
@@ -140,28 +154,38 @@ function attach(
       record(`stimulus.${stimulus.type}`, {
         turnId,
         ...('name' in stimulus && typeof stimulus.name === 'string' ? { name: stimulus.name } : {}),
-        ...(stimulus.type === 'error' ? { error: stimulus.message } : {}),
+        ...(stimulus.type === 'error' && includeContent ? { error: stimulus.message } : {}),
       })
     }),
     on('error', ({ error, source }) => {
-      const { code, stage } = (error ?? {}) as { code?: unknown; stage?: unknown }
-      record('kernel.error', {
-        source,
-        error: (error as Error)?.message ?? String(error),
-        ...(typeof code === 'string' ? { code } : {}),
-        ...(typeof stage === 'string' ? { stage } : {}),
-      })
+      if (includeContent) {
+        const { code, stage } = (error ?? {}) as { code?: unknown; stage?: unknown }
+        record('kernel.error', {
+          source,
+          error: (error as Error)?.message ?? String(error),
+          ...(typeof code === 'string' ? { code } : {}),
+          ...(typeof stage === 'string' ? { stage } : {}),
+        })
+      } else {
+        record('kernel.error', { source, ...sanitizeErrorValue(error) })
+      }
     }),
   )
   // Plugin events, recorded when those plugins are installed (no dependency on them).
   const onPlugin = on as unknown as (event: string, listener: (payload: Record<string, unknown>) => void) => () => void
   offs.push(
-    onPlugin('voice.speech', ({ phase, ...rest }) => record(`voice.speech.${String(phase)}`, rest)),
-    // Models loading and the speech worker's life: `voice.tts.load.start`, `voice.tts.worker.init`...
-    onPlugin('voice.tts', ({ event, ...rest }) => record(`voice.tts.${String(event)}`, rest)),
-    // Cues (ADR 0018): codes only, so recorded as they come.
-    onPlugin('cue.changed', (cue) => record('cue.changed', cue)),
-    onPlugin('cue.repeat', (cue) => record('cue.repeat', cue)),
+    onPlugin('voice.speech', (payload) => {
+      const phase = String(payload.phase)
+      const body = includeContent ? payload : sanitizeSpeechPayload(payload)
+      record(`voice.speech.${phase}`, body)
+    }),
+    onPlugin('voice.tts', (payload) => {
+      const event = String(payload.event)
+      const body = includeContent ? payload : sanitizeTtsPayload(payload)
+      record(`voice.tts.${event}`, body)
+    }),
+    onPlugin('cue.changed', (cue) => record('cue.changed', includeContent ? cue : sanitizeCuePayload(cue))),
+    onPlugin('cue.repeat', (cue) => record('cue.repeat', includeContent ? cue : sanitizeCuePayload(cue))),
     // Noise check: the report's numbers and verdict (no audio), and what the voice did.
     onPlugin('voice.noise', ({ report, action }) => {
       const r = (report ?? {}) as Record<string, unknown>

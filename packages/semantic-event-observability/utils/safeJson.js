@@ -23,9 +23,27 @@ export function safeJson(value, maxBytes = 2048) {
 	}
 }
 
+// Digit runs stand alone (not inside ids such as UUIDs); IBANs start with a country code.
+export function scrubSensitiveString(text) {
+	if (typeof text !== 'string') return text
+	return text
+		.replace(/\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]+/g, '[redacted-token]')
+		.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+		.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
+		.replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g, '[redacted-iban]')
+		.replace(/(?<![\w-])\d(?:[ -]?\d){8,}(?![\w-])/g, '[redacted-digits]')
+		.replace(/([?&](?:token|access_token|key|api_key|code|password)=)[^\s&#]+/gi, '$1[redacted]')
+}
+
 function replacer(key, value) {
 	if (typeof value === 'function') return '[Function]'
-	if (value instanceof Error) return { name: value.name, message: value.message }
+	if (value instanceof Error) {
+		return {
+			name: value.name,
+			message: scrubSensitiveString(value.message),
+		}
+	}
+	if (typeof value === 'string') return scrubSensitiveString(value)
 	return value
 }
 
@@ -54,8 +72,10 @@ function summarizeValue(value, denylist, maxDepth, depth) {
 	}
 
 	if (typeof value !== 'object') {
-		if (typeof value === 'string' && value.length > 200) {
-			return `${value.slice(0, 200)}…`
+		if (typeof value === 'string') {
+			const scrubbed = scrubSensitiveString(value)
+			if (scrubbed.length > 200) return `${scrubbed.slice(0, 200)}…`
+			return scrubbed
 		}
 		return value
 	}

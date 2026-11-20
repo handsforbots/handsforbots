@@ -25,12 +25,18 @@ export default class Policy {
 			return false
 		}
 
-		if (!this.allowRate()) {
+		const exemptFromRate =
+			eventType.startsWith('turn.') ||
+			eventType.startsWith('phase.') ||
+			eventType.startsWith('session.') ||
+			eventType.startsWith('metric.')
+
+		if (!exemptFromRate && !this.allowRate()) {
 			this.recordDrop('rate_limit')
 			return false
 		}
 
-		if (eventType.startsWith('turn.') || eventType.startsWith('phase.') || eventType.startsWith('session.') || eventType.startsWith('metric.')) {
+		if (exemptFromRate) {
 			return true
 		}
 

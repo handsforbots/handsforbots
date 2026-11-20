@@ -180,7 +180,7 @@ If packages are absent, those exporters stay inactive — no runtime error.
 
 ## 5. Debug API on `window`
 
-After the plugin loads:
+Only with `createObservability({ exposeGlobal: true })` (off by default, so other scripts on the page can't read the timeline). After the plugin loads:
 
 ```javascript
 window.__SEMANTIC_EVENT_OBSERVABILITY__

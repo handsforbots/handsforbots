@@ -53,6 +53,7 @@ export function createObservability(options = {}) {
 	const traceContextBridge = createTraceContextBridge({
 		getContext: () => correlation.getContext(),
 		getBaggage: () => (policy.enabled ? api.attributes : null),
+		propagateTo: options.propagateTo,
 	})
 
 	const sessionEndEvents = new Set((options.sessionEndEvents || []).map(String))
@@ -145,7 +146,7 @@ export function createObservability(options = {}) {
 				api.exporters = exporters
 				exporterStatus = await initExporters(exporters, createContext())
 				initialized = true
-				publishGlobal(api, identity)
+				if (options.exposeGlobal === true) publishGlobal(api, identity)
 				return exporterStatus
 			})()
 

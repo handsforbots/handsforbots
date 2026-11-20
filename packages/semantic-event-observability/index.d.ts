@@ -178,6 +178,10 @@ export type CreateObservabilityOptions = {
 	customMetricAllowlist?: string[]
 	bufferSize?: number
 	identity?: Partial<PackageIdentity>
+	/** Expose getTimeline/getMetrics on globalThis. Default false. */
+	exposeGlobal?: boolean
+	/** When set, withFetch/withTraceContext inject headers only for matching URLs. Default: same origin in browsers. */
+	propagateTo?: ((url: URL) => boolean) | (string | RegExp)[]
 }
 
 export type Observability = {
@@ -246,6 +250,7 @@ export function createTraceContextBridge(options?: {
 	getContext?: () => { traceId?: string | null }
 	/** Attributes added to the `baggage` header. */
 	getBaggage?: () => Readonly<Record<string, AttributeValue>> | null | undefined
+	propagateTo?: ((url: URL) => boolean) | (string | RegExp)[]
 }): TraceContextBridge
 export const BAGGAGE_MAX_MEMBERS: 64
 export const BAGGAGE_MAX_BYTES: 8192

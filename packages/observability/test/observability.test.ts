@@ -87,6 +87,7 @@ describe('voice events', () => {
     expect(json).toContain('"stage":"speak"')
     expect(json).toContain('output-blocked')
     expect(json).not.toContain('aham-confidencial')
+    expect(json).not.toContain('never started')
   })
 })
 
@@ -138,9 +139,9 @@ describe('speech provider trace', () => {
   // Node only has a global `navigator` from 21 on: stub it so the test runs on Node 20 too.
   afterEach(() => vi.unstubAllGlobals())
 
-  it('records the browser once, at start', async () => {
+  it('records the browser once, at start when clientEnvironment is enabled', async () => {
     vi.stubGlobal('navigator', { userAgent: 'TestAgent/1.0', language: 'pt-BR' })
-    const h4b = await createH4B({ plugins: [observability()] }).start()
+    const h4b = await createH4B({ plugins: [observability({ clientEnvironment: true })] }).start()
     const events = h4b.get('observability')!.getTimeline().filter((e) => e.name === 'client.environment')
     expect(events).toHaveLength(1)
     expect(JSON.stringify(events[0])).toContain('TestAgent/1.0')
