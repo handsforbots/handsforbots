@@ -1,7 +1,8 @@
 import { useExternalStoreRuntime, type AppendMessage, type ThreadMessageLike } from '@assistant-ui/react'
 import { textOf, type MediaPart, type Message, type Part } from '@handsforbots/core'
 import { useBusy, useH4B, useMessages } from '@handsforbots/react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { safeImageUrl, safeRasterMime } from './images.js'
 
 export type H4BAssistantRuntimeOptions = {
   /** Source name of signals sent from the assistant-ui composer. Default 'assistant-ui'. */
@@ -20,7 +21,18 @@ export function useH4BAssistantRuntime(options: H4BAssistantRuntimeOptions = {})
   const h4b = useH4B()
   const messages = useMessages()
   const busy = useBusy()
-  const thread = useMemo(() => toThreadMessages(messages), [messages])
+  const blobUrls = useRef<string[]>([])
+  const thread = useMemo(() => {
+    for (const url of blobUrls.current) URL.revokeObjectURL(url)
+    blobUrls.current = []
+    return toThreadMessages(messages, {
+      onBlobUrl: (url) => blobUrls.current.push(url),
+    })
+  }, [messages])
+  useEffect(() => () => {
+    for (const url of blobUrls.current) URL.revokeObjectURL(url)
+    blobUrls.current = []
+  }, [])
 
   return useExternalStoreRuntime<ThreadMessageLike>({
     messages: thread,
@@ -33,8 +45,12 @@ export function useH4BAssistantRuntime(options: H4BAssistantRuntimeOptions = {})
   })
 }
 
+export type ToThreadOptions = {
+  onBlobUrl?: (url: string) => void
+}
+
 /** H4B history → assistant-ui messages (tool results folded into tool-call parts). */
-export function toThreadMessages(messages: Message[]): ThreadMessageLike[] {
+export function toThreadMessages(messages: Message[], options: ToThreadOptions = {}): ThreadMessageLike[] {
   const results = new Map<string, { result?: unknown; error?: string }>()
   for (const message of messages) {
     if (message.role === 'tool') results.set(message.toolCallId, { result: message.result, error: message.error })
@@ -47,7 +63,7 @@ export function toThreadMessages(messages: Message[]): ThreadMessageLike[] {
       const content = [
         { type: 'text' as const, text: textOf(message) },
         ...message.parts.flatMap((p) => {
-          const image = imageUrl(p)
+          const image = imageUrl(p, options)
           return image ? [{ type: 'image' as const, image }] : []
         }),
       ].filter((p) => p.type !== 'text' || p.text)
@@ -68,7 +84,7 @@ export function toThreadMessages(messages: Message[]): ThreadMessageLike[] {
       })
     }
     for (const part of message.parts) {
-      const image = imageUrl(part)
+      const image = imageUrl(part, options)
       if (image) content.push({ type: 'image', image })
       if (part.type === 'data' && part.name === 'ui') content.push({ type: 'data-h4b-ui', data: part.value })
     }
@@ -85,12 +101,22 @@ export function toThreadMessages(messages: Message[]): ThreadMessageLike[] {
   return thread
 }
 
-function imageUrl(part: Part): string | undefined {
+function imageUrl(part: Part, options: ToThreadOptions): string | undefined {
   if (part.type !== 'image') return undefined
   const media = part as MediaPart
-  if (media.source.kind === 'url') return /^https:\/\//i.test(media.source.url) ? media.source.url : undefined
-  if (media.source.kind === 'base64') return `data:${media.mimeType};base64,${media.source.data}`
-  return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(media.source.blob) : undefined
+  if (media.source.kind === 'url') {
+    const url = media.source.url
+    return /^https:\/\//i.test(url) ? url : undefined
+  }
+  if (media.source.kind === 'base64') {
+    if (!safeRasterMime(media.mimeType)) return undefined
+    const data = `data:${media.mimeType.split(';')[0]};base64,${media.source.data}`
+    return safeImageUrl(data) ? data : undefined
+  }
+  if (typeof URL === 'undefined' || !URL.createObjectURL) return undefined
+  const url = URL.createObjectURL(media.source.blob)
+  options.onBlobUrl?.(url)
+  return safeImageUrl(url) ? url : undefined
 }
 
 function hasMedia(message: AppendMessage) {

@@ -5,7 +5,12 @@ import { menu } from '@handsforbots/menu'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pickGreeting, renderMarkdown, widget, type H4BChatElement } from '../src/index.js'
 
-const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
+const tick = (ms = 0) =>
+  new Promise<void>((resolve) => {
+    const afterFrame = () => (ms ? setTimeout(resolve, ms) : resolve())
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(afterFrame))
+    else queueMicrotask(afterFrame)
+  })
 
 function scripted(reply: (request: TurnRequest) => any[]): Transport & { requests: TurnRequest[] } {
   const requests: TurnRequest[] = []
@@ -358,11 +363,13 @@ describe('<h4b-chat>', () => {
     await h4b.start()
     const root = document.querySelector('h4b-chat')!.shadowRoot!
     await h4b.runAction('ping', {}, { origin: 'agent' })
+    await vi.advanceTimersByTimeAsync(20)
     expect(root.querySelector('.action')!.textContent).toContain('ping')
     expect(root.querySelector('.action')!.textContent).toContain('external agent')
 
     void h4b.ask('oi')
     await vi.advanceTimersByTimeAsync(10)
+    await vi.advanceTimersByTimeAsync(20)
     const visible = () => [...root.querySelectorAll('.msg.assistant:not(.pending):not([hidden])')].map((e) => e.textContent)
     expect(visible()).toEqual(['um'])
     await vi.advanceTimersByTimeAsync(600)
@@ -545,6 +552,7 @@ describe('<h4b-chat> rich content', () => {
     h4b.provide('transport', transport)
     await h4b.start()
     await h4b.ask('fotos')
+    await tick()
     const bubble = document.querySelector('h4b-chat')!.shadowRoot!.querySelector('.msg.assistant')!
     expect(bubble.querySelector('figcaption')!.textContent).toBe('Fotos')
     expect([...bubble.querySelectorAll('.gallery img')].map((i) => i.getAttribute('src'))).toEqual(['https://x.test/1.jpg'])
@@ -572,6 +580,7 @@ describe('<h4b-chat> sources', () => {
   it('numbers references in the text and lists cited, then consulted, sources as plain text', async () => {
     const { h4b, $ } = await mount({ startOpen: true }, scripted(sourcesReply))
     await h4b.ask('o que é a Autotrac?')
+    await tick()
     const bubble = $('.msg.assistant')
     const text = bubble.querySelector('.text')!
     expect(text.innerHTML).toContain('<strong>Autotrac</strong> rastreia.<sup class="cite"')
@@ -617,6 +626,7 @@ describe('<h4b-chat> sources', () => {
     const { h4b, $ } = await mount({ startOpen: true, sources: { action: 'open_source' } }, scripted(sourcesReply))
     h4b.actions.register({ name: 'open_source', description: 'Opens a source', handler: open })
     await h4b.ask('o que é a Autotrac?')
+    await tick()
     const reference = $('.msg.assistant .text [data-source="c1"]')
     expect(reference.tagName).toBe('BUTTON')
     reference.click()
@@ -646,6 +656,7 @@ describe('<h4b-chat> rich parts are stable', () => {
     h4b.provide('transport', transport)
     await h4b.start()
     await h4b.ask('x')
+    await tick()
     const bubble = document.querySelector('h4b-chat')!.shadowRoot!.querySelector('.msg.assistant')!
     expect(created).toHaveBeenCalledOnce()
     expect(bubble.querySelectorAll('section')).toHaveLength(1)

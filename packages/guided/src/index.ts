@@ -1,4 +1,4 @@
-import { definePlugin, textOf, type ActionDefinition, type PluginContext, type Signal } from '@handsforbots/core'
+import { definePlugin, textOf, type ActionDefinition, type Origin, type PluginContext, type Signal } from '@handsforbots/core'
 import { fuzzyBest, type FuzzyEntry } from '@handsforbots/menu'
 
 export type GuideStep = {
@@ -33,6 +33,13 @@ export type GuidedOptions = {
    * data-image-gallery-text-for) in the conversation. Default false.
    */
   gallery?: boolean
+  /**
+   * Attribute for named highlight targets (`[data-h4b-target="checkout"]`).
+   * Default `data-h4b-target`.
+   */
+  targetsAttribute?: string
+  /** Lets the assistant and agents use arbitrary CSS selectors. Default false. */
+  allowAssistantSelectors?: boolean
 }
 
 export type GuidedState = { active: boolean; tour?: string; step: number; total: number }
@@ -74,14 +81,22 @@ const VOCABULARY: Record<string, Record<'next' | 'previous' | 'close', string[]>
 
 const languageKey = (language?: string) => ((language ?? 'en').toLowerCase().startsWith('pt') ? 'pt' : 'en')
 
-/** querySelector that also looks inside open shadow roots (e.g. the <h4b-chat> widget). */
-export function queryDeep(selector: string, root: Document | ShadowRoot = document): Element | null {
+const WIDGET_TAG = 'h4b-chat'
+const NAMED_TARGET = /^[A-Za-z0-9_.-]{1,64}$/
+
+/** CSS.escape with a fallback for older engines. */
+const cssEscape = (value: string) =>
+  typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/["\\]/g, '\\$&')
+
+/** querySelector that also looks inside open shadow roots (e.g. the <h4b-chat> widget, unless `skipWidget`). */
+export function queryDeep(selector: string, root: Document | ShadowRoot = document, skipWidget = false): Element | null {
   try {
     const direct = root.querySelector(selector)
     if (direct) return direct
     for (const element of root.querySelectorAll('*')) {
+      if (skipWidget && element.tagName.toLowerCase() === WIDGET_TAG) continue
       if (element.shadowRoot) {
-        const found = queryDeep(selector, element.shadowRoot)
+        const found = queryDeep(selector, element.shadowRoot, false)
         if (found) return found
       }
     }
@@ -89,6 +104,23 @@ export function queryDeep(selector: string, root: Document | ShadowRoot = docume
     return null
   }
   return null
+}
+
+function resolveNamedTarget(name: string, options: GuidedOptions): string | undefined {
+  if (!NAMED_TARGET.test(name)) return undefined
+  const attr = options.targetsAttribute ?? 'data-h4b-target'
+  return `[${attr}="${cssEscape(name)}"]`
+}
+
+function selectorForTarget(target: string, options: GuidedOptions, origin: Origin): string | undefined {
+  if (origin === 'user' || options.allowAssistantSelectors) return target
+  return resolveNamedTarget(target, options)
+}
+
+function sanitizeStep(step: GuideStep, options: GuidedOptions, origin: Origin): GuideStep {
+  if (!step.target || origin === 'user' || options.allowAssistantSelectors) return step
+  const resolved = resolveNamedTarget(step.target, options)
+  return resolved ? { ...step, target: resolved } : { ...step, target: undefined }
 }
 
 const stepSchema = {
@@ -124,10 +156,14 @@ export const guided = definePlugin<GuidedOptions | undefined>({
         },
       },
       readOnly: true,
-      handler: ({ name, steps }: { name?: string; steps?: GuideStep[] }) => {
-        if (steps?.length) service.start(steps)
-        else if (name && options.tours?.[name]) service.start(name)
-        else throw new Error(name ? `Unknown tour "${name}"` : 'Give a tour name or steps')
+      handler: ({ name, steps }: { name?: string; steps?: GuideStep[] }, call) => {
+        const origin = call.origin
+        if (name !== undefined && tourNames.length && !tourNames.includes(name)) throw new Error(`Unknown tour "${name}"`)
+        if (steps?.length) {
+          service.start(steps.map((step) => sanitizeStep(step, options, origin)))
+        } else if (name && Object.hasOwn(options.tours ?? {}, name)) {
+          service.start(name)
+        } else throw new Error(name ? `Unknown tour "${name}"` : 'Give a tour name or steps')
         return { started: true, steps: service.getState().total }
       },
       describeResult: () => undefined,
@@ -141,8 +177,15 @@ export const guided = definePlugin<GuidedOptions | undefined>({
         required: ['target'],
       },
       readOnly: true,
-      handler: ({ target, text, title }: { target: string; text?: string; title?: string }) => {
-        if (!service.highlight(target, text, title)) throw new Error(`Nothing on screen matches "${target}"`)
+      handler: ({ target, text, title }: { target: string; text?: string; title?: string }, call) => {
+        const origin = call.origin
+        const selector = selectorForTarget(target, options, origin)
+        if (origin !== 'user' && !options.allowAssistantSelectors) {
+          if (selector && queryDeep(selector, document, true)) service.highlight(selector, text, title)
+          return { shown: true }
+        }
+        const resolved = selector ?? target
+        if (!service.highlight(resolved, text, title)) throw new Error(`Nothing on screen matches "${target}"`)
         return { shown: true }
       },
     })
@@ -193,10 +236,6 @@ function dynamicAction(ctx: PluginContext, selector: string, build: (values: str
 
 const valueOf = (el: Element, selector: string) => el.getAttribute(selector.slice(1, -1)) ?? ''
 
-/** CSS.escape with a fallback for older engines. */
-const cssEscape = (value: string) =>
-  typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/["\\]/g, '\\$&')
-
 function registerSections(ctx: PluginContext, service: GuidedService, attribute: string) {
   dynamicAction(ctx, `[${attribute}]`, (sections) => ({
     name: 'show_section',
@@ -212,6 +251,7 @@ function registerSections(ctx: PluginContext, service: GuidedService, attribute:
     readOnly: true,
     exposeTo: ['assistant', 'user', 'agent'],
     handler: ({ section, text }: { section: string; text?: string }) => {
+      if (!sections.includes(section)) throw new Error(`Unknown section "${section}"`)
       const selector = `[${attribute}="${cssEscape(section)}"]`
       const element = document.querySelector(selector)
       if (!element) throw new Error(`Section "${section}" is not on this page`)
@@ -244,6 +284,8 @@ function registerGallery(ctx: PluginContext) {
     exposeTo: ['assistant', 'user', 'agent'],
     handler: ({ topics: chosen, title }: { topics: string[] | string; title?: string }, call) => {
       const list = Array.isArray(chosen) ? chosen : String(chosen).split(',').map((t) => t.trim())
+      const unknown = list.filter((topic) => !topics.includes(topic))
+      if (unknown.length) throw new Error(`Unknown topics: ${unknown.join(', ')}`)
       const images = list.flatMap((topic) =>
         [...document.querySelectorAll<HTMLImageElement>(`[data-image-gallery-id="${cssEscape(topic)}"]`)].map((img) => ({
           src: img.currentSrc || img.src || img.getAttribute('data-src') || '',

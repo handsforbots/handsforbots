@@ -17,7 +17,7 @@ import {
 } from '@handsforbots/core'
 import { autofocusFlags, bindTextFocus, canFocus, type AutofocusOptions } from './focus.js'
 import { stringsFor, type Strings } from './i18n.js'
-import { escapeHtml, renderMarkdown, safeImageUrl } from './markdown.js'
+import { escapeHtml, renderMarkdown, safeImageUrl, type MarkdownLinkOptions, type MarkdownOptions } from './markdown.js'
 import { renderCitedText, sourceList, type SourcesOptions } from './sources.js'
 import { PALETTES, STYLES } from './styles.js'
 
@@ -142,6 +142,8 @@ export type WidgetOptions = {
    * references in the text and a list under the message. `false` hides them.
    */
   sources?: SourcesOptions | false
+  /** Host allowlist for absolute links in Markdown message text. Default: any http(s) host. */
+  links?: MarkdownLinkOptions
 }
 
 /** One option of a random greeting: text, several messages, or text with attributes for an A/B test. */
@@ -235,7 +237,8 @@ export class H4BChatElement extends BaseElement {
     privacy: HTMLElement
   }
   private rendered = new Map<string, { message: Message; element: HTMLElement }>()
-  private renderedParts = new WeakSet<object>()
+  private renderedPartKeys = new Set<string>()
+  private renderCoalesce = false
   private revealQueue: HTMLElement[] = []
   private revealTimer?: ReturnType<typeof setTimeout>
   private lastReveal = 0
@@ -253,7 +256,7 @@ export class H4BChatElement extends BaseElement {
     this.language = options.language ?? (document.documentElement.lang || 'en')
     this.strings = stringsFor(this.language, options.strings)
     this.build()
-    this.cleanups.push(h4b.subscribe(() => this.render()))
+    this.cleanups.push(h4b.subscribe(() => this.scheduleRender()))
     // Voice may be installed after the widget (plugin order) or removed at runtime.
     let unsubscribeVoice: (() => void) | undefined
     const watchVoice = () => {
@@ -309,8 +312,20 @@ export class H4BChatElement extends BaseElement {
     clearTimeout(this.revealTimer)
     clearTimeout(this.statusTimer)
     this.rendered.clear()
+    this.renderedPartKeys.clear()
     this.revealQueue = []
     this.initialRender = true
+  }
+
+  private scheduleRender() {
+    if (this.renderCoalesce) return
+    this.renderCoalesce = true
+    const flush = () => {
+      this.renderCoalesce = false
+      this.render()
+    }
+    const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : queueMicrotask
+    schedule(flush)
   }
 
   /* ---------------------------------------------------------------------- */
@@ -322,10 +337,14 @@ export class H4BChatElement extends BaseElement {
     const state = store?.getState() ?? {}
     for (const name of [...this.getAttributeNames()]) {
       const match = /^data-cue-(.+?)(-level)?$/.exec(name)
-      if (match && !(match[1]! in state)) this.removeAttribute(name)
+      if (match && !Object.hasOwn(state, match[1]!)) this.removeAttribute(name)
     }
     for (const [channel, cue] of Object.entries(state)) {
       if (!/^[a-z][a-z0-9-]{0,31}$/.test(channel)) continue
+      if (channel.endsWith('-level')) {
+        this.h4b?.emit('error', { error: new Error(`Cue channel must not end with "-level": ${channel}`), source: 'widget:cues' })
+        continue
+      }
       this.setAttribute(`data-cue-${channel}`, cue.value)
       this.setAttribute(`data-cue-${channel}-level`, String(cue.level))
     }
@@ -537,6 +556,9 @@ export class H4BChatElement extends BaseElement {
       if (!seen.has(id)) {
         entry.element.remove()
         this.rendered.delete(id)
+        for (const key of this.renderedPartKeys) {
+          if (key.startsWith(`${id}:`)) this.renderedPartKeys.delete(key)
+        }
       }
     }
     this.renderQueued(snapshot.queued)
@@ -552,8 +574,9 @@ export class H4BChatElement extends BaseElement {
     for (const element of [...this.els.log.querySelectorAll<HTMLElement>('.msg.queued')]) {
       if (!ids.has(element.dataset.signal!)) element.remove()
     }
+    const escapeId = (id: string) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"'))
     for (const signal of queued) {
-      if (this.els.log.querySelector(`.msg.queued[data-signal="${signal.id}"]`)) continue
+      if (this.els.log.querySelector(`.msg.queued[data-signal="${escapeId(signal.id)}"]`)) continue
       const text = textOf(signal.parts)
       if (!text) continue
       const element = document.createElement('div')
@@ -608,7 +631,8 @@ export class H4BChatElement extends BaseElement {
     // MCP App iframes) are created once, so they keep their state while text streams.
     const textElement = this.region(element, 'text')
     const sourceOptions = this.options.sources || {}
-    textElement.innerHTML = !text ? '' : sources.length ? renderCitedText(message, sourceOptions) : renderMarkdown(text)
+    const markdown: MarkdownOptions = { links: this.options.links ?? (sourceOptions.hosts ? { hosts: sourceOptions.hosts } : undefined) }
+    textElement.innerHTML = !text ? '' : sources.length ? renderCitedText(message, sourceOptions) : renderMarkdown(text, markdown)
     textElement.hidden = !text
     const sourcesElement = this.region(element, 'sources')
     const list = sources.length ? sourceList(message, s.sources, s.consultedSources, sourceOptions) : undefined
@@ -619,14 +643,15 @@ export class H4BChatElement extends BaseElement {
     element.title = message.interrupted ? s.interrupted : ''
     element.classList.toggle('rich', rich.length > 0)
     const media = this.region(element, 'media')
-    for (const part of message.parts) {
-      if (this.renderedParts.has(part)) continue
+    for (const [partIndex, part] of message.parts.entries()) {
+      const partKey = `${message.id}:${partIndex}`
+      if (this.renderedPartKeys.has(partKey)) continue
       if (part.type === 'image') {
-        this.renderedParts.add(part)
+        this.renderedPartKeys.add(partKey)
         const img = this.imageElement(part as MediaPart)
         if (img) media.append(img)
       } else if (part.type === 'data' && part.name === 'ui') {
-        this.renderedParts.add(part)
+        this.renderedPartKeys.add(partKey)
         const { component, props } = part.value as { component: string; props?: unknown }
         // Own names only: a component such as 'constructor' must not reach Object.prototype.
         const own = (table: Record<string, Renderer> | undefined) => (table && Object.hasOwn(table, component) ? table[component] : undefined)
@@ -792,7 +817,9 @@ export class H4BChatElement extends BaseElement {
       if (message.role === 'user') return []
       if (message.role !== 'assistant') continue
       const data = message.parts.find((p) => p.type === 'data' && p.name === 'quick_replies')
-      if (data?.type === 'data' && Array.isArray(data.value)) return data.value as QuickReply[]
+      if (data?.type === 'data' && Array.isArray(data.value)) {
+        return (data.value as unknown[]).filter((item): item is QuickReply => !!item && typeof (item as QuickReply).label === 'string')
+      }
     }
     return []
   }

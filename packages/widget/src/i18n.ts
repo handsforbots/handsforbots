@@ -184,5 +184,11 @@ export const STRINGS: Record<string, Strings> = {
 
 export function stringsFor(language: string | undefined, overrides: Partial<Strings> = {}): Strings {
   const lang = (language ?? 'en').toLowerCase()
-  return { ...(STRINGS[lang] ?? STRINGS[lang.split('-')[0]!] ?? STRINGS.en!), ...overrides }
+  const base = lang.split('-')[0]!
+  const pack = Object.hasOwn(STRINGS, lang)
+    ? STRINGS[lang]!
+    : Object.hasOwn(STRINGS, base)
+      ? STRINGS[base]!
+      : STRINGS.en!
+  return { ...pack, ...overrides }
 }

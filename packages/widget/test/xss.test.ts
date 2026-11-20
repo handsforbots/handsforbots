@@ -54,6 +54,13 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
+const flushWidget = () =>
+  new Promise<void>((resolve) => {
+    const done = () => resolve()
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(done))
+    else queueMicrotask(done)
+  })
+
 async function chat(events: unknown[], options = {}) {
   const transport: Transport = {
     name: 'payloads',
@@ -189,7 +196,9 @@ describe('XSS: messages in <h4b-chat>', () => {
       { type: 'message.citations', messageId: 'a', citations: [{ start: 0, end: 1, sourceIds: ['c1'] }] },
     ])
     await h4b.ask(payload)
+    await flushWidget()
     await h4b.runAction('missing', { payload })
+    await flushWidget()
     assertSafeTree(root.querySelector('.log')!)
     expect(root.querySelector('.msg.user')!.textContent).toBe(payload)
   })
@@ -205,6 +214,7 @@ describe('XSS: messages in <h4b-chat>', () => {
       { type: 'message.part', messageId: 'a', part: { type: 'image', mimeType: 'image/png', source: { kind: 'base64', data: '"><x' } } },
     ])
     await h4b.ask('imgs')
+    await flushWidget()
     const sources = [...root.querySelectorAll('.msg.assistant img')].map((img) => img.getAttribute('src'))
     expect(sources).toEqual(['https://ok.test/a.png'])
   })
@@ -217,6 +227,7 @@ describe('XSS: messages in <h4b-chat>', () => {
     const errors: unknown[] = []
     h4b.on('error', (e) => errors.push(e))
     await h4b.ask('x')
+    await flushWidget()
     expect(root.querySelector('.msg.assistant .media')?.childNodes.length ?? 0).toBe(0)
     expect(errors).toEqual([])
   })

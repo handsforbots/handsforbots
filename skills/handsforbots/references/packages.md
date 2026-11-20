@@ -31,13 +31,13 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `vue` | `h4bVue`, `provideH4B`, same composables as React, `useService`, `v-text-focus` | `core`; `vue` 3.3+ | `widget` | Vue bindings |
 | `copilotkit` | `useCopilotKitBridge(opts)`, `<CopilotKitBridge />` | `core`, `react`; `@copilotkit/react-core` 1.77+, `react` 18+ | `transport-agui` | CopilotKit owns chat and agent; H4B adds actions, context, voice, menu |
 | `assistant-ui` | `useH4BAssistantRuntime(opts?)` | `core`, `react`; `@assistant-ui/react` 0.15+, `react` 18+ | — | assistant-ui draws the thread over any H4B transport |
-| `menu` | `menu({ commands, language?, ... })`, type `Command` | `core` | — | Direct commands without the LLM |
+| `menu` | `menu({ commands, language?, sources?, ... })`, type `Command` | `core` | — | Direct commands without the LLM; typed input only from `sources` (default: chat surfaces, voice, shortcuts, `host`) |
 | `voice` | `voice({...})`, `webSpeechSTT`, `webSpeechTTS`, `httpSTT`, `httpTTS`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`, `httpEndOfTurn`, `textEchoFilter`, `checkNoise`, `measureNoise`, `createLevelGate` | `core`; `vosk-browser` only for `voskBrowserSTT` | — | Speech in and out |
 | `voice-models` | `piperTTS`, `kokoroTTS`, `transformersTTS`, `workerTTS`, `serveTTS`, `espeakPhonemizer`, `piperVoice`, `kokoroModel`, `huggingFace`, `fetchModel` | `core`, `voice`; the app supplies `onnxruntime-web`, a phonemizer build or `@huggingface/transformers` | — | Neural TTS in the page |
 | `voice-effects` | `voiceEffects`, `presets`, `defineEffect`, `validateChain`, `toSSML`, `toFFmpeg` | — (`voice` optional, types only) | — | Effects chains for speech, also outside H4B |
 | `keyboard` | `keyboard({ talk?, interrupt?, palette?, target? })` | `core` (`voice` optional: the talk shortcut needs it) | — | Hold-to-talk, interrupt, palette event |
 | `inputs` | `camera(...)`, `files(...)`, `gui(...)`, `sensors(...)` | `core` | — | Camera, files, route (path only by default), selection and declarative HTML (both opt-in), idle, sensors |
-| `guided` | `guided({ tours?, autoStart?, sectionsAttribute?, gallery?, ... })` | `core` | `menu` | Tours, highlights, `show_section`, `image_gallery` |
+| `guided` | `guided({ tours?, autoStart?, sectionsAttribute?, gallery?, targetsAttribute?, allowAssistantSelectors?, ... })` | `core` | `menu` | Tours, highlights, `show_section`, `image_gallery`; the assistant targets `data-h4b-target` names |
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
 | `mcp-apps` | `mcpAppRenderer({ allowTools? })`, `mountMcpApp(h4b, props, opts)` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
 | `cues` | `cues({ channels, rules?, classify?, report?, action?, sync? })`; `/server`: `readCuesState` | `core` | — | Closed-vocabulary presentation states |

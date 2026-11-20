@@ -60,7 +60,7 @@ describe('matchers', () => {
     id: 's',
     kind: 'trigger' as const,
     modality,
-    source: 'test',
+    source: 'host',
     timestamp: 0,
     parts: [{ type: 'text' as const, text: t }],
   })
@@ -197,5 +197,21 @@ describe('menu plugin with the kernel', () => {
     const h4b = await createH4B({ plugins: [menu({ commands })] }).start()
     h4b.provide('transport', { name: 't', async *run() {} })
     expect((await h4b.ask('/pedidos')).status.route).toBe('transport')
+  })
+
+  it('does not match commands from mcp-app or gui sources', async () => {
+    const handler = vi.fn(() => 'wiped')
+    const h4b = await createH4B({
+      plugins: [menu({ commands: [{ action: 'wipe_cart', phrases: ['wipe now', 'empty my cart'] }] })],
+      actions: [{ name: 'wipe_cart', description: 'Wipe', handler }],
+    }).start()
+    h4b.provide('transport', { name: 't', async *run() {} })
+    expect(
+      (await h4b.ask({ modality: 'text', source: 'mcp-app', parts: [{ type: 'text', text: '/wipe now' }] })).status.route,
+    ).toBe('transport')
+    expect((await h4b.ask({ modality: 'text', source: 'gui', parts: [{ type: 'text', text: 'empty my crat' }] })).status.route).toBe(
+      'transport',
+    )
+    expect(handler).not.toHaveBeenCalled()
   })
 })

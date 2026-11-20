@@ -61,6 +61,11 @@ export type MenuOptions = {
    * Transcripts are never affected (recognizers add "?" on their own).
    */
   typedQuestions?: 'llm' | 'command'
+  /**
+   * Signal `source` values that may trigger slash, pattern and fuzzy matchers.
+   * Default: widget, assistant-ui, react, voice, menu, shortcut (keyboard) and host (`ask`/`send`).
+   */
+  sources?: string[]
 }
 
 /** Action the menu runs to ask "did you mean…?" for uncertain inputs. */
@@ -78,6 +83,8 @@ const ASK_TEXT: Record<string, (or: string) => string> = {
   en: (list) => `Did you mean ${list}?`,
 }
 const OR: Record<string, string> = { pt: 'ou', es: 'o', en: 'or' }
+
+const DEFAULT_MENU_SOURCES = ['widget', 'assistant-ui', 'react', 'voice', 'menu', 'shortcut', 'host'] as const
 
 export type Suggestion = { command: Command; label: string; score: number }
 
@@ -122,6 +129,7 @@ export const menu = definePlugin<MenuOptions | undefined>({
 
 export function createMenu(options: MenuOptions = {}) {
   let commands: Command[] = [...(options.commands ?? [])]
+  const allowedSources = new Set(options.sources ?? DEFAULT_MENU_SOURCES)
 
   const phrasesOf = (command: Command): string[] => {
     if (!command.phrases) return []
@@ -172,7 +180,10 @@ export function createMenu(options: MenuOptions = {}) {
   const textInput = (signal: Signal): string | undefined =>
     signal.modality === 'text' || signal.modality === 'transcript' ? textOf(signal.parts).trim() : undefined
 
+  const menuInput = (signal: Signal) => signal.modality === 'command' || (signal.source !== undefined && allowedSources.has(signal.source))
+
   const matchExplicit = (signal: Signal): Match | null => {
+    if (!menuInput(signal)) return null
     if (signal.modality === 'command') {
       const data = signal.parts.find((p) => p.type === 'data' && p.name === 'command')
       if (data?.type !== 'data') return null
@@ -202,6 +213,7 @@ export function createMenu(options: MenuOptions = {}) {
   }
 
   const matchPattern = (signal: Signal): Match | null => {
+    if (!menuInput(signal)) return null
     const text = textInput(signal)
     if (!text) return null
     const normalized = normalize(text)
@@ -216,6 +228,7 @@ export function createMenu(options: MenuOptions = {}) {
   }
 
   const matchFuzzy = (signal: Signal): Match | null => {
+    if (!menuInput(signal)) return null
     const text = textInput(signal)
     if (!text || text.startsWith('/')) return null
     if (signal.modality === 'text' && text.endsWith('?') && options.typedQuestions !== 'command') return null

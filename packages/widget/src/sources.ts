@@ -1,7 +1,7 @@
 import { citationSegments, citedSources, safeSourceUrl, sourcesOf, type Message, type SourcePart } from '@handsforbots/core'
-import { escapeHtml, renderMarkdown } from './markdown.js'
+import { escapeHtml, renderMarkdown, type MarkdownOptions } from './markdown.js'
 
-export type SourcesOptions = {
+export type SourcesOptions = MarkdownOptions & {
   /** Hosts that source links may point to (`example.com`, `*.example.com`). Default: any http(s) host. */
   hosts?: string[]
   /**
@@ -18,6 +18,53 @@ const OPEN = ''
 const CLOSE = ''
 const SENTINELS = /[]/g
 
+type Span = { start: number; end: number }
+
+/** Inline code and whole `[label](url)` links, where a reference would break the Markdown. */
+function protectedSpans(text: string): Span[] {
+  const spans: Span[] = []
+  const next = new Map<string, number>()
+  const find = (token: string, from: number): number => {
+    const known = next.get(token)
+    if (known !== undefined && (known === -1 || known >= from)) return known
+    const at = text.indexOf(token, from)
+    next.set(token, at)
+    return at
+  }
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '`') {
+      const end = find('`', i + 1)
+      if (end === -1) continue
+      spans.push({ start: i, end: end + 1 })
+      i = end
+    } else if (text[i] === '[') {
+      const close = find(']', i + 1)
+      if (close === -1 || text[close + 1] !== '(') continue
+      const end = find(')', close + 2)
+      if (end === -1) continue
+      spans.push({ start: i, end: end + 1 })
+      i = end
+    }
+  }
+  return spans
+}
+
+/** Inserts each marker where its citation ended, or right after the link or code span it fell inside. */
+function placeMarkers(raw: string, markers: { at: number; text: string }[]): string {
+  const spans = protectedSpans(raw)
+  let out = ''
+  let from = 0
+  let s = 0
+  for (const marker of markers) {
+    let at = Math.max(marker.at, from)
+    while (s < spans.length && spans[s]!.end <= at) s++
+    if (s < spans.length && spans[s]!.start < at) at = spans[s]!.end
+    out += raw.slice(from, at) + marker.text
+    from = at
+  }
+  return out + raw.slice(from)
+}
+
 /**
  * Markdown HTML of a message's text with numbered references where its
  * citations end (ADR 0014). Only citations to sources of the message become
@@ -29,19 +76,21 @@ export function renderCitedText(message: Message, options: SourcesOptions = {}):
   const numbers = citedSources(message)
   const refs: string[][] = []
   let raw = ''
+  const markers: { at: number; text: string }[] = []
   for (const part of message.parts) {
     if (part.type !== 'text') continue
     for (const segment of citationSegments({ ...part, text: part.text.replace(SENTINELS, '') }, known)) {
       if (segment.kind === 'text') raw += segment.text
       else {
-        raw += `${OPEN}${refs.length}${CLOSE}`
+        markers.push({ at: raw.length, text: `${OPEN}${refs.length}${CLOSE}` })
         refs.push(segment.sourceIds)
       }
     }
   }
+  raw = placeMarkers(raw, markers)
   if (!raw) return ''
   const sources = new Map(sourcesOf(message).map((s) => [s.id, s]))
-  return renderMarkdown(raw).replace(/(\d+)/g, (_, index: string) =>
+  return renderMarkdown(raw, options).replace(/(\d+)/g, (_, index: string) =>
     (refs[Number(index)] ?? [])
       .map((id) => referenceHtml(sources.get(id)!, numbers.get(id) ?? 0, message.id, options))
       .join(''),

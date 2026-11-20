@@ -95,7 +95,7 @@ responses:
   - text: Here it is!
     custom:
       h4b:
-        action: { name: guided_highlight, args: { target: '#save_button', text: 'Save here' } }
+        action: { name: guided_highlight, args: { target: 'save', text: 'Save here' } } # <button data-h4b-target="save">
         # effect: { name: scroll, value: '#top' }
         # render: { component: gallery, props: { images: [...] } }
 ```
