@@ -55,7 +55,7 @@ Sources and citations ([guide](./sources.md)): `sourceView`, `sourceGroups`, `so
 
 ## transport-agui
 
-`agui({ url, headers?, agent?, forwardedProps? })`: HTTP POST + SSE. `headers` may be a function (refresh tokens, trace headers). `agent` accepts any AG-UI agent (e.g. `new HttpAgent()` from `@ag-ui/client`, or an in-process one). CUSTOM events named `h4b.ui.effect` and `h4b.ui.render` become GUI effects and rich content; `h4b.sources` (`{ messageId?, sources: [...] }`) and `h4b.citations` (`{ messageId?, citations }`) become [sources and citations](./sources.md). Sources are not sent back in the history.
+`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` may be a function (refresh tokens, trace headers). `agent` accepts any AG-UI agent (e.g. `new HttpAgent()` from `@ag-ui/client`, or an in-process one). CUSTOM events named `h4b.ui.effect` and `h4b.ui.render` become GUI effects and rich content; `h4b.sources` (`{ messageId?, sources: [...] }`) and `h4b.citations` (`{ messageId?, citations }`) become [sources and citations](./sources.md). Sources are not sent back in the history. An SSE event over `maxEventBytes` (1 MiB) fails the turn; `RUN_ERROR` shows the person `Agent run failed` and keeps only a real `code`.
 
 ## transport-rasa
 
@@ -74,13 +74,13 @@ responses:
 
 ## transport-http
 
-- `http({ url, method?, headers?, session?, body?, parse?, parseChunk?, sendToolResults? })`: generic turn API. `session: { url, method, extract }` opens one backend session per thread (falls back to the thread id). Responses: plain text, `{ response | content | text | message }`, arrays of messages (`text`, `image`, `buttons`), chat completions, `tool_calls`; `text/event-stream` is streamed (OpenAI-style deltas, fragmented tool calls). `sources` and `citations` in a response or an SSE chunk become [sources and citations](./sources.md).
+- `http({ url, method?, headers?, session?, body?, parse?, parseChunk?, sendToolResults?, maxEventBytes?, maxResponseBytes?, onSessionIssue? })`: generic turn API. `session: { url, method, extract }` opens one backend session per thread (falls back to the thread id; an id outside `[A-Za-z0-9._:-]{1,256}` is refused, reported to `onSessionIssue` and not cached). Responses: plain text, `{ response | content | text | message }`, arrays of messages (`text`, `image`, `buttons`), chat completions, `tool_calls`; `text/event-stream` is streamed (OpenAI-style deltas, fragmented tool calls). `sources` and `citations` in a response or an SSE chunk become [sources and citations](./sources.md). Limits: one SSE event up to `maxEventBytes` (1 MiB), a whole response up to `maxResponseBytes` (10 MiB). Backend errors reach the person as `Backend error (HTTP 500)` or `Backend error`; the body goes in `error.detail` (thrown error) and only an identifier-like `code` reaches the `error` stimulus.
 - `universalLLM({ url, provider?, model?, systemPrompt?, contextWindow?, parameters?, stream?, backendSession? })`: the v1 UniversalLLM request format, plus history, tools and context.
 - `openAICompatible({ baseUrl, model, systemPrompt?, apiKey?, stream?, temperature? })`: `/chat/completions` with native tools. A key in the browser is public: use it for local development (e.g. Ollama at `http://localhost:11434/v1`) or point `baseUrl` at your proxy.
 
 ## transport-ai-sdk
 
-`aiSdk({ url, headers?, body?, fetch? })`: talks to a Vercel AI SDK route that returns `streamText(...).toUIMessageStreamResponse()`. The request mirrors `DefaultChatTransport` (`id`, `messages` as UIMessages, `trigger`) plus `tools` (H4B actions) and `context`; declare the tools without `execute` on the route so the client runs them:
+`aiSdk({ url, headers?, body?, fetch?, maxEventBytes?, maxResponseBytes? })`: talks to a Vercel AI SDK route that returns `streamText(...).toUIMessageStreamResponse()`. The request mirrors `DefaultChatTransport` (`id`, `messages` as UIMessages, `trigger`) plus `tools` (H4B actions) and `context`; declare the tools without `execute` on the route so the client runs them:
 
 ```ts
 export async function POST(req: Request) {

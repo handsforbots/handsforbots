@@ -202,4 +202,4 @@ const system = `${conversationStatePrompt()}\n\nCurrent state:\n${JSON.stringify
 // structured output for a separate updater: stateUpdateSchema()
 ```
 
-`readConversationState` never throws, drops malformed items and returns `undefined` when there is no state. The state comes from the browser and anyone using the page can edit it: use it as context, never as authorization.
+`readConversationState` never throws, drops malformed items and returns `undefined` when there is no state. It keeps at most `maxSections` (64) sections, skips names such as `__proto__`, and rebuilds each rejection from its known fields (`detail` cut at 500 characters). The state comes from the browser and anyone using the page can edit it: use it as context, never as authorization.

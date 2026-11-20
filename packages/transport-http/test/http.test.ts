@@ -30,7 +30,7 @@ describe('response parsing', () => {
     expect(parseResponse({ choices: [{ message: { content: null, tool_calls: [{ id: 't', function: { name: 'go', arguments: '{"x":1}' } }] } }] })).toEqual([
       { type: 'action.call', callId: 't', name: 'go', args: { x: 1 } },
     ])
-    expect(parseResponse({ error: { message: 'quota' } })).toEqual([{ type: 'error', message: 'quota' }])
+    expect(parseResponse({ error: { message: 'quota' } })).toEqual([{ type: 'error', message: 'Backend error' }])
   })
 
   it('maps history to chat messages without orphan tool results', () => {
@@ -141,7 +141,7 @@ describe('http transport', () => {
   it('reports HTTP errors with a snippet of the body', async () => {
     const server = fakeServer(() => new Response('upstream timeout', { status: 504 }))
     const h4b = await createH4B({ plugins: [http({ url: 'u', fetch: server.fetch })], onError: () => {} }).start()
-    expect((await h4b.ask('x')).status).toMatchObject({ phase: 'error', error: 'Backend responded 504: upstream timeout' })
+    expect((await h4b.ask('x')).status).toMatchObject({ phase: 'error', error: 'Backend error (HTTP 504)' })
   })
 })
 

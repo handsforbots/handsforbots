@@ -202,4 +202,4 @@ const system = `${conversationStatePrompt()}\n\nEstado atual:\n${JSON.stringify(
 // saída estruturada para um atualizador à parte: stateUpdateSchema()
 ```
 
-`readConversationState` nunca lança, descarta itens malformados e devolve `undefined` quando não há estado. O estado vem do navegador e quem usa a página pode editá-lo: use como contexto, nunca como autorização.
+`readConversationState` nunca lança, descarta itens malformados e devolve `undefined` quando não há estado. Guarda no máximo `maxSections` (64) seções, ignora nomes como `__proto__` e refaz cada rejeição só com os campos conhecidos (`detail` cortado em 500 caracteres). O estado vem do navegador e quem usa a página pode editá-lo: use como contexto, nunca como autorização.

@@ -55,7 +55,7 @@ Fontes e citações ([guia](./sources.md)): `sourceView`, `sourceGroups`, `sourc
 
 ## transport-agui
 
-`agui({ url, headers?, agent?, forwardedProps? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.render` viram efeitos na GUI e conteúdo rico; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). As fontes não voltam no histórico.
+`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.render` viram efeitos na GUI e conteúdo rico; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). As fontes não voltam no histórico. Um evento SSE acima de `maxEventBytes` (1 MiB) faz o turno falhar; `RUN_ERROR` mostra à pessoa `Agent run failed` e mantém só um `code` de verdade.
 
 ## transport-rasa
 
@@ -74,13 +74,13 @@ responses:
 
 ## transport-http
 
-- `http({ url, method?, headers?, session?, body?, parse?, parseChunk?, sendToolResults? })`: API genérica de turnos. `session: { url, method, extract }` abre uma sessão no backend por conversa (com o id da conversa como reserva). Respostas: texto puro, `{ response | content | text | message }`, listas de mensagens (`text`, `image`, `buttons`), chat completions, `tool_calls`; `text/event-stream` é lido em streaming (deltas no estilo OpenAI, tool calls fragmentadas). `sources` e `citations` numa resposta ou num chunk SSE viram [fontes e citações](./sources.md).
+- `http({ url, method?, headers?, session?, body?, parse?, parseChunk?, sendToolResults?, maxEventBytes?, maxResponseBytes?, onSessionIssue? })`: API genérica de turnos. `session: { url, method, extract }` abre uma sessão no backend por conversa (com o id da conversa como reserva; um id fora de `[A-Za-z0-9._:-]{1,256}` é recusado, informado a `onSessionIssue` e não fica em cache). Respostas: texto puro, `{ response | content | text | message }`, listas de mensagens (`text`, `image`, `buttons`), chat completions, `tool_calls`; `text/event-stream` é lido em streaming (deltas no estilo OpenAI, tool calls fragmentadas). `sources` e `citations` numa resposta ou num chunk SSE viram [fontes e citações](./sources.md). Limites: um evento SSE até `maxEventBytes` (1 MiB), a resposta inteira até `maxResponseBytes` (10 MiB). Erros do backend chegam à pessoa como `Backend error (HTTP 500)` ou `Backend error`; o corpo vai em `error.detail` (erro lançado) e só um `code` com cara de identificador chega ao estímulo `error`.
 - `universalLLM({ url, provider?, model?, systemPrompt?, contextWindow?, parameters?, stream?, backendSession? })`: o formato de requisição do UniversalLLM da v1, com histórico, tools e contexto.
 - `openAICompatible({ baseUrl, model, systemPrompt?, apiKey?, stream?, temperature? })`: `/chat/completions` com tools nativas. Uma chave no navegador é pública: use para desenvolvimento local (ex.: Ollama em `http://localhost:11434/v1`) ou aponte `baseUrl` para o seu proxy.
 
 ## transport-ai-sdk
 
-`aiSdk({ url, headers?, body?, fetch? })`: conversa com uma rota do Vercel AI SDK que devolve `streamText(...).toUIMessageStreamResponse()`. A requisição segue o `DefaultChatTransport` (`id`, `messages` como UIMessages, `trigger`) e acrescenta `tools` (as ações do H4B) e `context`; declare as tools sem `execute` na rota para o cliente executá-las:
+`aiSdk({ url, headers?, body?, fetch?, maxEventBytes?, maxResponseBytes? })`: conversa com uma rota do Vercel AI SDK que devolve `streamText(...).toUIMessageStreamResponse()`. A requisição segue o `DefaultChatTransport` (`id`, `messages` como UIMessages, `trigger`) e acrescenta `tools` (as ações do H4B) e `context`; declare as tools sem `execute` na rota para o cliente executá-las:
 
 ```ts
 export async function POST(req: Request) {

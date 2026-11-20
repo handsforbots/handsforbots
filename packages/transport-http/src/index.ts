@@ -11,6 +11,16 @@ import {
   type Transport,
   type TurnRequest,
 } from '@handsforbots/core'
+import {
+  assertResidualSSEWithinLimit,
+  createSSEScanState,
+  DEFAULT_MAX_EVENT_BYTES,
+  DEFAULT_MAX_RESPONSE_BYTES,
+  drainSSEBlocks,
+  readBoundedText,
+} from './bounded.js'
+import { isLoopbackHost, normalizeSessionId } from './host.js'
+import { stimulusErrorCode, transportRouteError } from './transport-error.js'
 
 type Headers = Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
 
@@ -39,6 +49,12 @@ export type HttpTransportOptions = {
   parseChunk?: ChunkParser
   /** After client actions run, call the backend again with their results. Default true. */
   sendToolResults?: boolean
+  /** Max bytes buffered for one SSE event while scanning. Default 1 MiB. */
+  maxEventBytes?: number
+  /** Max bytes for a non-streaming response body. Default 10 MiB. */
+  maxResponseBytes?: number
+  /** Non-fatal session setup issues (invalid id from the backend). */
+  onSessionIssue?: (error: unknown) => void
   name?: string
   fetch?: typeof fetch
 }
@@ -66,6 +82,8 @@ export const http = definePlugin<HttpTransportOptions>({
 export function createHttpTransport(options: HttpTransportOptions): Transport {
   const sessions = new Map<string, Promise<string>>()
   const fetchFn = () => options.fetch ?? fetch
+  const maxEventBytes = options.maxEventBytes ?? DEFAULT_MAX_EVENT_BYTES
+  const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
 
   const sessionFor = (request: TurnRequest): Promise<string> | undefined => {
     const session = options.session
@@ -80,15 +98,25 @@ export function createHttpTransport(options: HttpTransportOptions): Transport {
             ...(session.method === 'GET' ? {} : { body: JSON.stringify(session.body?.(request) ?? { thread_id: request.threadId }) }),
           })
           if (!response.ok) throw new Error(`session endpoint responded ${response.status}`)
-          const json = await response.json()
-          const id = (session.extract ?? ((j) => j.session_id ?? j.sessionId ?? j.id))(json)
-          if (!id) throw new Error('session endpoint returned no id')
-          return String(id)
-        } catch (error) {
-          if (session.fallbackToThread === false) {
-            sessions.delete(request.threadId)
-            throw error
+          const text = response.body ? await readBoundedText(response.body, maxResponseBytes) : await response.text()
+          let json: unknown
+          try {
+            json = JSON.parse(text)
+          } catch {
+            throw new Error('session endpoint returned invalid JSON')
           }
+          const rawId = (session.extract ?? ((j) => j.session_id ?? j.sessionId ?? j.id))(json)
+          if (!rawId) throw new Error('session endpoint returned no id')
+          const id = normalizeSessionId(String(rawId))
+          if (!id) {
+            options.onSessionIssue?.(new Error('Session endpoint returned an invalid session id'))
+            if (session.fallbackToThread === false) throw new Error('Invalid session id from backend')
+            return request.threadId
+          }
+          return id
+        } catch (error) {
+          sessions.delete(request.threadId)
+          if (session.fallbackToThread === false) throw error
           return request.threadId
         }
       })()
@@ -123,16 +151,18 @@ export function createHttpTransport(options: HttpTransportOptions): Transport {
       if (!response.ok) {
         let detail = ''
         try {
-          detail = (await response.text()).slice(0, 200)
+          detail = response.body
+            ? (await readBoundedText(response.body, maxResponseBytes)).slice(0, 200)
+            : (await response.text()).slice(0, 200)
         } catch {
           /* ignore */
         }
-        throw new Error(`Backend responded ${response.status}${detail ? `: ${detail}` : ''}`)
+        throw transportRouteError(`Backend error (HTTP ${response.status})`, response.status, detail)
       }
       if (response.headers.get('content-type')?.includes('text/event-stream') && response.body) {
-        yield* streamStimuli(response.body, options.parseChunk ?? parseChunk)
+        yield* streamStimuli(response.body, options.parseChunk ?? parseChunk, maxEventBytes)
       } else {
-        const textBody = await response.text()
+        const textBody = response.body ? await readBoundedText(response.body, maxResponseBytes) : await response.text()
         let json: unknown = textBody
         try {
           json = JSON.parse(textBody)
@@ -268,8 +298,8 @@ export function parseResponse(json: any): Stimulus[] {
   if (typeof json === 'string') return json.trim() ? textMessage(json) : []
   if (Array.isArray(json)) return json.flatMap((item) => (typeof item === 'string' ? textMessage(item) : messageItem(item)))
   if (json.error) {
-    const message = typeof json.error === 'string' ? json.error : (json.error.message ?? JSON.stringify(json.error))
-    return [{ type: 'error', message }]
+    const code = stimulusErrorCode(typeof json.error === 'object' && json.error ? json.error.code : undefined)
+    return [{ type: 'error', message: 'Backend error', ...(code ? { code } : {}) }]
   }
   if (Array.isArray(json.choices)) {
     const message = json.choices[0]?.message ?? {}
@@ -325,7 +355,10 @@ function sourceStimuli(messageId: string, sources: unknown[] | undefined): Stimu
 export const parseChunk: ChunkParser = (data) => {
   if (data === '[DONE]') return { done: true }
   if (typeof data === 'string') return { text: data }
-  if (data?.error) return { stimuli: [{ type: 'error', message: data.error.message ?? String(data.error) }] }
+  if (data?.error) {
+    const code = stimulusErrorCode(data.error.code)
+    return { stimuli: [{ type: 'error', message: 'Backend error', ...(code ? { code } : {}) }] }
+  }
   const delta = data?.choices?.[0]?.delta
   if (delta) {
     return {
@@ -342,21 +375,17 @@ export const parseChunk: ChunkParser = (data) => {
   return { stimuli: parseResponse(data) }
 }
 
-async function* streamStimuli(body: ReadableStream<Uint8Array>, parse: ChunkParser): AsyncGenerator<Stimulus> {
+async function* streamStimuli(body: ReadableStream<Uint8Array>, parse: ChunkParser, maxEventBytes: number): AsyncGenerator<Stimulus> {
   const reader = body.pipeThrough(new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>).getReader()
   const messageId = createId('msg')
   let started = false
   const calls = new Map<number | string, { id?: string; name?: string; arguments: string }>()
-  let buffer = ''
+  const sse = createSSEScanState()
   try {
     outer: while (true) {
       const { value, done } = await reader.read()
       if (done) break
-      buffer += value
-      let boundary: number
-      while ((boundary = buffer.search(/\r?\n\r?\n/)) >= 0) {
-        const block = buffer.slice(0, boundary)
-        buffer = buffer.slice(boundary).replace(/^\r?\n\r?\n/, '')
+      for (const block of drainSSEBlocks(sse, value, maxEventBytes)) {
         const raw = block
           .split(/\r?\n/)
           .filter((l) => l.startsWith('data:'))
@@ -392,6 +421,7 @@ async function* streamStimuli(body: ReadableStream<Uint8Array>, parse: ChunkPars
         if (chunk.done) break outer
       }
     }
+    assertResidualSSEWithinLimit(sse, maxEventBytes)
   } finally {
     reader.releaseLock()
   }
@@ -484,7 +514,7 @@ export const openAICompatible = definePlugin<OpenAICompatibleOptions>({
   name: 'transport-openai-compatible',
   provides: ['transport'],
   apply(ctx, options) {
-    if (options.apiKey && typeof location !== 'undefined' && !/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
+    if (options.apiKey && typeof location !== 'undefined' && !isLoopbackHost(location.hostname)) {
       console.warn('[h4b] transport-openai-compatible: an API key in the browser is visible to every visitor. Use a backend proxy.')
     }
     ctx.provide('transport', createOpenAICompatibleTransport(options))

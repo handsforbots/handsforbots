@@ -17,6 +17,13 @@ import {
   type Transport,
   type TurnRequest,
 } from '@handsforbots/core'
+import {
+  assertResidualSSEWithinLimit,
+  createSSEScanState,
+  DEFAULT_MAX_EVENT_BYTES,
+  drainSSEBlocks,
+} from './bounded.js'
+import { stimulusErrorCode, transportRouteError } from './transport-error.js'
 
 /** Anything that turns a RunAgentInput into a stream of AG-UI events (HttpAgent, in-process agents…). */
 export type AguiRunner = {
@@ -37,6 +44,8 @@ export type AguiTransportOptions = {
   /** Any AG-UI agent, e.g. `new HttpAgent(...)` from @ag-ui/client or an in-process agent. */
   agent?: AguiRunner | (() => AguiRunner)
   forwardedProps?: unknown
+  /** Max bytes buffered for one SSE event while scanning. Default 1 MiB. */
+  maxEventBytes?: number
   fetch?: typeof fetch
 }
 
@@ -77,7 +86,7 @@ export function createAguiTransport(options: AguiTransportOptions): Transport {
         events = iterate(agent.run(input), signal, () => agent.abortRun?.())
       } else {
         const headers = typeof options.headers === 'function' ? await options.headers() : options.headers
-        events = postSSE(options.url!, input, headers ?? {}, signal, options.fetch ?? globalThis.fetch)
+        events = postSSE(options.url!, input, headers ?? {}, signal, options.fetch ?? globalThis.fetch, options.maxEventBytes)
       }
       for await (const event of events) yield* mapper(event)
     },
@@ -91,6 +100,7 @@ export async function* postSSE(
   headers: Record<string, string>,
   signal: AbortSignal,
   fetchFn: typeof fetch = globalThis.fetch,
+  maxEventBytes = DEFAULT_MAX_EVENT_BYTES,
 ): AsyncGenerator<BaseEvent> {
   const response = await fetchFn(url, {
     method: 'POST',
@@ -99,24 +109,21 @@ export async function* postSSE(
     signal,
   })
   if (!response.ok || !response.body) {
-    throw new Error(`AG-UI endpoint responded ${response.status} ${response.statusText}`.trim())
+    throw transportRouteError(`Agent request failed (HTTP ${response.status})`, response.status)
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buffer = ''
+  const sse = createSSEScanState()
   try {
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
-      buffer += value
-      let boundary: number
-      while ((boundary = buffer.search(/\r?\n\r?\n/)) >= 0) {
-        const block = buffer.slice(0, boundary)
-        buffer = buffer.slice(boundary).replace(/^\r?\n\r?\n/, '')
+      for (const block of drainSSEBlocks(sse, value, maxEventBytes)) {
         const event = parseSSEBlock(block)
         if (event) yield event
       }
     }
-    const event = parseSSEBlock(buffer)
+    assertResidualSSEWithinLimit(sse, maxEventBytes)
+    const event = parseSSEBlock(sse.buffer)
     if (event) yield event
   } finally {
     reader.releaseLock()
@@ -363,8 +370,10 @@ export function createEventMapper(): (event: BaseEvent) => Stimulus[] {
           return [{ type: 'message.citations', messageId: targetOf(event.value), citations }]
         }
         return [{ type: 'custom', name: event.name, value: event.value }]
-      case 'RUN_ERROR':
-        return [{ type: 'error', message: event.message, code: event.code }]
+      case 'RUN_ERROR': {
+        const code = stimulusErrorCode(event.code)
+        return [{ type: 'error', message: 'Agent run failed', ...(code ? { code } : {}) }]
+      }
       case 'RUN_FINISHED': {
         // Flush chunked calls/messages that never got an explicit end.
         const out: Stimulus[] = []

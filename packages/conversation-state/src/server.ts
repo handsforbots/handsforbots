@@ -12,6 +12,7 @@ import {
   STATE_KEY,
   type Confidence,
   type Origin,
+  type RejectReason,
   type Rejection,
   type StateView,
   type ViewItem,
@@ -38,6 +39,8 @@ export {
 export type ReadStateOptions = {
   /** Sections kept (others are dropped). Default: all. */
   sections?: readonly string[]
+  /** Most sections kept. Default 64. */
+  maxSections?: number
   /** Most items per section. Default 100. */
   maxItems?: number
   /** Most characters in a text. Default 2000. */
@@ -45,6 +48,26 @@ export type ReadStateOptions = {
 }
 
 const ORIGINS: readonly Origin[] = ['user', 'assistant', 'tool', 'app', 'unsourced']
+const RESERVED_SECTION_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const REJECT_REASONS = new Set<RejectReason>([
+  'invalid',
+  'unknown-section',
+  'unknown-item',
+  'not-allowed-value',
+  'too-long',
+  'evidence-required',
+  'evidence-not-found',
+  'quote-not-found',
+  'user-stated',
+  'locked',
+  'stale',
+  'duplicate',
+  'section-full',
+  'reason-required',
+  'screened',
+  'over-budget',
+  'too-many-removals',
+])
 
 /**
  * Finds and checks the state in what the transport sent:
@@ -63,19 +86,24 @@ export function readConversationState(source: unknown, options: ReadStateOptions
   if (!isRecord(raw) || !isRecord(raw.sections) || !Number.isInteger(raw.revision) || (raw.revision as number) < 0) return undefined
   const maxItems = options.maxItems ?? 100
   const maxChars = options.maxChars ?? 2000
-  const sections: StateView['sections'] = {}
+  const maxSections = options.maxSections ?? 64
+  const sections = Object.create(null) as StateView['sections']
+  let keptSections = 0
   for (const [name, value] of Object.entries(raw.sections)) {
+    if (RESERVED_SECTION_KEYS.has(name)) continue
     if (options.sections && !options.sections.includes(name)) continue
+    if (keptSections >= maxSections) continue
     if (value === null) sections[name] = null
     else if (Array.isArray(value)) sections[name] = value.slice(0, maxItems).map((v) => item(v, maxChars)).filter((v): v is ViewItem => !!v)
     else {
       const one = item(value, maxChars)
       if (one) sections[name] = one
     }
+    keptSections++
   }
   const view: StateView = { revision: raw.revision as number, sections }
   if (Array.isArray(raw.rejected)) {
-    const rejected = raw.rejected.filter((r): r is Rejection => isRecord(r) && typeof r.reason === 'string' && typeof r.index === 'number').slice(0, 50)
+    const rejected = raw.rejected.map(rejectionEntry).filter((r): r is Rejection => !!r).slice(0, 50)
     if (rejected.length) view.rejected = rejected
   }
   return view
@@ -90,6 +118,18 @@ export function stateItems(view: StateView | undefined, filter: { scope?: string
       if (filter.scope === undefined || entry.scope === filter.scope) out.push({ ...entry, section })
     }
   }
+  return out
+}
+
+function rejectionEntry(value: unknown): Rejection | undefined {
+  if (!isRecord(value) || !Number.isInteger(value.index)) return undefined
+  const reason = value.reason
+  if (typeof reason !== 'string' || !REJECT_REASONS.has(reason as RejectReason)) return undefined
+  const out: Rejection = { index: value.index as number, reason: reason as RejectReason }
+  if (typeof value.op === 'string' && value.op.length <= 32) out.op = value.op
+  if (typeof value.section === 'string' && value.section.length <= 64) out.section = value.section
+  if (typeof value.id === 'string' && value.id.length <= 64) out.id = value.id
+  if (typeof value.detail === 'string') out.detail = value.detail.slice(0, 500)
   return out
 }
 

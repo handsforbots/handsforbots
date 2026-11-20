@@ -1,4 +1,13 @@
 import { createId, definePlugin, textOf, toSourcePart, type Message, type Part, type SourcePart, type Stimulus, type Transport, type TurnRequest } from '@handsforbots/core'
+import {
+  assertResidualSSEWithinLimit,
+  createSSEScanState,
+  DEFAULT_MAX_EVENT_BYTES,
+  DEFAULT_MAX_RESPONSE_BYTES,
+  drainSSEBlocks,
+  readBoundedText,
+} from './bounded.js'
+import { transportRouteError } from './transport-error.js'
 
 /** The subset of the AI SDK UIMessage shape this transport sends. */
 export type UIMessagePart =
@@ -23,6 +32,10 @@ export type AiSdkTransportOptions = {
   headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
   /** Extra fields for the request body (model, settings…). */
   body?: Record<string, unknown> | ((request: TurnRequest) => Record<string, unknown>)
+  /** Max bytes buffered for one SSE event while scanning. Default 1 MiB. */
+  maxEventBytes?: number
+  /** Max bytes for a non-streaming error body. Default 10 MiB. */
+  maxResponseBytes?: number
   fetch?: typeof fetch
 }
 
@@ -49,6 +62,8 @@ export const aiSdk = definePlugin<AiSdkTransportOptions>({
  *   }).toUIMessageStreamResponse()
  */
 export function createAiSdkTransport(options: AiSdkTransportOptions): Transport {
+  const maxEventBytes = options.maxEventBytes ?? DEFAULT_MAX_EVENT_BYTES
+  const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
   return {
     name: 'ai-sdk',
     capabilities: { streaming: true, tools: true, media: ['image/*', 'application/pdf'] },
@@ -72,12 +87,13 @@ export function createAiSdkTransport(options: AiSdkTransportOptions): Transport 
         }),
         signal,
       })
-      if (!response.ok || !response.body) {
-        const detail = await response.text().catch(() => '')
-        throw new Error(`AI SDK route responded ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+      if (!response.ok) {
+        const detail = response.body ? await readBoundedText(response.body, maxResponseBytes).catch(() => '') : ''
+        throw transportRouteError(`AI SDK route error (HTTP ${response.status})`, response.status, detail)
       }
+      if (!response.body) throw new Error('AI SDK route returned no body')
       const mapper = createChunkMapper()
-      for await (const chunk of readUIMessageStream(response.body)) yield* mapper(chunk)
+      for await (const chunk of readUIMessageStream(response.body, maxEventBytes)) yield* mapper(chunk)
       yield* mapper({ type: '__end' })
     },
   }
@@ -135,18 +151,14 @@ async function blobToBase64(blob: Blob) {
 /* UI message stream → stimuli                                                */
 /* -------------------------------------------------------------------------- */
 
-export async function* readUIMessageStream(body: ReadableStream<Uint8Array>): AsyncGenerator<any> {
+export async function* readUIMessageStream(body: ReadableStream<Uint8Array>, maxEventBytes = DEFAULT_MAX_EVENT_BYTES): AsyncGenerator<any> {
   const reader = body.pipeThrough(new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>).getReader()
-  let buffer = ''
+  const sse = createSSEScanState()
   try {
     while (true) {
       const { value, done } = await reader.read()
       if (done) break
-      buffer += value
-      let boundary: number
-      while ((boundary = buffer.search(/\r?\n\r?\n/)) >= 0) {
-        const block = buffer.slice(0, boundary)
-        buffer = buffer.slice(boundary).replace(/^\r?\n\r?\n/, '')
+      for (const block of drainSSEBlocks(sse, value, maxEventBytes)) {
         const data = block
           .split(/\r?\n/)
           .filter((l) => l.startsWith('data:'))
@@ -157,6 +169,7 @@ export async function* readUIMessageStream(body: ReadableStream<Uint8Array>): As
         yield JSON.parse(data)
       }
     }
+    assertResidualSSEWithinLimit(sse, maxEventBytes)
   } finally {
     reader.releaseLock()
   }
@@ -215,7 +228,7 @@ export function createChunkMapper(): (chunk: any) => Stimulus[] {
       case 'tool-output-error':
         return [{ type: 'action.result', callId: chunk.toolCallId, result: { error: chunk.errorText } }]
       case 'error':
-        return [{ type: 'error', message: chunk.errorText ?? 'AI SDK stream error' }]
+        return [{ type: 'error', message: 'AI SDK stream error' }]
       case 'finish':
       case 'abort':
       case '__end':

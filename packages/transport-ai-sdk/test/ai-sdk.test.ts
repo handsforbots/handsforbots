@@ -22,8 +22,10 @@ function route(scenario: string) {
     }
     const { messages } = JSON.parse(String(init.body))
     const toolPart = messages.at(-1).parts.find((p: any) => p.type === 'dynamic-tool' && p.state === 'output-available')
-    if (scenario === 'tool' && !toolPart) {
-      return sse([{ type: 'start' }, { type: 'tool-input-available', toolCallId: 't1', toolName: 'conformance_echo', input: { value: 'ping' } }, { type: 'finish' }])
+    if ((scenario === 'tool' || scenario === 'duplicateCall') && !toolPart) {
+      const id = scenario === 'duplicateCall' ? 'dup' : 't1'
+      const chunk = { type: 'tool-input-available', toolCallId: id, toolName: 'conformance_echo', input: { value: 'ping' } }
+      return sse([{ type: 'start' }, chunk, ...(scenario === 'duplicateCall' ? [chunk] : []), { type: 'finish' }])
     }
     const text = toolPart ? `echo returned ${JSON.stringify(toolPart.output)}` : 'hello'
     return sse([{ type: 'start' }, { type: 'text-start', id: 'x' }, { type: 'text-delta', id: 'x', delta: text }, { type: 'text-end', id: 'x' }, { type: 'finish' }])
@@ -53,7 +55,7 @@ describe('chunk mapping', () => {
       { type: 'action.result', callId: 's1', result: ['r'] },
       { type: 'ui.effect', name: 'highlight', value: '#save' },
       { type: 'custom', name: 'ai-sdk.data.weather', value: { c: 20 } },
-      { type: 'error', message: 'quota' },
+      { type: 'error', message: 'AI SDK stream error' },
       { type: 'message.end', messageId: 'm1' },
     ])
   })

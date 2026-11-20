@@ -199,10 +199,45 @@ type Requested = { value: string; level?: number }
 
 type Counter = { last?: string; streak: number; counts: Map<string, number> }
 
-function cuesOf(message: Message): StoredCues | undefined {
+const CUE_FROM = new Set<CueFrom>(['backend', 'rule', 'default', 'sticky', 'repeat'])
+
+function sanitizeStoredCues(
+  raw: unknown,
+  channels: Record<string, CueChannel>,
+  report: (error: unknown) => void,
+): StoredCues | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const out: StoredCues = {}
+  for (const [name, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Object.hasOwn(channels, name)) {
+      report(new Error(`Ignored reserved or unknown cues data for channel "${name}".`))
+      continue
+    }
+    if (typeof entry !== 'object' || entry === null) {
+      report(new Error(`Ignored malformed cues entry for "${name}".`))
+      continue
+    }
+    const record = entry as Record<string, unknown>
+    const channel = channels[name]!
+    const value = typeof record.value === 'string' ? record.value : undefined
+    if (!value || !channel.values.includes(value)) {
+      report(new Error(`Ignored cues value "${String(record.value)}" for "${name}"; not in vocabulary.`))
+      continue
+    }
+    const levels = channel.repeat?.[value]?.levels ?? []
+    const maxLevel = levels.length + 1
+    const levelRaw = typeof record.level === 'number' && Number.isFinite(record.level) ? Math.round(record.level) : 1
+    const level = Math.min(Math.max(1, levelRaw), maxLevel)
+    const from = CUE_FROM.has(record.from as CueFrom) ? (record.from as CueFrom) : 'default'
+    const requested = typeof record.requested === 'string' && channel.values.includes(record.requested) ? record.requested : undefined
+    out[name] = { value, level, from, ...(requested ? { requested } : {}) }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+function cuesPartOf(message: Message): DataPart | undefined {
   if (message.role !== 'assistant') return undefined
-  const part = message.parts.find((p): p is DataPart => p.type === 'data' && p.name === CUES_PART)
-  return part && typeof part.value === 'object' && part.value !== null ? (part.value as StoredCues) : undefined
+  return message.parts.find((p): p is DataPart => p.type === 'data' && p.name === CUES_PART)
 }
 
 function emptyCounters(names: string[]): Map<string, Counter> {
@@ -303,6 +338,14 @@ const definition: PluginDefinition<CuesOptions> = {
     const actionName = typeof options.action === 'string' ? options.action : 'set_cues'
     const app = ctx.app
     const report = (error: unknown) => ctx.emit('error', { error, source: 'cues' })
+    // Parts are replaced, never mutated, so the checked value can be kept per part: same object, same result, one error.
+    const checked = new WeakMap<DataPart, StoredCues | null>()
+    const storedOf = (message: Message): StoredCues | undefined => {
+      const part = cuesPartOf(message)
+      if (!part) return undefined
+      if (!checked.has(part)) checked.set(part, sanitizeStoredCues(part.value, channels, report) ?? null)
+      return checked.get(part) ?? undefined
+    }
     const classify = (source: SourcePart): readonly string[] => {
       if (!options.classify) return []
       try {
@@ -364,7 +407,7 @@ const definition: PluginDefinition<CuesOptions> = {
     const countersBefore = (messages: Message[], index = messages.length) => {
       const counters = emptyCounters(names)
       for (let i = 0; i < index; i++) {
-        const stored = cuesOf(messages[i]!)
+        const stored = storedOf(messages[i]!)
         if (stored) count(counters, stored)
       }
       return counters
@@ -374,7 +417,7 @@ const definition: PluginDefinition<CuesOptions> = {
       const next = initial()
       const counters = emptyCounters(names)
       for (const message of messages) {
-        const stored = cuesOf(message)
+        const stored = storedOf(message)
         if (!stored || skip?.has(message.id)) continue
         count(counters, stored)
         for (const name of names) {
@@ -507,7 +550,7 @@ const definition: PluginDefinition<CuesOptions> = {
       if (!eligible(message, info)) return
       const asked = named ? (info?.asked ?? {}) : {}
       const fromBackend = Object.keys(asked).length > 0
-      const previous = cuesOf(message)
+      const previous = storedOf(message)
       // Already settled and nothing new from the backend: keep it (rules never rerun on old messages).
       if (previous && !fromBackend) return
       let ruled: Record<string, string> = {}
@@ -566,7 +609,7 @@ const definition: PluginDefinition<CuesOptions> = {
       const messages = app.messages
       const target = info.messageId
         ? messages.findIndex((m) => m.id === info.messageId)
-        : messages.findLastIndex((m) => m.role === 'assistant' && m.turnId === turnId && !cuesOf(m))
+        : messages.findLastIndex((m) => m.role === 'assistant' && m.turnId === turnId && !storedOf(m))
       const counters = countersBefore(messages, target < 0 ? messages.length : target)
       const next: Record<string, CueState> = {}
       for (const [name, asked] of Object.entries(info.asked)) {
@@ -597,14 +640,14 @@ const definition: PluginDefinition<CuesOptions> = {
       Object.assign(info.asked, values)
       // A message the backend named that was already stored: decide it again now.
       const target = messageId && app.messages.find((m) => m.id === messageId)
-      if (target && cuesOf(target)) settle(messageId!)
+      if (target && storedOf(target)) settle(messageId!)
       else preview(turnId)
       return values
     }
 
     const finishTurn = (turnId: string) => {
       for (const message of app.messages) {
-        if (message.role === 'assistant' && message.turnId === turnId && !cuesOf(message)) settle(message.id)
+        if (message.role === 'assistant' && message.turnId === turnId && !storedOf(message)) settle(message.id)
       }
       turns.delete(turnId)
       if (currentTurn === turnId) currentTurn = undefined
@@ -665,7 +708,7 @@ const definition: PluginDefinition<CuesOptions> = {
         for (const id of held) if (!ids.has(id)) held.delete(id)
         if (!held.size) heldTurns.clear()
       }
-      const stored = messages.map(cuesOf).filter((c): c is StoredCues => !!c)
+      const stored = messages.map(storedOf).filter((c): c is StoredCues => !!c)
       if (stored.length === known.length && stored.every((c, i) => c === known[i])) return
       known = stored
       publish()
@@ -728,7 +771,7 @@ const definition: PluginDefinition<CuesOptions> = {
       }),
     }
     ctx.provide('cues', control)
-    known = app.messages.map(cuesOf).filter((c): c is StoredCues => !!c)
+    known = app.messages.map(storedOf).filter((c): c is StoredCues => !!c)
     publish()
   },
 }

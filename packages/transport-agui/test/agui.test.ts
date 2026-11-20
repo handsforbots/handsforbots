@@ -57,7 +57,7 @@ describe('event mapper', () => {
       { type: 'action.call', callId: 't', name: 'highlight', args: { selector: '#save' }, messageId: 'm' },
       { type: 'state.patch', patch: [{ op: 'add', path: '/a', value: 1 }] },
       { type: 'ui.effect', name: 'scroll', value: '#top' },
-      { type: 'error', message: 'nope', code: undefined },
+      { type: 'error', message: 'Agent run failed' },
     ])
   })
 
@@ -299,6 +299,6 @@ describe('interop with @ag-ui/client', () => {
       onError: () => {},
     }).start()
     const result = await h4b.ask('oi')
-    expect(result.status).toMatchObject({ phase: 'error', error: expect.stringContaining('503') })
+    expect(result.status).toMatchObject({ phase: 'error', error: 'Agent request failed (HTTP 503)' })
   })
 })

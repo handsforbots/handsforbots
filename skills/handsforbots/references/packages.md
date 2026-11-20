@@ -22,9 +22,9 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | Package | Import | Needs | Comes with | Capability |
 |---|---|---|---|---|
 | `core` | `createH4B`, `definePlugin`, `withConsent`, `pickVariant`, source helpers | — | `memory` | Kernel: conversation, actions, queue, router, interceptors, consent, sources |
-| `transport-agui` | `agui({ url \| agent, headers?, forwardedProps? })` | `core` | `@ag-ui/core` | AG-UI agents (HTTP + SSE or an agent object) |
+| `transport-agui` | `agui({ url \| agent, headers?, forwardedProps?, maxEventBytes? })` | `core` | `@ag-ui/core` | AG-UI agents (HTTP + SSE or an agent object) |
 | `transport-http` | `http(...)`, `universalLLM(...)`, `openAICompatible(...)` | `core` | — | Your HTTP API, the v1 UniversalLLM format, `/chat/completions` |
-| `transport-ai-sdk` | `aiSdk({ url, headers?, body?, fetch? })` | `core` | — | A Vercel AI SDK UI message stream route |
+| `transport-ai-sdk` | `aiSdk({ url, headers?, body?, fetch?, maxEventBytes?, maxResponseBytes? })` | `core` | — | A Vercel AI SDK UI message stream route |
 | `transport-rasa` | `rasa({ url, sender?, metadata?, reportActionResults? })` | `core` | — | Rasa REST channel; no history, no tools |
 | `widget` | `widget({...})`, `pickGreeting`, `bindTextFocus` | `core` | — | `<h4b-chat>` Web Component |
 | `react` | `H4BProvider`, `useH4B`, `useMessages`, `useAction`, `useContextSignal`, `useStore`, `useStimulus`, `useSources`, `useTextFocus` | `core`; `react` 18+ | `widget` | React bindings |
