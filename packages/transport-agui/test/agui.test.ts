@@ -229,6 +229,39 @@ describe('transport over HTTP (HttpAgent + SSE)', () => {
     expect(h4b.getSnapshot().turn?.phase).toBe('done')
     expect(textOf(h4b.messages.at(-1)!)).toBe('Olá do servidor')
   })
+
+  const sseServer = (blocks: string[]) =>
+    createServer(async (req, res) => {
+      for await (const _ of req) void _
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      for (const block of blocks) res.write(`${block}\n\n`)
+      res.end()
+    })
+
+  it('ignores a closing data: [DONE]', async () => {
+    const event = (e: BaseEvent) => `data: ${JSON.stringify(e)}`
+    server = sseServer([
+      event(ev(EventType.RUN_STARTED, { threadId: 't', runId: 'r' })),
+      event(ev(EventType.TEXT_MESSAGE_CHUNK, { messageId: 'm', delta: 'fim' })),
+      event(ev(EventType.RUN_FINISHED, { threadId: 't', runId: 'r' })),
+      'data: [DONE]',
+    ])
+    await new Promise<void>((resolve) => server!.listen(0, resolve))
+    const { port } = server.address() as AddressInfo
+    const h4b = await createH4B({ plugins: [agui({ url: `http://127.0.0.1:${port}/agent` })] }).start()
+    const result = await h4b.ask('oi')
+    expect(result.status.phase).toBe('done')
+    expect(textOf(result.messages.at(-1)!)).toBe('fim')
+  })
+
+  it('fails the turn with a clear error when an event is not JSON', async () => {
+    server = sseServer(['data: oops'])
+    await new Promise<void>((resolve) => server!.listen(0, resolve))
+    const { port } = server.address() as AddressInfo
+    const h4b = await createH4B({ plugins: [agui({ url: `http://127.0.0.1:${port}/agent` })], onError: () => {} }).start()
+    const result = await h4b.ask('oi')
+    expect(result.status).toMatchObject({ phase: 'error', error: expect.stringContaining('not JSON') })
+  })
 })
 
 describe('interop with @ag-ui/client', () => {

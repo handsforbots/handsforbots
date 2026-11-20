@@ -273,10 +273,11 @@ describe('cues', () => {
     expect(await mount({ tone: { values: ['a b'], default: 'a b' } })).toMatch(/code/)
   })
 
-  it('does not crash when untrusted cues contain Object.prototype keys like constructor or __proto__', async () => {
-    const { h4b, say } = await setup([reply('oi')])
-    await say('vai')
-    h4b.emit('stimulus', { turnId: 't1', stimulus: { type: 'ui.effect', name: 'cues', value: { ['__proto__']: 'evil', constructor: 'evil' } as any } })
-    expect(h4b.get('cues')!.getState().tone).toBeDefined()
+  it('treats Object.prototype names as unknown channels', async () => {
+    const value = JSON.parse('{"__proto__": "x", "constructor": "x", "toString": "x", "tone": "curioso"}')
+    const { h4b, errors, say } = await setup([[effect(value), ...reply('ok')]])
+    await say('a')
+    expect(tones(h4b)).toEqual(['curioso'])
+    for (const name of ['__proto__', 'constructor', 'toString']) expect(errors).toContain(`Unknown cue channel "${name}" was dropped.`)
   })
 })

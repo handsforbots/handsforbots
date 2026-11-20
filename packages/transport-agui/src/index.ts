@@ -133,7 +133,7 @@ function parseSSEBlock(block: string): BaseEvent | undefined {
   try {
     return JSON.parse(data) as BaseEvent
   } catch {
-    return undefined
+    throw new Error(`AG-UI endpoint sent an event that is not JSON: ${data.slice(0, 80)}`)
   }
 }
 

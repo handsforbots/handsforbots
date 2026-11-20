@@ -507,7 +507,9 @@ Andamento (2026-11-17): suíte de payloads em `packages/widget/test/xss.test.ts`
 
 Depois: testes no Chromium de verdade (`pnpm test:browser`, modo browser do Vitest com Playwright, job `browser` na CI). Canários contam qualquer payload que rode nas superfícies do widget, e o sandbox dos MCP Apps é conferido em 10 formatos de HTML; os dois pegam as falhas antigas quando reintroduzidas.
 
-Falta: arquitetura da chave, React, Vue, `copilotkit`/`assistant-ui`, `guided` e `gui()`, `ui/message` e `ui/update-model-context` do `mcp-apps` (caminho de injeção de prompt, ligado por padrão), Trusted Types nos exemplos, as recomendações para quem integra e avisos de segurança. Avisos: no `devPanel` da `observability` em desenvolvimento; em produção, só um sinal muitíssimo genérico (sem tipo, origem nem conteúdo), para não ensinar a quem ataca o que foi notado.
+Andamento (2026-11-19): o `applyPatch` do `state.patch` deixava `/__proto__/x` e `/constructor/prototype/x` escreverem no `Object.prototype` da página; agora ele só percorre propriedades próprias e recusa `__proto__`, e `constructor` e `prototype` continuam valendo como chaves comuns do estado. O `cues` procurava canais vindos do backend sem `Object.hasOwn` (`constructor` derrubava a leitura das cues daquele estímulo). O `mcp-apps` ganhou `allowModelContext: false`, que recusa `ui/update-model-context`. Robustez: seletor inválido no `guided` vira "nada encontrado" em vez de `DOMException`; o SSE do `agui` ignora um `data: [DONE]` final e falha o turno com mensagem clara quando um evento não é JSON.
+
+Falta: arquitetura da chave, React, Vue, `copilotkit`/`assistant-ui`, `gui()`, `ui/message` e `ui/update-model-context` do `mcp-apps` ligados por padrão (caminho de injeção de prompt; hoje dá para desligar com `allowMessages: false` e `allowModelContext: false`), Trusted Types nos exemplos, as recomendações para quem integra e avisos de segurança. Avisos: no `devPanel` da `observability` em desenvolvimento; em produção, só um sinal muitíssimo genérico (sem tipo, origem nem conteúdo), para não ensinar a quem ataca o que foi notado.
 
 ## 4. Fases
 
