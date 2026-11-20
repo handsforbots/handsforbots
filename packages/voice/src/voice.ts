@@ -904,7 +904,12 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     sentLive = ''
     discardPending()
     clearTimeout(restartTimer)
+    if (holding) release(holding, false)
     if (!active) return
+    if (active.held) {
+      release(active.held, false)
+      active.held = undefined
+    }
     active.discarded = true
     if (active.session) {
       clearTimeout(active.killTimer)
@@ -1306,7 +1311,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
 
   const synthesize = (provider: TextToSpeech, text: string, speakOptions: SpeakOptions, signal: AbortSignal) => {
     const job = synthQueue.then(async () => {
-      if (signal.aborted) return undefined
+      if (signal.aborted || !allowed(provider)) return undefined
       set({ synthesizing: ++synthesizing > 0 })
       try {
         return await provider.synthesize!(text, speakOptions)
@@ -1677,11 +1682,14 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
 
   ctx.on('consent.changed', () => {
     const currentStt = state.stt ? sttProviders.find((p) => p.name === state.stt) : undefined
-    const sttBlocked = !!(active && currentStt && consentBlocked(currentStt))
+    const sttBlocked = !!(currentStt && consentBlocked(currentStt))
     if (endOfTurn && consentBlocked(endOfTurn)) onEndOfTurnConsentRevoked()
-    if (sttBlocked) revokeActiveStt()
-    const speaking = state.speaking ? ttsProviders.find((p) => p.name === state.tts) : undefined
-    if (speaking && consentBlocked(speaking)) service.cancelSpeech()
+    if (sttBlocked && active) revokeActiveStt()
+    else if (sttBlocked && (turn.texts.length > 0 || turn.live)) discardPending()
+    const speechBusy = state.speaking || state.synthesizing || chunksLeft > 0
+    const currentTts =
+      (state.tts ? ttsProviders.find((p) => p.name === state.tts) : undefined) ?? (speechBusy ? preferred() : undefined)
+    if (currentTts && consentBlocked(currentTts) && speechBusy) service.cancelSpeech()
   })
 
   ctx.onDispose(() => {

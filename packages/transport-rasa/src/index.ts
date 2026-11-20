@@ -8,6 +8,8 @@ import {
   type Transport,
   type TurnRequest,
 } from '@handsforbots/core'
+import { DEFAULT_MAX_RESPONSE_BYTES, readBoundedText } from './bounded.js'
+import { transportRouteError } from './transport-error.js'
 
 /** One item of Rasa's REST channel response. */
 export type RasaMessage = {
@@ -35,6 +37,7 @@ export type RasaTransportOptions = {
    */
   reportActionResults?: (results: { name: string; result?: unknown; error?: string }[]) => string | undefined
   fetch?: typeof fetch
+  maxResponseBytes?: number
 }
 
 export const rasa = definePlugin<RasaTransportOptions>({
@@ -46,6 +49,7 @@ export const rasa = definePlugin<RasaTransportOptions>({
 })
 
 export function createRasaTransport(options: RasaTransportOptions): Transport {
+  const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
   return {
     name: 'rasa',
     capabilities: { streaming: false, tools: true },
@@ -66,8 +70,19 @@ export function createRasaTransport(options: RasaTransportOptions): Transport {
         }),
         signal,
       })
-      if (!response.ok) throw new Error(`Rasa responded ${response.status} ${response.statusText}`.trim())
-      const items = (await response.json()) as RasaMessage[]
+      if (!response.ok) {
+        let detail = ''
+        try {
+          detail = response.body
+            ? (await readBoundedText(response.body, maxResponseBytes)).slice(0, 200)
+            : (await response.text()).slice(0, 200)
+        } catch {
+          /* ignore */
+        }
+        throw transportRouteError(`Backend error (HTTP ${response.status})`, response.status, detail)
+      }
+      const textBody = response.body ? await readBoundedText(response.body, maxResponseBytes) : await response.text()
+      const items = JSON.parse(textBody) as RasaMessage[]
       yield* toStimuli(Array.isArray(items) ? items : [])
     },
   }

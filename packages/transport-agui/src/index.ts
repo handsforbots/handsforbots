@@ -22,6 +22,7 @@ import {
   createSSEScanState,
   DEFAULT_MAX_EVENT_BYTES,
   drainSSEBlocks,
+  isSSESizeLimitError,
 } from './bounded.js'
 import { stimulusErrorCode, transportRouteError } from './transport-error.js'
 
@@ -113,6 +114,7 @@ export async function* postSSE(
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const sse = createSSEScanState()
+  let overflow = false
   try {
     while (true) {
       const { value, done } = await reader.read()
@@ -125,7 +127,17 @@ export async function* postSSE(
     assertResidualSSEWithinLimit(sse, maxEventBytes)
     const event = parseSSEBlock(sse.buffer)
     if (event) yield event
+  } catch (error) {
+    overflow = isSSESizeLimitError(error)
+    throw error
   } finally {
+    if (overflow) {
+      try {
+        await reader.cancel()
+      } catch {
+        /* ignore */
+      }
+    }
     reader.releaseLock()
   }
 }

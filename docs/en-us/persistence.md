@@ -67,6 +67,8 @@ app.post('/api/h4b/summary', async (req, res) => {
 
 Encrypted by default (AES-GCM, Web Crypto). The key is kept **outside** the stored data and expires, so after the deadline nothing readable is left, even if the person never comes back to the site. This is the protection; the encryption is how it is enforced.
 
+Stored format **version 3** binds each envelope to `savedAt` and `threadId` through AES-GCM additional authenticated data (`{ version: 3, savedAt, threadId }`); anything from earlier alphas (plain JSON, version 2, or version 3 without a matching thread) is discarded on load. On **https**, the default `cookieKey()` uses the host-only cookie `__Host-h4b-key` instead of the older `h4b-key` name, so a leftover cookie from a previous build is ignored.
+
 | Key source | Who expires the key | Notes |
 |---|---|---|
 | `cookieKey({ ttlMinutes: 30 })` (default) | The browser (`Max-Age`, renewed on every load and save) | `SameSite=Strict`, `Secure` on https, `path` configurable. ~60 bytes travel with requests to that path |

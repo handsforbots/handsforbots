@@ -50,6 +50,8 @@ const waitFor = (check: () => boolean, timeoutMs = 5000) =>
     poll()
   })
 
+const attackerPageUrl = new URL('./navigation-attacker.html', import.meta.url).href
+
 /** Mounts the app and resolves with its report; rejects if it never reports. */
 function run(html: string, csp?: { connectDomains?: string[] }): Promise<Report> {
   const h4b = createH4B({ memory: false })
@@ -76,7 +78,9 @@ describe('MCP App sandbox in a real browser', () => {
 
   it('keeps standards mode when the app declares its own doctype', async () => {
     const h4b = createH4B({ memory: false })
-    const iframe = mountMcpApp(h4b, { html: '<!doctype html><html><head></head><body><script>parent.postMessage({mode:document.compatMode}, "*")</script></body></html>' })
+    const iframe = mountMcpApp(h4b, {
+      html: '<!doctype html><html><head></head><body><script>parent.postMessage({mode:document.compatMode}, "*")</script></body></html>',
+    })
     mounted.push(iframe)
     document.body.append(iframe)
     const mode = await new Promise<string>((resolve, reject) => {
@@ -129,14 +133,11 @@ const rpc = (msg) => new Promise((resolve) => {
     expect(handler).toHaveBeenCalled()
   })
 
-  it('ignores tools/call after navigation when window.parent was replaced', async () => {
+  it('blocks tools/call from an http(s) page after the app navigates away', async () => {
     const handler = vi.fn(() => ({ ok: true }))
     const h4b = await createH4B({
       actions: [{ name: 'pwn', description: 'nope', exposeTo: ['agent'], handler }],
     }).start()
-  const second = encodeURIComponent(
-    '<script>parent.postMessage({ jsonrpc: "2.0", id: 77, method: "tools/call", params: { name: "pwn", arguments: {} } }, "*")</script>',
-  )
     const html = `<script>
 const rpc = (msg) => new Promise((resolve) => {
   const onMsg = (e) => {
@@ -148,38 +149,51 @@ const rpc = (msg) => new Promise((resolve) => {
 ;(async () => {
   await rpc({ jsonrpc: '2.0', id: 1, method: 'ui/initialize', params: { protocolVersion: '${PROTOCOL_VERSION}', appCapabilities: {} } })
   parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }, '*')
-  window.parent = { postMessage() {} }
-  location.href = 'data:text/html,${second}'
+  location.href = ${JSON.stringify(attackerPageUrl)}
 })()
 </script>`
     const iframe = mountMcpApp(h4b, { html }, { allowTools: ['pwn'] }) as HTMLIFrameElement
     mounted.push(iframe)
-    let loads = 0
-    iframe.addEventListener('load', () => { loads++ })
     document.body.append(iframe)
-    await waitFor(() => loads >= 1, 8000)
+    const attackerRan = await waitForAttackerPing(12_000)
+    expect(attackerRan).toBe(true)
     await waitFor(() => handler.mock.calls.length > 0, 2000).catch(() => undefined)
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it('drops the bridge after in-iframe navigation so tools/call from the new document is ignored', async () => {
+  it('drops the bridge when navigation happens before initialize', async () => {
     const handler = vi.fn(() => ({ ok: true }))
     const h4b = await createH4B({
       actions: [{ name: 'pwn', description: 'nope', exposeTo: ['agent'], handler }],
     }).start()
-    const second = encodeURIComponent(
-      '<script>parent.postMessage({ jsonrpc: "2.0", id: 77, method: "tools/call", params: { name: "pwn", arguments: {} } }, "*")</script>',
-    )
-    const html = `<script>location.href = 'data:text/html,${second}'</script>`
+    const html = `<script>location.href = ${JSON.stringify(attackerPageUrl)}</script>`
     const iframe = mountMcpApp(h4b, { html }, { allowTools: ['pwn'] }) as HTMLIFrameElement
     mounted.push(iframe)
-    let loads = 0
-    iframe.addEventListener('load', () => {
-      loads++
-    })
     document.body.append(iframe)
-    await waitFor(() => loads >= 1, 8000)
+    expect(await waitForAttackerPing(12_000)).toBe(true)
     await waitFor(() => handler.mock.calls.length > 0, 2000).catch(() => undefined)
     expect(handler).not.toHaveBeenCalled()
   })
 })
+
+function waitForAttackerPing(timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs
+  const onMessage = (event: MessageEvent) => {
+      if (event.data?.h4bAttackerRan) {
+        window.removeEventListener('message', onMessage)
+        resolve(true)
+      }
+    }
+    window.addEventListener('message', onMessage)
+    const poll = () => {
+      if (Date.now() >= deadline) {
+        window.removeEventListener('message', onMessage)
+        reject(new Error('attacker page never reported'))
+        return
+      }
+      requestAnimationFrame(poll)
+    }
+    poll()
+  })
+}

@@ -67,6 +67,8 @@ app.post('/api/h4b/summary', async (req, res) => {
 
 Criptografada por padrão (AES-GCM, Web Crypto). A chave fica **fora** do dado guardado e expira, então depois do prazo não sobra nada legível, mesmo que a pessoa nunca volte ao site. Essa é a proteção; a criptografia é o jeito de garanti-la.
 
+O formato guardado **versão 3** amarra cada envelope a `savedAt` e `threadId` via dados autenticados adicionais do AES-GCM (`{ version: 3, savedAt, threadId }`); qualquer coisa de alphas anteriores (JSON legível, versão 2 ou versão 3 com thread incompatível) é descartada ao carregar. Em **https**, o `cookieKey()` padrão usa o cookie host-only `__Host-h4b-key` em vez do nome antigo `h4b-key`, então um cookie sobrando de um build anterior é ignorado.
+
 | Fonte da chave | Quem expira a chave | Observações |
 |---|---|---|
 | `cookieKey({ ttlMinutes: 30 })` (padrão) | O navegador (`Max-Age`, renovado a cada carregamento e gravação) | `SameSite=Strict`, `Secure` em https, `path` configurável. Uns 60 bytes vão junto nas requisições a esse caminho |

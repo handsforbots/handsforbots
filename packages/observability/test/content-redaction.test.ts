@@ -119,4 +119,38 @@ describe('content redaction (includeContent false)', () => {
     expect(preview?.preview).toBeDefined()
     assertNoCanaries(preview!.preview!)
   })
+
+  it('strips reason from voice.decision when includeContent is false', async () => {
+    const exported: SemanticEvent[] = []
+    const captureExporter: Exporter = {
+      id: 'capture',
+      onEvent(event) {
+        exported.push(event)
+      },
+    }
+    const h4b = await createH4B({
+      plugins: [
+        observability({
+          environment: 'test',
+          exporters: [],
+          customExporters: [captureExporter],
+        }),
+      ],
+    }).start()
+    const emit = h4b.emit.bind(h4b) as (event: string, payload: unknown) => void
+    emit('voice.decision', {
+      kind: 'end-of-turn-unavailable',
+      provider: 'model',
+      reason: 'failed to load ?token=sk_live_ABC',
+      text: 'secret transcript',
+    })
+    const timeline = h4b.get('observability')!.getTimeline()
+    const decision = timeline.find((e) => e.name === 'voice.decision')
+    expect(decision).toBeDefined()
+    const payload = decision!.payload as Record<string, unknown>
+    expect(payload.kind).toBe('end-of-turn-unavailable')
+    expect(payload.provider).toBe('model')
+    expect(payload).not.toHaveProperty('reason')
+    expect(payload).not.toHaveProperty('text')
+  })
 })

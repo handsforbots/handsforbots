@@ -46,6 +46,28 @@ async function idle(h4b: ReturnType<typeof createH4B>) {
 }
 
 describe('ensureAssistant hardening', () => {
+  it('emits stimulus events with the resolved assistant message id', async () => {
+    const userId = createId('msg')
+    const transport = scripted([[{ type: 'message.delta', messageId: userId, delta: 'redirected text' }]])
+    const stimuli: Stimulus[] = []
+    const h4b = await createH4B({ plugins: [withTransport(transport)] }).start()
+    h4b.on('stimulus', ({ stimulus }) => stimuli.push(structuredClone(stimulus)))
+    h4b.conversation.append({
+      id: userId,
+      role: 'user',
+      parts: [{ type: 'text', text: 'user line' }],
+      modality: 'text',
+      source: 'host',
+      createdAt: 1,
+    })
+    h4b.send('go')
+    await idle(h4b)
+    const assistant = h4b.messages.find((m) => m.role === 'assistant' && m.turnId)
+    const delta = stimuli.find((s) => s.type === 'message.delta')
+    expect(delta).toMatchObject({ messageId: assistant!.id, delta: 'redirected text' })
+    expect(delta!.messageId).not.toBe(userId)
+  })
+
   it('rejects deltas targeting a user message id and uses a new assistant message', async () => {
     const userId = createId('msg')
     const transport = scripted([
@@ -265,6 +287,10 @@ describe('createId', () => {
 })
 
 describe('JSON patch hardening', () => {
+  it('requires an existing source for copy', () => {
+    expect(() => applyPatch({ a: 1 }, [{ op: 'copy', from: '/missing', path: '/b' }])).toThrow(/copy source missing/)
+  })
+
   it('rejects remove /a/- and remove /a/foo (no NaN splice)', () => {
     expect(() => applyPatch({ a: [1, 2] }, [{ op: 'remove', path: '/a/-' }])).toThrow(/remove/)
     const doc = { a: [1, 2] }
@@ -337,7 +363,7 @@ describe('parseSessionSnapshot', () => {
         threadId: 't',
         messages: [{ id: 'm', role: 'user', parts: [], createdAt: 1 }],
       }),
-    ).toBeUndefined()
+    ).toEqual({ threadId: 't', messages: [] })
   })
 
   it('accepts a valid minimal snapshot', () => {
@@ -357,6 +383,37 @@ describe('parseSessionSnapshot', () => {
     } satisfies SessionSnapshot)
     expect(parsed?.threadId).toBe('t')
     expect(parsed?.seenCallIds).toEqual(['c1'])
+  })
+
+  it('drops forged parts but keeps the rest of the conversation', () => {
+    const parsed = parseSessionSnapshot({
+      threadId: 't',
+      messages: [
+        {
+          id: 'u',
+          role: 'user',
+          modality: 'text',
+          source: 'host',
+          parts: [
+            { type: 'text', text: 'keep me' },
+            { type: 'source', id: 's1', title: 'T', trail: 'abc' },
+            { type: 'source', id: 's2', title: 'T', url: {} },
+            { type: 'image', mimeType: 'image/png', source: {} },
+            { type: 'data', name: 'ui', value: null },
+          ],
+          createdAt: 1,
+        },
+        {
+          id: 'a',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'also kept' }],
+          createdAt: 2,
+        },
+      ],
+    })
+    expect(parsed?.messages).toHaveLength(2)
+    expect(parsed?.messages[0]).toMatchObject({ role: 'user', parts: [{ type: 'text', text: 'keep me' }] })
+    expect(parsed?.messages[1]).toMatchObject({ role: 'assistant', parts: [{ type: 'text', text: 'also kept' }] })
   })
 
   it('accepts snapshots stored by storage plugins (omitted_media and ui parts)', () => {
@@ -389,6 +446,21 @@ describe('parseSessionSnapshot', () => {
 })
 
 describe('parameters-only validation (D3)', () => {
+  it('accepts parameters schemas with up to 1024 enum values', async () => {
+    const values = Array.from({ length: 100 }, (_, i) => `v${i}`)
+    const h4b = await createH4B({
+      actions: [
+        {
+          name: 'pick',
+          description: 'Pick',
+          parameters: { type: 'object', properties: { tag: { type: 'string', enum: values } } },
+          handler: (args) => args,
+        },
+      ],
+    }).start()
+    await expect(h4b.actions.invoke('pick', { tag: 'v50' }, { origin: 'user', callId: 'e1' })).resolves.toEqual({ tag: 'v50' })
+  })
+
   it('validates parameters schema at runtime', async () => {
     const h4b = await createH4B({
       actions: [
@@ -453,5 +525,42 @@ describe('failed handler tool messages', () => {
     const tools = h4b.messages.filter((m) => m.role === 'tool')
     expect(tools[0]).toMatchObject({ error: 'Action "secret" failed' })
     expect(tools[1]?.error).toMatch(/Invalid arguments/)
+  })
+})
+
+describe('void action tool messages', () => {
+  it('persists and restores a conversation with a void action result', async () => {
+    let saved: SessionSnapshot | null = null
+    const storage = definePlugin({
+      name: 'mem',
+      apply(ctx) {
+        ctx.provide('storage', {
+          load: () => (saved ? structuredClone(saved) : null),
+          save: (s) => void (saved = structuredClone(s)),
+          clear: () => void (saved = null),
+        })
+      },
+    })
+    const call: Stimulus = { type: 'action.call', callId: 'v1', name: 'noop', args: {} }
+    const transport = scripted([[call]])
+    const h4b = await createH4B({
+      plugins: [withTransport(transport), storage()],
+      actions: [{ name: 'noop', description: 'Does nothing', handler: () => {} }],
+    }).start()
+    h4b.send('go')
+    await idle(h4b)
+    const tool = h4b.messages.find((m) => m.role === 'tool' && m.name === 'noop')
+    expect(tool).toMatchObject({ result: null })
+    await h4b.persist()
+    expect(saved).not.toBeNull()
+    const parsed = parseSessionSnapshot(saved!)
+    expect(parsed).toBeDefined()
+    expect(parsed!.messages.some((m) => m.role === 'tool')).toBe(true)
+    // Verify a fresh instance restores the conversation
+    const h4b2 = await createH4B({
+      plugins: [storage()],
+    }).start()
+    expect(h4b2.messages.some((m) => m.role === 'tool')).toBe(true)
+    expect(h4b2.messages).toHaveLength(h4b.messages.length)
   })
 })

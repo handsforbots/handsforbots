@@ -6,6 +6,7 @@ import {
 } from '@handsforbots/semantic-event-observability'
 import {
   sanitizeCuePayload,
+  sanitizeDecisionPayload,
   sanitizeErrorValue,
   sanitizeSpeechPayload,
   sanitizeTtsPayload,
@@ -204,9 +205,7 @@ function attach(
     // Level gate: `voice.level.monitor.open`, `voice.level.learned` (levels in dBFS), `voice.level.learn.skipped`.
     onPlugin('voice.level', ({ event, ...rest }) => record(`voice.level.${String(event)}`, rest)),
     onPlugin('voice.decision', (decision) => {
-      // The transcript is content: kept out unless `includeContent`.
-      const { text, ...rest } = decision
-      record('voice.decision', includeContent && text !== undefined ? decision : rest)
+      record('voice.decision', includeContent ? decision : sanitizeDecisionPayload(decision))
     }),
   )
   return { dispose: () => offs.forEach((off) => off()), record }

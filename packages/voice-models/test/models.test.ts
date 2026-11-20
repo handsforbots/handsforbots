@@ -115,6 +115,11 @@ describe('model sources', () => {
     expect(sourceUrl('/models/file.onnx?sig=abc%3D')).toBe('/models/file.onnx?sig=abc%3D')
   })
 
+  it('rejects a lone dot path segment', () => {
+    expect(() => huggingFace('org/repo', './weights.onnx')).toThrow(TypeError)
+    expect(() => huggingFace('org/repo', 'voices/./evil.onnx')).toThrow(TypeError)
+  })
+
   it('rejects unsafe Piper and Kokoro voice ids and encodes path segments', () => {
     expect(() => piperVoice('en_US-x-y/../../../attacker/evil/resolve/main/m')).toThrow(TypeError)
     expect(() => piperVoice('pt_BR-faber-medium/../x')).toThrow()

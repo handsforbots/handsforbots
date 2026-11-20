@@ -47,10 +47,10 @@ describe('FFmpeg export hardening', () => {
 
   it('exposes execFile argv and quotes paths for POSIX shells', () => {
     const out = toFFmpeg('clean')
-    expect(out.args('in.wav', 'out.wav')).toEqual(['-i', 'in.wav', '-af', 'anull', 'out.wav'])
+    expect(out.args('in.wav', 'out.wav')).toEqual(['-nostdin', '-n', '-i', 'in.wav', '-af', 'anull', 'out.wav'])
     const tricky = `a b'$(id)\`x\`c`
     expect(execFileSync('sh', ['-c', `printf %s ${posixShellQuote(tricky)}`], { encoding: 'utf8' })).toBe(tricky)
-    expect(out.command(tricky, 'out.wav')).toBe(`ffmpeg -i ${posixShellQuote(tricky)} -af 'anull' 'out.wav'`)
+    expect(out.command(tricky, 'out.wav')).toBe(`ffmpeg -nostdin -n -i ${posixShellQuote(tricky)} -af 'anull' 'out.wav'`)
   })
 
   it('rejects input or output paths that look like FFmpeg flags', () => {
@@ -58,6 +58,15 @@ describe('FFmpeg export hardening', () => {
     expect(() => out.args('-y', 'out.wav')).toThrow(/input path must not start with "-"/)
     expect(() => out.args('in.wav', '-f')).toThrow(/output path must not start with "-"/)
     expect(() => out.command('-y', 'out.wav')).toThrow(/input path must not start with "-"/)
+  })
+
+  it('rejects protocol-prefixed input and output paths', () => {
+    const out = toFFmpeg('clean')
+    for (const path of ['concat:list.txt', 'pipe:0', 'http://evil.test/x.wav', 'https://evil.test/x.wav', 'file:-']) {
+      expect(() => out.args(path, 'out.wav')).toThrow(/protocol prefix/)
+      expect(() => out.args('in.wav', path)).toThrow(/protocol prefix/)
+    }
+    expect(out.args(String.raw`C:\voice\in.wav`, 'out.wav')[3]).toBe(String.raw`C:\voice\in.wav`)
   })
 
   it('command() does not run shell expansions under sh -c', () => {

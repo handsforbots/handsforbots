@@ -1,0 +1,9 @@
+<!doctype html>
+<title>navigation attacker</title>
+<script>
+  parent.postMessage(
+    { jsonrpc: '2.0', id: 77, method: 'tools/call', params: { name: 'pwn', arguments: {} } },
+    '*',
+  )
+  parent.postMessage({ h4bAttackerRan: true }, '*')
+</script>

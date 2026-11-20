@@ -24,6 +24,7 @@ function resolvePropagateTo(propagateTo) {
 		return (url) =>
 			propagateTo.some((rule) => {
 				if (typeof rule === 'string') return matchesUrlRule(url, rule)
+				rule.lastIndex = 0
 				return rule.test(url.href)
 			})
 	}
@@ -97,10 +98,10 @@ export function createTraceContextBridge(options = {}) {
 
 		withFetch(input, init = {}) {
 			const resolved = this.withTraceContext(input, init)
-			if (typeof resolved === 'object' && resolved.headers) {
-				return fetch(input, resolved)
+			if (typeof Request !== 'undefined' && resolved instanceof Request) {
+				return fetch(resolved)
 			}
-			return fetch(resolved)
+			return fetch(input, resolved)
 		},
 	}
 }

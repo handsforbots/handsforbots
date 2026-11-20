@@ -13,7 +13,7 @@ export type HuggingFaceFile = {
 }
 
 const HF_REPO = /^[\w.-]+\/[\w.-]+$/
-const UNSAFE_PATH = /(?:^|\/)\.\.(?:\/|$)|\\|%2e%2e/i
+const UNSAFE_PATH = /(?:^|\/)\.\.(?:\/|$)|(?:^|\/)\.(?:\/|$)|\\|%2e%2e/i
 
 export function assertSafeModelPath(path: string, label: string): void {
   if (UNSAFE_PATH.test(path) || path.includes('..') || path.includes('\\') || path.includes('%')) {

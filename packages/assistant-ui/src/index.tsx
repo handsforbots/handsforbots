@@ -114,6 +114,7 @@ function imageUrl(part: Part, options: ToThreadOptions): string | undefined {
     return safeImageUrl(data) ? data : undefined
   }
   if (typeof URL === 'undefined' || !URL.createObjectURL) return undefined
+  if (!safeRasterMime(media.mimeType)) return undefined
   const url = URL.createObjectURL(media.source.blob)
   options.onBlobUrl?.(url)
   return safeImageUrl(url) ? url : undefined

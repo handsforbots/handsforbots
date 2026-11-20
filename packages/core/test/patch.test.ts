@@ -16,6 +16,10 @@ describe('applyPatch', () => {
     expect(patched).toEqual({ a: 2, b: [20, 30] })
   })
 
+  it('throws when copy source is missing', () => {
+    expect(() => applyPatch({ a: 1 }, [{ op: 'copy', from: '/missing', path: '/b' }])).toThrow(/copy source missing/)
+  })
+
   it('rejects __proto__ in a path or a from', () => {
     expect(() => applyPatch({}, [{ op: 'add', path: '/__proto__/polluted', value: true }])).toThrow(/__proto__/)
     expect(() => applyPatch({ a: 1 }, [{ op: 'copy', from: '/__proto__/toString', path: '/a' }])).toThrow(/__proto__/)

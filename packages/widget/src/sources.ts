@@ -23,24 +23,26 @@ type Span = { start: number; end: number }
 /** Inline code and whole `[label](url)` links, where a reference would break the Markdown. */
 function protectedSpans(text: string): Span[] {
   const spans: Span[] = []
-  const next = new Map<string, number>()
-  const find = (token: string, from: number): number => {
-    const known = next.get(token)
-    if (known !== undefined && (known === -1 || known >= from)) return known
+  const lineEnd = (from: number) => {
+    const at = text.indexOf('\n', from)
+    return at === -1 ? text.length : at
+  }
+  const find = (token: string, from: number, limit: number): number => {
     const at = text.indexOf(token, from)
-    next.set(token, at)
-    return at
+    return at === -1 || at >= limit ? -1 : at
   }
   for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') continue
+    const limit = lineEnd(i)
     if (text[i] === '`') {
-      const end = find('`', i + 1)
+      const end = find('`', i + 1, limit)
       if (end === -1) continue
       spans.push({ start: i, end: end + 1 })
       i = end
     } else if (text[i] === '[') {
-      const close = find(']', i + 1)
+      const close = find(']', i + 1, limit)
       if (close === -1 || text[close + 1] !== '(') continue
-      const end = find(')', close + 2)
+      const end = find(')', close + 2, limit)
       if (end === -1) continue
       spans.push({ start: i, end: end + 1 })
       i = end

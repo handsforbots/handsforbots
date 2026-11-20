@@ -58,9 +58,13 @@ const MAX_MODEL_CONTEXT_BYTES = 16 * 1024
 
 type JsonRpc = { jsonrpc: '2.0'; id?: string | number; method?: string; params?: unknown; result?: unknown; error?: unknown }
 
-const NAV_GUARD = `<script>
-(()=>{const p=parent;const send=()=>p.postMessage({method:'h4b/mcp-app/unloading'},'*');addEventListener('pagehide',send,{once:true});addEventListener('unload',send,{once:true})})();
+/** Injected before any app markup: MessageChannel bridge, parent.postMessage shim, handshake. */
+function buildBridgeScript(nonce: string): string {
+  const n = JSON.stringify(nonce)
+  return `<script>
+(()=>{const ch=new MessageChannel();const appPort=ch.port1;const hostPort=ch.port2;const nonce=${n};parent.postMessage({method:'h4b/mcp-app/handshake',nonce},'*',[hostPort]);const origParent=parent;const forward=(data)=>{if(data&&typeof data==='object'&&data.jsonrpc==='2.0'){appPort.postMessage(data);return!0}return!1};const wrapPost=(t,post)=>function(data,origin,transfer){if(!forward(data))return post.call(t,data,origin,transfer)};try{Object.defineProperty(window,'parent',{get(){const post=origParent.postMessage.bind(origParent);return new Proxy(origParent,{get(t,p){if(p==='postMessage')return wrapPost(t,post);const v=Reflect.get(t,p);return typeof v==='function'?v.bind(t):v}})},configurable:!0})}catch{const post=origParent.postMessage.bind(origParent);origParent.postMessage=wrapPost(origParent,post)}appPort.addEventListener('message',(e)=>{window.dispatchEvent(new MessageEvent('message',{data:e.data}))});appPort.start();const send=()=>{try{origParent.postMessage({method:'h4b/mcp-app/unloading'},'*')}catch{}};addEventListener('pagehide',send,{once:!0});addEventListener('unload',send,{once:!0})})();
 </script>`
+}
 
 /**
  * Prepends an unconditional doctype and CSP meta so nothing in the app HTML runs before the policy.
@@ -73,7 +77,7 @@ export function withCsp(html: string, policy: string): string {
 type BridgeCleanup = () => void
 const bridgeCleanups = new WeakMap<HTMLElement, BridgeCleanup>()
 
-/** Tears down the postMessage bridge for a mounted MCP App element. */
+/** Tears down the MessageChannel bridge for a mounted MCP App element. */
 export function unmountMcpApp(element: HTMLElement): void {
   bridgeCleanups.get(element)?.()
 }
@@ -101,9 +105,11 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
     intervalMs: options.linkRate?.intervalMs ?? 1000,
     maxPerMount: options.linkRate?.maxPerMount ?? 10,
   }
+  const mountNonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
   let initialized = false
   let delivered = false
   let bridgeActive = true
+  let bridgePort: MessagePort | undefined
   let loadCount = 0
   let lastMessageAt = 0
   let messageCount = 0
@@ -114,14 +120,20 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
     if (!bridgeActive) return
     bridgeActive = false
     initialized = false
-    window.removeEventListener('message', onMessage)
+    bridgePort?.close()
+    bridgePort = undefined
+    window.removeEventListener('message', onWindowMessage)
     observer?.disconnect()
     bridgeCleanups.delete(iframe)
   }
 
   const post = (message: Omit<JsonRpc, 'jsonrpc'>) => {
-    if (!bridgeActive) return
-    iframe.contentWindow?.postMessage({ jsonrpc: '2.0', ...message }, '*')
+    if (!bridgeActive || !bridgePort) return
+    try {
+      bridgePort.postMessage({ jsonrpc: '2.0', ...message })
+    } catch {
+      tearDown()
+    }
   }
   const respond = (id: JsonRpc['id'], result: unknown) => post({ id, result })
   const fail = (id: JsonRpc['id'], code: number, message: string) => post({ id, error: { code, message } })
@@ -143,18 +155,11 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
     platform: 'web',
   })
 
-  const onMessage = async (event: MessageEvent) => {
+  const onRpc = async (message: JsonRpc) => {
     if (!bridgeActive || !iframe.isConnected) {
       tearDown()
       return
     }
-    if (event.source !== iframe.contentWindow) return
-    const raw = event.data as Record<string, unknown>
-    if (raw?.method === 'h4b/mcp-app/unloading') {
-      tearDown()
-      return
-    }
-    const message = event.data as JsonRpc
     if (message?.jsonrpc !== '2.0' || !message.method) return
     const { id, method, params } = message
     const p = params as Record<string, unknown> | undefined
@@ -243,7 +248,32 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
     }
   }
 
-  window.addEventListener('message', onMessage)
+  const onPortMessage = (event: MessageEvent) => {
+    void onRpc(event.data as JsonRpc)
+  }
+
+  const onWindowMessage = (event: MessageEvent) => {
+    if (!bridgeActive || !iframe.isConnected) {
+      tearDown()
+      return
+    }
+    if (event.source !== iframe.contentWindow) return
+    if (bridgePort) return
+    const raw = event.data as Record<string, unknown>
+    if (raw?.method === 'h4b/mcp-app/handshake') {
+      if (raw.nonce !== mountNonce) return
+      const port = event.ports?.[0]
+      if (!port) return
+      bridgePort = port
+      port.addEventListener('message', onPortMessage)
+      port.start()
+      window.removeEventListener('message', onWindowMessage)
+      return
+    }
+    if (raw?.method === 'h4b/mcp-app/unloading') tearDown()
+  }
+
+  window.addEventListener('message', onWindowMessage)
   bridgeCleanups.set(iframe, tearDown)
 
   const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver((mutations) => {
@@ -271,7 +301,7 @@ export function mountMcpApp(h4b: H4B, props: McpAppProps, options: McpAppOptions
   }
 
   iframe.addEventListener('load', onIframeLoad)
-  iframe.srcdoc = withCsp(`${NAV_GUARD}${props.html}`, buildCspPolicy(props.csp, options.allowDomains))
+  iframe.srcdoc = withCsp(`${buildBridgeScript(mountNonce)}${props.html}`, buildCspPolicy(props.csp, options.allowDomains))
 
   if (observer && document.body) observer.observe(document.body, { childList: true, subtree: true })
   queueMicrotask(() => {

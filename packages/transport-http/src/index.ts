@@ -17,6 +17,7 @@ import {
   DEFAULT_MAX_EVENT_BYTES,
   DEFAULT_MAX_RESPONSE_BYTES,
   drainSSEBlocks,
+  isSSESizeLimitError,
   readBoundedText,
 } from './bounded.js'
 import { isLoopbackHost, normalizeSessionId } from './host.js'
@@ -381,6 +382,7 @@ async function* streamStimuli(body: ReadableStream<Uint8Array>, parse: ChunkPars
   let started = false
   const calls = new Map<number | string, { id?: string; name?: string; arguments: string }>()
   const sse = createSSEScanState()
+  let overflow = false
   try {
     outer: while (true) {
       const { value, done } = await reader.read()
@@ -422,7 +424,17 @@ async function* streamStimuli(body: ReadableStream<Uint8Array>, parse: ChunkPars
       }
     }
     assertResidualSSEWithinLimit(sse, maxEventBytes)
+  } catch (error) {
+    overflow = isSSESizeLimitError(error)
+    throw error
   } finally {
+    if (overflow) {
+      try {
+        await reader.cancel()
+      } catch {
+        /* ignore */
+      }
+    }
     reader.releaseLock()
   }
   if (started) yield { type: 'message.end', messageId }

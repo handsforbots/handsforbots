@@ -1,7 +1,6 @@
 const MAX_DEPTH = 32
 const MAX_PROPERTIES = 64
-const MAX_ENUM = 64
-const MAX_STRING = 4096
+const MAX_ENUM = 1024
 const MAX_ARRAY_ITEMS = 256
 
 export class JsonSchemaValidationError extends Error {

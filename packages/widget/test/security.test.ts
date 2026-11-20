@@ -63,6 +63,41 @@ describe('citation markers vs markdown links', () => {
     expect(html).toContain('<sup class="cite"')
   })
 
+  function citedLinkAcrossLines(text: string, citeEnd: number) {
+    const message: Message = {
+      id: 'm1',
+      role: 'assistant',
+      createdAt: 0,
+      parts: [
+        { type: 'text', text, citations: [{ start: 0, end: citeEnd, sourceIds: ['s1'] }] },
+        { type: 'source', id: 's1', title: 'Src', url: 'https://ok.test' },
+      ],
+    }
+    return renderCitedText(message)
+  }
+
+  it('does not treat markdown links as spanning newlines when placing citations', () => {
+    const url = 'https://ok.test/p'
+    const exact = `\n[b](${url}XX)`
+    const citeEnd = exact.indexOf('XX') + 1
+    const exactHtml = citedLinkAcrossLines(exact, citeEnd)
+    expect(exactHtml).toMatch(new RegExp(`href="${url}XX"`))
+    expect(exactHtml).not.toMatch(/href="[^"]*<sup/)
+    const multiline = [
+      `\n[b](${url}\nXX)`,
+      `\n\n[b](${url}\n\nXX)`,
+      `- [b](${url}\nXX)`,
+    ]
+    for (const text of multiline) {
+      const html = citedLinkAcrossLines(text, text.indexOf('XX') + 1)
+      for (const [, href] of html.matchAll(/href="([^"]*)"/g)) {
+        expect(href).not.toMatch(/<sup/)
+        expect(href).not.toContain('cite')
+      }
+      expect(html).not.toMatch(/href="[^"]*<sup/)
+    }
+  })
+
   it('moves a reference out of a link or code span to right after it, keeping the rest in place', () => {
     const text = 'Um. Veja [isto](https://ok.test/x) e `co de` fim.'
     const message: Message = {

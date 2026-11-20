@@ -400,26 +400,6 @@ export type InlineCitationsOptions = {
 
 export type InlineCitationsChunk = { text: string; citations: Citation[] }
 
-function trimTrailingSpaces(text: string): string {
-  let end = text.length
-  while (end > 0) {
-    const c = text.charCodeAt(end - 1)
-    if (c !== 0x20 && c !== 0x09) break
-    end--
-  }
-  return end === text.length ? text : text.slice(0, end)
-}
-
-function trailingSpaces(text: string): string {
-  let start = text.length
-  while (start > 0) {
-    const c = text.charCodeAt(start - 1)
-    if (c !== 0x20 && c !== 0x09) break
-    start--
-  }
-  return text.slice(start)
-}
-
 /**
  * Removes citation markers such as `[c3]` from streamed text and turns them
  * into point citations (ADR 0014). For backends and transports whose model
@@ -441,6 +421,8 @@ export function inlineCitations(options: InlineCitationsOptions = {}) {
   const accepts =
     typeof known === 'function' ? known : known ? ((ids) => (id: string) => ids.has(id))(new Set(known)) : () => true
   let pending = ''
+  /** Trailing spaces not sent yet: a marker may follow and remove them. Kept out of `pending` so they are never rescanned. */
+  let held = ''
   let emitted = 0
 
   /** Index in `s` where a marker starting at `i` ends (exclusive), or -1, or -2 if `s` ends inside a possible marker. */
@@ -469,7 +451,7 @@ export function inlineCitations(options: InlineCitationsOptions = {}) {
       if (found === -2 && !final) break
       if (typeof found === 'object') {
         // Drop the spaces right before the marker ("word [c3]." → "word.").
-        out = trimTrailingSpaces(out)
+        held = ''
         const at = emitted + out.length
         if (last && last.end === at) {
           if (!last.sourceIds.includes(found.id)) last.sourceIds.push(found.id)
@@ -480,17 +462,21 @@ export function inlineCitations(options: InlineCitationsOptions = {}) {
         i = found.end
         continue
       }
-      out += s[i]
+      const c = s.charCodeAt(i)
+      if (c === 0x20 || c === 0x09) held += s[i]
+      else {
+        if (held) {
+          out += held
+          held = ''
+        }
+        out += s[i]
+      }
       i++
     }
     pending = s.slice(i)
-    if (!final) {
-      // Hold trailing spaces: a marker may follow and remove them.
-      const held = trailingSpaces(out)
-      if (held) {
-        out = out.slice(0, out.length - held.length)
-        pending = held + pending
-      }
+    if (final) {
+      out += held
+      held = ''
     }
     emitted += out.length
     return { text: out, citations }

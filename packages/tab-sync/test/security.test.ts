@@ -65,6 +65,59 @@ describe('tab-sync security', () => {
     expect(merged.map((m) => m.id)).toEqual(['a', 'b'])
   })
 
+  it('rejects malformed activity broadcasts in notify mode', async () => {
+    const createChannel = bus()
+    const activities: unknown[] = []
+    const tab = await createH4B({
+      plugins: [tabSync({ mode: 'notify', createChannel })],
+    }).start()
+    tab.on('tabs.activity', (a) => activities.push(a))
+    const channel = createChannel('h4b:default')
+    channel.postMessage({
+      type: 'h4b:activity',
+      from: 'evil',
+      at: Date.now(),
+      activity: { kind: 'action', name: 'x'.repeat(400), origin: 'user', ok: true },
+    })
+    channel.postMessage({
+      type: 'h4b:activity',
+      from: 'evil',
+      at: Date.now(),
+      activity: { kind: 'turn', phase: 'done', route: 'nope' },
+    })
+    channel.postMessage({
+      type: 'h4b:activity',
+      from: 'evil',
+      at: Date.now(),
+      activity: { kind: 'action', name: 'save', origin: 'user', ok: true, extra: 'pollution' },
+    })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(activities).toEqual([])
+    expect(tab.context.find((s) => s.key === 'tab-sync.activity')).toBeUndefined()
+  })
+
+  it('accepts well-formed activity broadcasts in notify mode', async () => {
+    const createChannel = bus()
+    const activities: unknown[] = []
+    const tab = await createH4B({
+      plugins: [tabSync({ mode: 'notify', createChannel })],
+    }).start()
+    tab.on('tabs.activity', (a) => activities.push(a))
+    const channel = createChannel('h4b:default')
+    channel.postMessage({
+      type: 'h4b:activity',
+      from: 'peer',
+      at: 1,
+      activity: { kind: 'action', name: 'save', origin: 'user', ok: true },
+    })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(activities).toEqual([{ kind: 'action', name: 'save', origin: 'user', ok: true, tab: 'peer', at: 1 }])
+    expect(tab.context.find((s) => s.key === 'tab-sync.activity')?.parts[0]).toMatchObject({
+      type: 'data',
+      name: 'other_tabs_activity',
+    })
+  })
+
   it('restores seenCallIds merged from another tab on the same thread', async () => {
     const createChannel = bus()
     const tabA = await createH4B({ threadId: 't1', plugins: [tabSync({ createChannel, throttleMs: 0 })] }).start()

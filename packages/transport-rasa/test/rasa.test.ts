@@ -77,7 +77,14 @@ describe('Rasa transport', () => {
   it('reports HTTP errors as error turns', async () => {
     const fetch = vi.fn(async () => new Response('nope', { status: 500, statusText: 'Server Error' }))
     const h4b = await createH4B({ plugins: [rasa({ url: 'u', fetch: fetch as any })], onError: () => {} }).start()
-    expect((await h4b.ask('x')).status).toMatchObject({ phase: 'error', error: 'Rasa responded 500 Server Error' })
+    expect((await h4b.ask('x')).status).toMatchObject({ phase: 'error', error: 'Backend error (HTTP 500)' })
+  })
+
+  it('rejects a response body above maxResponseBytes', async () => {
+    const big = 'x'.repeat(10_485_760 + 1)
+    const fetch = vi.fn(async () => new Response(big, { status: 200 }))
+    const h4b = await createH4B({ plugins: [rasa({ url: 'u', fetch: fetch as any })], onError: () => {} }).start()
+    await expect(h4b.ask('x')).resolves.toMatchObject({ status: { phase: 'error' } })
   })
 
   it('maps effects, renders and unknown custom payloads', () => {

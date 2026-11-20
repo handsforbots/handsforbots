@@ -41,6 +41,44 @@ describe('SSE scanning limits', () => {
     expect(findSSEBoundary('data: z\n\n'.repeat(3), scanFrom)).toBeGreaterThanOrEqual(0)
   })
 
+  it('feeds a 1 MiB event in 50-byte chunks within a generous budget', () => {
+    const chunkBytes = 50
+    const totalBytes = 1_000_000
+    const payload = 'x'.repeat(totalBytes)
+    const state = createSSEScanState()
+    const started = performance.now()
+    for (let i = 0; i < payload.length; i += chunkBytes) {
+      for (const _block of drainSSEBlocks(state, payload.slice(i, i + chunkBytes), DEFAULT_MAX_EVENT_BYTES)) {
+        /* one residual event */
+      }
+    }
+    expect(state.buffer.length).toBeGreaterThan(0)
+    expect(performance.now() - started).toBeLessThan(400)
+  })
+
+  it('counts maxEventBytes in UTF-8 bytes, not UTF-16 length', () => {
+    const byteTarget = Math.floor(DEFAULT_MAX_EVENT_BYTES * 2.7)
+    const euros = '€'.repeat(Math.ceil(byteTarget / 3))
+    const state = createSSEScanState()
+    expect(() => {
+      for (const _ of drainSSEBlocks(state, euros, DEFAULT_MAX_EVENT_BYTES)) {
+        /* drain */
+      }
+    }).toThrow(/SSE event exceeds/)
+  })
+
+  it('still parses separated events when chunked', () => {
+    const state = createSSEScanState()
+    const parts = ['data: {"text":"a"}\n\n', 'data: {"text":"b"}\n\n']
+    const blocks: string[] = []
+    for (const part of parts) {
+      for (const block of drainSSEBlocks(state, part, DEFAULT_MAX_EVENT_BYTES)) blocks.push(block)
+    }
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0]).toContain('"a"')
+    expect(blocks[1]).toContain('"b"')
+  })
+
   it('drains one large chunk with 200k small events within a generous budget', () => {
     const events = 200_000
     const blob = 'data: {}\n\n'.repeat(events)

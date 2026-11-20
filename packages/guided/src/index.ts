@@ -128,7 +128,7 @@ const stepSchema = {
   properties: {
     title: { type: 'string' },
     text: { type: 'string' },
-    target: { type: 'string', description: 'CSS selector of the element to point at; omit for a centered message' },
+    target: { type: 'string', description: 'Target name (`data-h4b-target` value) of the element to point at; omit for a centered message' },
   },
   required: ['text'],
 }
@@ -173,7 +173,7 @@ export const guided = definePlugin<GuidedOptions | undefined>({
       description: 'Points at an element on the screen with a short explanation (e.g. "where do I export?").',
       parameters: {
         type: 'object',
-        properties: { target: { type: 'string', description: 'CSS selector' }, text: { type: 'string' }, title: { type: 'string' } },
+        properties: { target: { type: 'string', description: 'Target name (`data-h4b-target` value)' }, text: { type: 'string' }, title: { type: 'string' } },
         required: ['target'],
       },
       readOnly: true,

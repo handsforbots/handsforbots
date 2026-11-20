@@ -29,6 +29,8 @@ const TTS_FIELDS = new Set([
 
 const CUE_FIELDS = new Set(['channel', 'value', 'streak', 'count', 'level', 'from', 'replaced', 'messageId'])
 
+const DECISION_FIELDS = new Set(['kind', 'provider', 'probability', 'levelDb', 'userLevelDb', 'at', 'messageId'])
+
 export function pickFields(payload: Record<string, unknown>, allowed: Set<string>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const key of allowed) {
@@ -47,6 +49,13 @@ export function sanitizeTtsPayload(payload: Record<string, unknown>): Record<str
 
 export function sanitizeCuePayload(payload: Record<string, unknown>): Record<string, unknown> {
   return pickFields(payload, CUE_FIELDS)
+}
+
+export function sanitizeDecisionPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const out = pickFields(payload, DECISION_FIELDS)
+  const reason = identifier(payload.reason)
+  if (reason) out.reason = reason
+  return out
 }
 
 // Error names, codes and stages are identifiers; anything else may be free text.

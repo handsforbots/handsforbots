@@ -98,7 +98,7 @@ export const gui = definePlugin<GuiOptions | undefined>({
       const onClick = (event: Event) => {
         if (!isTrustedPointerEvent(event)) return
         const target = (event.target as Element | null)?.closest?.('[data-h4b-say],[data-h4b-command]') as HTMLElement | null
-        if (!target) return
+        if (!target || !scope.contains(target)) return
         const say = target.dataset.h4bSay
         if (say) {
           ctx.signal({ modality: 'gui-event', source: 'gui', parts: [{ type: 'text', text: say }], meta: { element: describe(target) } })

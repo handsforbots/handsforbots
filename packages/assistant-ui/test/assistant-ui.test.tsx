@@ -80,6 +80,22 @@ describe('assistant-ui runtime', () => {
     void release
   })
 
+  it('drops non-raster blob images when building thread messages', () => {
+    const blob = new Blob(['<svg></svg>'], { type: 'image/svg+xml' })
+    const thread = toThreadMessages([
+      {
+        id: 'u',
+        role: 'user',
+        createdAt: 1,
+        modality: 'image',
+        source: 'test',
+        parts: [{ type: 'image', mimeType: 'image/svg+xml', source: { kind: 'blob', blob } }],
+      },
+    ])
+    const parts = thread[0]!.content
+    expect(Array.isArray(parts) && parts.every((p) => p.type !== 'image')).toBe(true)
+  })
+
   it('shows direct commands and rich content from other routes', () => {
     const thread = toThreadMessages([
       { id: 'u', role: 'user', parts: [{ type: 'text', text: '/atrasados' }], modality: 'text', source: 'menu', route: 'direct', createdAt: 1 },

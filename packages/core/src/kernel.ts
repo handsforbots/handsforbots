@@ -1199,7 +1199,7 @@ export class H4B {
       role: 'tool',
       toolCallId: call.id,
       name: call.name,
-      ...(outcome.result !== undefined ? { result: outcome.result } : {}),
+      ...(outcome.result !== undefined ? { result: outcome.result } : { result: null }),
       ...(outcome.error !== undefined ? { error: toolError ?? outcome.error } : {}),
       route: round.route,
       turnId: round.turnId,
@@ -1385,7 +1385,11 @@ export class H4B {
     if (this.current?.turnId === turnId && stimulus.type !== 'message.start' && stimulus.type !== 'message.end') {
       this.current.output = true
     }
-    this.emit('stimulus', { turnId, stimulus })
+    const emitted =
+      'messageId' in stimulus && typeof stimulus.messageId === 'string'
+        ? { ...stimulus, messageId: round.redirectedMessageIds.get(stimulus.messageId) ?? stimulus.messageId }
+        : stimulus
+    this.emit('stimulus', { turnId, stimulus: emitted })
   }
 
   private closeStreaming(round: RoundState) {

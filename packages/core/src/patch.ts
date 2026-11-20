@@ -18,9 +18,13 @@ export function applyPatch<T>(document: T, operations: JsonPatchOperation[]): T 
       case 'remove':
         doc = removeAt(doc, parse(op.path))
         break
-      case 'copy':
-        doc = setAt(doc, parse(op.path), structuredClone(getAt(doc, parse(op.from ?? ''))), 'add')
+      case 'copy': {
+        const from = parse(op.from ?? '')
+        const value = getAt(doc, from)
+        if (value === undefined) throw new Error(`JSON patch copy source missing at ${op.from ?? ''}`)
+        doc = setAt(doc, parse(op.path), structuredClone(value), 'add')
         break
+      }
       case 'move': {
         const from = parse(op.from ?? '')
         const value = getAt(doc, from)

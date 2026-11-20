@@ -27,6 +27,27 @@ const waitFor = async (check: () => boolean, timeoutMs = 2000) => {
   throw new Error('condition not met before timeout')
 }
 
+const bridgeNonce = (srcdoc: string) => {
+  const m = /const nonce=([^;]+);/.exec(srcdoc)
+  if (!m) throw new Error('bridge nonce not found in srcdoc')
+  return JSON.parse(m[1]!) as string
+}
+
+/** Completes the MessageChannel handshake the injected bridge script would send. */
+function completeHandshake(iframe: HTMLIFrameElement) {
+  const view = iframe.contentWindow!
+  const channel = new MessageChannel()
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: { method: 'h4b/mcp-app/handshake', nonce: bridgeNonce(iframe.srcdoc) },
+      source: view,
+      ports: [channel.port2],
+    }),
+  )
+  channel.port2.start()
+  return channel
+}
+
 /** Mounts an app and returns helpers to act as the View inside the iframe. */
 async function setup(options = {}, props = {}) {
   const filter = vi.fn(({ status }: { status: string }) => ({ count: status === 'late' ? 3 : 0 }))
@@ -45,16 +66,17 @@ async function setup(options = {}, props = {}) {
     { allowTools: ['filter_orders'], allowMessages: true, allowModelContext: true, ...options },
   ) as HTMLIFrameElement
   document.body.append(iframe)
-  const view = iframe.contentWindow!
+  const channel = completeHandshake(iframe)
   const received: any[] = []
-  vi.spyOn(view, 'postMessage').mockImplementation((data: any) => void received.push(data))
-  const send = (data: object) => window.dispatchEvent(new MessageEvent('message', { data: { jsonrpc: '2.0', ...data }, source: view }))
+  channel.port1.addEventListener('message', (e) => received.push(e.data))
+  channel.port1.start()
+  const send = (data: object) => channel.port1.postMessage({ jsonrpc: '2.0', ...data })
   const reply = async (id: number) => {
     await waitFor(() => received.some((m) => m.id === id))
     return received.find((m) => m.id === id)!
   }
   const triggerLoad = () => iframe.dispatchEvent(new Event('load'))
-  return { h4b, iframe, send, reply, received, filter, requests, triggerLoad }
+  return { h4b, iframe, send, reply, received, filter, requests, triggerLoad, channel }
 }
 
 describe('MCP Apps host', () => {
@@ -179,7 +201,7 @@ describe('MCP Apps host', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     send({ id: 4, method: 'ui/message', params: { role: 'user', content: { type: 'text', text: 'Explique o pico de agosto' } } })
     await reply(4)
-    await h4b.when('turn.status', (s) => s.phase === 'done')
+    await waitFor(() => requests.length === 1, 10_000)
     expect(requests).toEqual(['Explique o pico de agosto'])
 
     send({ id: 5, method: 'ui/open-link', params: { url: 'https://example.com' } })
@@ -248,9 +270,68 @@ describe('MCP Apps host', () => {
     expect(open).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores messages from other windows', async () => {
-    const { received, filter } = await setup()
-    window.dispatchEvent(new MessageEvent('message', { data: { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'filter_orders', arguments: {} } }, source: window }))
+  it('accepts only the first handshake with the mount nonce', async () => {
+    const filter = vi.fn(() => ({ count: 1 }))
+    const h4b = await createH4B({
+      actions: [{ name: 'filter_orders', description: 'Filter', exposeTo: ['agent'], handler: filter }],
+    }).start()
+    const iframe = mountMcpApp(
+      h4b,
+      { html: '<html><head></head><body>app</body></html>' },
+      { allowTools: ['filter_orders'] },
+    ) as HTMLIFrameElement
+    document.body.append(iframe)
+    const rogue = new MessageChannel()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { method: 'h4b/mcp-app/handshake', nonce: 'wrong' },
+        source: iframe.contentWindow!,
+        ports: [rogue.port2],
+      }),
+    )
+    rogue.port2.start()
+    const channel = completeHandshake(iframe)
+    const received: unknown[] = []
+    channel.port1.addEventListener('message', (e) => received.push(e.data))
+    channel.port1.start()
+    channel.port1.postMessage({
+      jsonrpc: '2.0',
+      id: 30,
+      method: 'ui/initialize',
+      params: { protocolVersion: PROTOCOL_VERSION, appCapabilities: {} },
+    })
+    await waitFor(() => received.some((m: any) => m.id === 30))
+    channel.port1.postMessage({ jsonrpc: '2.0', id: 31, method: 'ui/notifications/initialized' })
+    channel.port1.postMessage({
+      jsonrpc: '2.0',
+      id: 32,
+      method: 'tools/call',
+      params: { name: 'filter_orders', arguments: {} },
+    })
+    await waitFor(() => received.some((m: any) => m.id === 32))
+    expect(filter).toHaveBeenCalled()
+    rogue.port1.start()
+    const rogueReplies: unknown[] = []
+    rogue.port1.addEventListener('message', (e) => rogueReplies.push(e.data))
+    rogue.port1.postMessage({
+      jsonrpc: '2.0',
+      id: 40,
+      method: 'tools/call',
+      params: { name: 'filter_orders', arguments: {} },
+    })
+    await tick(50)
+    expect(rogueReplies).toEqual([])
+    expect(filter).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores JSON-RPC on the window after the handshake', async () => {
+    const { iframe, received, filter } = await setup()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'filter_orders', arguments: {} } },
+        source: iframe.contentWindow!,
+      }),
+    )
     await waitFor(() => filter.mock.calls.length > 0, 300).catch(() => undefined)
     expect(filter).not.toHaveBeenCalled()
     expect(received).toEqual([])

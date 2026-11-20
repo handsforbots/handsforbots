@@ -5,6 +5,7 @@ import {
   DEFAULT_MAX_EVENT_BYTES,
   DEFAULT_MAX_RESPONSE_BYTES,
   drainSSEBlocks,
+  isSSESizeLimitError,
   readBoundedText,
 } from './bounded.js'
 import { transportRouteError } from './transport-error.js'
@@ -154,6 +155,7 @@ async function blobToBase64(blob: Blob) {
 export async function* readUIMessageStream(body: ReadableStream<Uint8Array>, maxEventBytes = DEFAULT_MAX_EVENT_BYTES): AsyncGenerator<any> {
   const reader = body.pipeThrough(new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>).getReader()
   const sse = createSSEScanState()
+  let overflow = false
   try {
     while (true) {
       const { value, done } = await reader.read()
@@ -170,7 +172,17 @@ export async function* readUIMessageStream(body: ReadableStream<Uint8Array>, max
       }
     }
     assertResidualSSEWithinLimit(sse, maxEventBytes)
+  } catch (error) {
+    overflow = isSSESizeLimitError(error)
+    throw error
   } finally {
+    if (overflow) {
+      try {
+        await reader.cancel()
+      } catch {
+        /* ignore */
+      }
+    }
     reader.releaseLock()
   }
 }

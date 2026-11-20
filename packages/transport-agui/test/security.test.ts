@@ -39,6 +39,32 @@ describe('AG-UI SSE limits', () => {
     expect(n).toBe(200)
     expect(performance.now() - started).toBeLessThan(200)
   })
+
+  it('feeds a 1 MiB event in 50-byte chunks within a generous budget', () => {
+    const chunkBytes = 50
+    const totalBytes = 1_000_000
+    const payload = 'z'.repeat(totalBytes)
+    const state = createSSEScanState()
+    const started = performance.now()
+    for (let i = 0; i < payload.length; i += chunkBytes) {
+      for (const _block of drainSSEBlocks(state, payload.slice(i, i + chunkBytes), DEFAULT_MAX_EVENT_BYTES)) {
+        /* one residual event */
+      }
+    }
+    expect(state.buffer.length).toBeGreaterThan(0)
+    expect(performance.now() - started).toBeLessThan(400)
+  })
+
+  it('counts maxEventBytes in UTF-8 bytes', () => {
+    const byteTarget = Math.floor(DEFAULT_MAX_EVENT_BYTES * 2.7)
+    const euros = '€'.repeat(Math.ceil(byteTarget / 3))
+    const state = createSSEScanState()
+    expect(() => {
+      for (const _ of drainSSEBlocks(state, euros, DEFAULT_MAX_EVENT_BYTES)) {
+        /* drain */
+      }
+    }).toThrow(/SSE event exceeds/)
+  })
 })
 
 describe('AG-UI error surface', () => {

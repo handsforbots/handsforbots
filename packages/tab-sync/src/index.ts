@@ -1,6 +1,8 @@
 import { createId, definePlugin, parseSessionSnapshot, type Message, type PluginContext, type Route, type SessionSnapshot } from '@handsforbots/core'
 
 const MAX_SEEN_CALL_IDS = 1000
+const MAX_ACTIVITY_TEXT = 256
+const ROUTES = new Set<Route>(['direct', 'transport', 'capture', 'push', 'agent'])
 
 /**
  * - `sync`: tabs share one conversation (default).
@@ -170,8 +172,10 @@ function notify(ctx: PluginContext, options: TabSyncOptions, channel: ChannelLik
   const onMessage = ({ data }: { data: any }) => {
     if (!data || typeof data !== 'object' || data.type !== 'h4b:activity') return
     if (typeof data.from !== 'string' || data.from === tabId) return
-    if (!data.activity || typeof data.activity !== 'object' || typeof data.at !== 'number' || !Number.isFinite(data.at)) return
-    const entry = { ...(data.activity as TabActivity), tab: data.from, at: data.at }
+    if (typeof data.at !== 'number' || !Number.isFinite(data.at)) return
+    const activity = parseTabActivity(data.activity)
+    if (!activity) return
+    const entry = { ...activity, tab: data.from, at: data.at }
     ctx.emit('tabs.activity', entry)
     if (limit <= 0) return
     recent.push(entry)
@@ -200,6 +204,35 @@ function mergeSeenCallIds(local?: string[], incoming?: string[]): string[] {
     out.push(id)
   }
   return out.slice(-MAX_SEEN_CALL_IDS)
+}
+
+function shortText(value: unknown, max = MAX_ACTIVITY_TEXT): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= max ? value : undefined
+}
+
+function onlyKeys(value: Record<string, unknown>, keys: string[]) {
+  return Object.keys(value).every((k) => keys.includes(k))
+}
+
+function parseTabActivity(raw: unknown): TabActivity | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const value = raw as Record<string, unknown>
+  if (value.kind === 'reset') return onlyKeys(value, ['kind']) ? { kind: 'reset' } : undefined
+  if (value.kind === 'action') {
+    const name = shortText(value.name)
+    const origin = shortText(value.origin)
+    if (!name || !origin || typeof value.ok !== 'boolean') return undefined
+    if (!onlyKeys(value, value.error === undefined ? ['kind', 'name', 'origin', 'ok'] : ['kind', 'name', 'origin', 'ok', 'error'])) return undefined
+    const error = shortText(value.error)
+    return { kind: 'action', name, origin, ok: value.ok, ...(error ? { error } : {}) }
+  }
+  if (value.kind === 'turn') {
+    if (value.phase !== 'done' && value.phase !== 'error' && value.phase !== 'aborted') return undefined
+    const route = typeof value.route === 'string' && ROUTES.has(value.route as Route) ? (value.route as Route) : undefined
+    if (!onlyKeys(value, route === undefined ? ['kind', 'phase'] : ['kind', 'phase', 'route'])) return undefined
+    return { kind: 'turn', phase: value.phase, ...(route ? { route } : {}) }
+  }
+  return undefined
 }
 
 /** Union by id (incoming wins for the same id), ordered by creation time. */

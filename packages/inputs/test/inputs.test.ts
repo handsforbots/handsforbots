@@ -139,6 +139,22 @@ describe('gui (Poke successor)', () => {
     await h4b.stop()
   })
 
+  it('ignores declarative targets outside the configured root scope', async () => {
+    const run = vi.fn()
+    document.body.innerHTML = `
+      <p data-h4b-command="outside" data-h4b-args='{"x":1}'>
+        <span id="scope"><button id="inner">dentro</button></span>
+      </p>`
+    const h4b = await createH4B({
+      plugins: [gui({ route: false, declarative: true, root: document.getElementById('scope')! })],
+      actions: [{ name: 'outside', description: 'Outside', handler: run }],
+    }).start()
+    trustedClick(document.getElementById('inner')!)
+    await tick()
+    expect(run).not.toHaveBeenCalled()
+    await h4b.stop()
+  })
+
   it('ignores non-trusted declarative clicks when declarative is enabled', async () => {
     const run = vi.fn()
     document.body.innerHTML = `<button id="x" data-h4b-command="transfer" data-h4b-args='{"to":"attacker"}'>Go</button>`

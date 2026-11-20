@@ -52,8 +52,14 @@ function assertCustomFfmpegExport(exported: string, label: string): void {
   }
 }
 
+const FFMPEG_PROTOCOL = /^[a-z][a-z0-9+.-]*:/i
+const WINDOWS_DRIVE = /^[a-zA-Z]:[\\/]/
+
 function assertFfmpegPath(path: string, role: 'input' | 'output'): void {
   if (path.startsWith('-')) throw new Error(`FFmpeg ${role} path must not start with "-" (use "./-" if needed)`)
+  if (FFMPEG_PROTOCOL.test(path) && !WINDOWS_DRIVE.test(path)) {
+    throw new Error(`FFmpeg ${role} path must not use a protocol prefix`)
+  }
 }
 
 /** `atempo` takes 0.5–100 per filter: smaller factors are chained. */
@@ -112,7 +118,7 @@ export function toFFmpeg(chain: EffectChain | PresetName, options: FfmpegOptions
   const argv = (input: string, output: string) => {
     assertFfmpegPath(input, 'input')
     assertFfmpegPath(output, 'output')
-    return ['-i', input, '-af', filter, output]
+    return ['-nostdin', '-n', '-i', input, '-af', filter, output]
   }
   return {
     filter,
@@ -121,7 +127,7 @@ export function toFFmpeg(chain: EffectChain | PresetName, options: FfmpegOptions
     command: (input, output) => {
       assertFfmpegPath(input, 'input')
       assertFfmpegPath(output, 'output')
-      return `ffmpeg -i ${posixShellQuote(input)} -af ${posixShellQuote(filter)} ${posixShellQuote(output)}`
+      return `ffmpeg -nostdin -n -i ${posixShellQuote(input)} -af ${posixShellQuote(filter)} ${posixShellQuote(output)}`
     },
   }
 }
