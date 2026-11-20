@@ -16,4 +16,9 @@ overrides:
   'fast-uri@>=3.0.0 <3.1.9': ^3.1.9 # GHSA-w74x-v6f9-j3xg and related (via ajv)
   'ip-address@<10.7.4': ^10.7.4 # GHSA-rxp7-6hxx-x8q5 (via express-rate-limit)
   'katex@>=0.11.0 <0.18.2': ^0.18.2 # GHSA-238p-pmpm-9mq7 (via @copilotkit/react-core > streamdown)
-  'zod@<4.6.6': ^4.6.6 # GHSA-mrhx-c7xc-m3w5, no 3.x fix (via @ag-ui/proto)
+  # No 3.x fix (via @ag-ui/proto). @a2ui/web_core@0.15.0 still calls Zod 3's
+  # ZodType.prototype.describe, so that package is patched below.
+  'zod@<4.6.6': ^4.6.6 # GHSA-mrhx-c7xc-m3w5
+
+patchedDependencies:
+  '@a2ui/web_core@0.15.0': patches/@a2ui__web_core@0.15.0.patch
