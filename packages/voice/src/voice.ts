@@ -395,6 +395,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
   const playable = (p: TextToSpeech) => !!p.speak || (!!p.synthesize && player.isSupported())
   let ttsProviders = (await supportedOf(toArray(options.tts))).filter(playable)
   const allowed = (provider: { consent?: string }) => !provider.consent || ctx.app.consent.granted(provider.consent)
+  const consentBlocked = (provider: { consent?: string } | undefined) => !!provider?.consent && !ctx.app.consent.granted(provider.consent)
 
   let bargeIn = options.bargeIn !== false
   let bargeInOptions: BargeInOptions = typeof options.bargeIn === 'object' ? options.bargeIn : {}
@@ -879,6 +880,42 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
   }
   const hasFallbackAfter = () => sttProviders.slice(sttIndex + 1).some(allowed)
 
+  const restartListeningAfterConsent = () => {
+    sttIndex = 0
+    if (wantListening && nextProvider()) {
+      void startSession()
+    } else {
+      wantListening = false
+      closeMonitor()
+      set({ listening: false, partial: state.mode === 'hands-free' ? turnText() : '' })
+    }
+  }
+
+  const onEndOfTurnConsentRevoked = () => {
+    if (!endOfTurn || !consentBlocked(endOfTurn)) return
+    clearTurnTimers()
+    decide({ kind: 'end-of-turn-unavailable', provider: endOfTurn.name, reason: 'consent denied' })
+    if (state.mode !== 'hands-free' || (!turn.texts.length && !turn.live)) return
+    const provider = state.stt ? sttProviders.find((p) => p.name === state.stt) : undefined
+    scheduleEndOfTurn(!!provider?.capabilities.endOfTurn)
+  }
+
+  const revokeActiveStt = () => {
+    sentLive = ''
+    discardPending()
+    clearTimeout(restartTimer)
+    if (!active) return
+    active.discarded = true
+    if (active.session) {
+      clearTimeout(active.killTimer)
+      active.session.abort()
+      active = undefined
+      restartListeningAfterConsent()
+    } else {
+      set({ listening: false, partial: state.mode === 'hands-free' ? turnText() : '' })
+    }
+  }
+
   const startSession = async (): Promise<void> => {
     const provider = nextProvider()
     if (!provider) {
@@ -903,7 +940,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         { language, continuous: handsFree || !!entry.held },
         {
           onPartial(heard) {
-            if (!isCurrent() || entry.stopping) return
+            if (!isCurrent() || entry.stopping || entry.discarded) return
             const text = withoutBackground(withoutEcho(heard, false), false)
             if (entry.held) return set({ partial: heldText(entry.held, text) })
             bargeInCheck(text, false)
@@ -988,7 +1025,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
             }
           },
           onAudio(samples, sampleRate) {
-            if (isCurrent() && !entry.stopping) keepAudio(samples, sampleRate)
+            if (isCurrent() && !entry.stopping && !entry.discarded) keepAudio(samples, sampleRate)
           },
           onError(error) {
             failed = error
@@ -1036,6 +1073,13 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
           },
         },
       )
+      if (isCurrent() && (entry.discarded || consentBlocked(provider))) {
+        entry.discarded = true
+        entry.session.abort()
+        active = undefined
+        restartListeningAfterConsent()
+        return
+      }
     } catch (error) {
       const speechError = error instanceof SpeechError ? error : new SpeechError('unknown', (error as Error)?.message)
       if (isCurrent()) active = undefined
@@ -1629,6 +1673,15 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
   // A new turn from the keyboard makes pending speech obsolete.
   ctx.on('turn.status', (status) => {
     if (status.phase === 'received' && status.signal?.modality === 'text') service.cancelSpeech()
+  })
+
+  ctx.on('consent.changed', () => {
+    const currentStt = state.stt ? sttProviders.find((p) => p.name === state.stt) : undefined
+    const sttBlocked = !!(active && currentStt && consentBlocked(currentStt))
+    if (endOfTurn && consentBlocked(endOfTurn)) onEndOfTurnConsentRevoked()
+    if (sttBlocked) revokeActiveStt()
+    const speaking = state.speaking ? ttsProviders.find((p) => p.name === state.tts) : undefined
+    if (speaking && consentBlocked(speaking)) service.cancelSpeech()
   })
 
   ctx.onDispose(() => {

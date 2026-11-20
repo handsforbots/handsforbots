@@ -1,5 +1,5 @@
 import type { LoadProgress, SpeechAudio, TextToSpeech } from '@handsforbots/voice'
-import { fetchJson, fetchModel, huggingFace, progressOf, type ModelCache, type ModelSource } from './fetch.js'
+import { assertSafeModelPath, fetchJson, fetchModel, huggingFace, progressOf, type ModelCache, type ModelSource } from './fetch.js'
 import { chunkText, concatAudio, float32, int64, loadRuntime, type OnnxRuntime, type OnnxSession, type RuntimeSource } from './onnx.js'
 import type { Phonemizer } from './phonemizer.js'
 
@@ -30,12 +30,18 @@ const FILES: Record<KokoroDtype, string> = {
   q4f16: 'onnx/model_q4f16.onnx',
 }
 
+const KOKORO_VOICE_ID = /^[a-z]{2}_[a-z0-9_]+$/
+
 /** Hugging Face files of Kokoro 82M in ONNX (onnx-community/Kokoro-82M-v1.0-ONNX). */
 export function kokoroModel(
   options: { dtype?: KokoroDtype; voices: string[]; repo?: string; revision?: string },
 ): Pick<KokoroOptions, 'model' | 'voices' | 'tokenizer'> {
   const repo = options.repo ?? 'onnx-community/Kokoro-82M-v1.0-ONNX'
   const at = { revision: options.revision }
+  for (const voice of options.voices) {
+    assertSafeModelPath(voice, 'Kokoro voice id')
+    if (!KOKORO_VOICE_ID.test(voice)) throw new TypeError(`Kokoro voice ids look like "pf_dora", got "${voice}"`)
+  }
   return {
     model: huggingFace(repo, FILES[options.dtype ?? 'q8'], at),
     tokenizer: huggingFace(repo, 'tokenizer.json', at),
@@ -111,8 +117,9 @@ export function kokoroTTS(options: KokoroOptions): TextToSpeech & { readonly voi
     load: async (onProgress, signal) => void (await load(onProgress, signal)),
     async synthesize(text, speakOptions): Promise<SpeechAudio> {
       const { ort, session, vocab, styles } = await load()
-      const voice = speakOptions.voice && styles[speakOptions.voice] ? speakOptions.voice : (options.voice ?? voiceIds[0]!)
-      const style = styles[voice]
+      const voice =
+        speakOptions.voice && Object.hasOwn(styles, speakOptions.voice) ? speakOptions.voice : (options.voice ?? voiceIds[0]!)
+      const style = Object.hasOwn(styles, voice) ? styles[voice] : undefined
       if (!style) throw new Error(`Kokoro voice "${voice}" was not loaded`)
       const parts: Float32Array[] = []
       for (const chunk of chunkText(text)) {

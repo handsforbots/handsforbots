@@ -8,6 +8,45 @@ export type HuggingFaceFile = {
   revision?: string
   /** A mirror of the Hub. Default 'https://huggingface.co'. */
   endpoint?: string
+  /** Expected SHA-256 digest (lowercase hex). When set, bytes from the network and cache are verified. */
+  sha256?: string
+}
+
+const HF_REPO = /^[\w.-]+\/[\w.-]+$/
+const UNSAFE_PATH = /(?:^|\/)\.\.(?:\/|$)|\\|%2e%2e/i
+
+export function assertSafeModelPath(path: string, label: string): void {
+  if (UNSAFE_PATH.test(path) || path.includes('..') || path.includes('\\') || path.includes('%')) {
+    throw new TypeError(`Unsafe ${label}: "${path}"`)
+  }
+}
+
+export function assertHuggingFaceRepo(repo: string): void {
+  assertSafeModelPath(repo, 'Hugging Face repo')
+  if (!HF_REPO.test(repo)) throw new TypeError(`Invalid Hugging Face repo: "${repo}"`)
+}
+
+function encodePathSegments(path: string): string {
+  assertSafeModelPath(path, 'model path')
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
+function expectedSha256(source: ModelSource): string | undefined {
+  if (typeof source === 'object' && source !== null && 'huggingFace' in source && source.sha256) {
+    return source.sha256.toLowerCase()
+  }
+  return undefined
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function verifyDigest(bytes: Uint8Array, expected: string | undefined, where: string): Promise<void> {
+  if (!expected) return
+  const actual = await sha256Hex(bytes)
+  if (actual !== expected) throw new Error(`${where}: SHA-256 mismatch (expected ${expected}, got ${actual})`)
 }
 
 /**
@@ -24,18 +63,31 @@ export type ModelSource =
   | Uint8Array
   | (() => Promise<ArrayBuffer | Uint8Array | Blob | Response>)
 
-export const huggingFace = (repo: string, file: string, options: { revision?: string; endpoint?: string } = {}): HuggingFaceFile => ({
-  huggingFace: repo,
-  file,
-  ...options,
-})
+export const huggingFace = (
+  repo: string,
+  file: string,
+  options: { revision?: string; endpoint?: string; sha256?: string } = {},
+): HuggingFaceFile => {
+  assertHuggingFaceRepo(repo)
+  assertSafeModelPath(file, 'Hugging Face file')
+  return {
+    huggingFace: repo,
+    file,
+    ...options,
+    sha256: options.sha256?.toLowerCase(),
+  }
+}
 
 /** The URL a source downloads from, if it is downloaded at all. */
 export function sourceUrl(source: ModelSource): string | undefined {
   if (typeof source === 'string') return source
   if (typeof source === 'object' && source !== null && 'huggingFace' in source) {
+    assertHuggingFaceRepo(source.huggingFace)
+    assertSafeModelPath(source.file, 'Hugging Face file')
+    const revision = source.revision ?? 'main'
+    assertSafeModelPath(revision, 'Hugging Face revision')
     const endpoint = (source.endpoint ?? 'https://huggingface.co').replace(/\/$/, '')
-    return `${endpoint}/${source.huggingFace}/resolve/${encodeURIComponent(source.revision ?? 'main')}/${source.file}`
+    return `${endpoint}/${source.huggingFace}/resolve/${encodeURIComponent(revision)}/${encodePathSegments(source.file)}`
   }
   return undefined
 }
@@ -111,20 +163,32 @@ const toBytes = async (value: ArrayBuffer | Uint8Array | Blob): Promise<Uint8Arr
 
 /** Downloads a model file with progress, from the cache when it is there. */
 export async function fetchModel(source: ModelSource, options: FetchModelOptions = {}): Promise<Uint8Array> {
+  const digest = expectedSha256(source)
   const url = sourceUrl(source)
   if (url === undefined) {
     const value = typeof source === 'function' ? await source() : (source as ArrayBuffer | Uint8Array | Blob)
     const bytes = value instanceof Response ? await readBody(value, 'file', options) : await toBytes(value)
+    await verifyDigest(bytes, digest, 'model')
     options.onProgress?.({ loaded: bytes.length, total: bytes.length, file: 'file' })
     return bytes
   }
-  const file = url.split('/').pop() ?? url
+  const file = decodeURIComponent(url.split('/').pop() ?? url)
   const cache = defaultCache(options.cache)
   const cached = await cache?.match(url).catch(() => undefined)
-  if (cached) return readBody(cached, file, options)
+  if (cached) {
+    const bytes = await readBody(cached, file, options)
+    try {
+      await verifyDigest(bytes, digest, url)
+      return bytes
+    } catch (error) {
+      await cache?.delete?.(url).catch(() => {})
+      if (!digest) throw error
+    }
+  }
   const response = await (options.fetch ?? fetch)(url, { signal: options.signal })
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
   const bytes = await readBody(response, file, options)
+  await verifyDigest(bytes, digest, url)
   if (cache) {
     const headers = { 'Content-Type': response.headers.get('Content-Type') ?? 'application/octet-stream', 'Content-Length': String(bytes.length) }
     await cache.put(url, new Response(bytes as BodyInit, { headers })).catch(() => {})

@@ -225,7 +225,7 @@ Toda interrupção, backchannel ou eco ignorado e fim de turno é informado em `
 ### Privacidade e eco
 
 - Provedores declaram se o áudio ou o texto saem da página (`remote`). O `webSpeechSTT` conta como remoto: navegadores como o Chrome mandam o áudio para o serviço de fala deles, e no mãos-livres isso é contínuo. Provedores remotos de fim de turno mandam a transcrição para o seu servidor e, de lá, para quem roda o modelo.
-- Dê a um provedor uma finalidade `consent` e ele só é usado enquanto ela está concedida ([Consentimento](./consent.md)); o plugin passa ao próximo reconhecedor, ou ao silêncio. Mostrar o aviso e guardar a decisão é do seu app.
+- Dê a um provedor uma finalidade `consent` e ele só é usado enquanto ela está concedida ([Consentimento](./consent.md)); o plugin passa ao próximo reconhecedor, ou ao silêncio. Retirá-la no meio da sessão aborta a escuta na hora (mesmo antes de o reconhecedor terminar de abrir) e descarta o que ele ouviu. Mostrar o aviso e guardar a decisão é do seu app.
 - Reconhecedores que abrem o microfone (`httpSTT`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`) usam cancelamento de eco, supressão de ruído e ganho automático. O Web Speech cuida do próprio microfone; o quanto ele ignora a voz do bot depende do aparelho. O [filtro de eco](#filtro-de-eco) cobre o que passar. Teste com e sem fone.
 - O Safari no iOS encerra as sessões de reconhecimento sozinho; o mãos-livres as reinicia, mas teste sessões longas em aparelhos reais.
 

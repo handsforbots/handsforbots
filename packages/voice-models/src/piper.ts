@@ -1,5 +1,5 @@
 import type { LoadProgress, SpeechAudio, TextToSpeech } from '@handsforbots/voice'
-import { fetchJson, fetchModel, huggingFace, progressOf, type ModelCache, type ModelSource } from './fetch.js'
+import { assertSafeModelPath, fetchJson, fetchModel, huggingFace, progressOf, type ModelCache, type ModelSource } from './fetch.js'
 import { chunkText, concatAudio, float32, int64, loadRuntime, type OnnxRuntime, type OnnxSession, type RuntimeSource } from './onnx.js'
 import type { Phonemizer } from './phonemizer.js'
 
@@ -40,7 +40,11 @@ export type PiperOptions = {
  * (`pt_BR-faber-medium`, `en_US-lessac-medium`…). Licenses vary per voice:
  * read its MODEL_CARD.
  */
+const PIPER_VOICE_ID = /^[a-z]{2,3}_[A-Z]{2}-[a-zA-Z0-9_]+-(?:x_low|low|medium|high)$/
+
 export function piperVoice(id: string, options: { revision?: string } = {}): { model: ModelSource; config: ModelSource } {
+  assertSafeModelPath(id, 'Piper voice id')
+  if (!PIPER_VOICE_ID.test(id)) throw new TypeError(`Piper voice ids look like "pt_BR-faber-medium", got "${id}"`)
   const [locale, name, quality] = id.split('-')
   if (!locale || !name || !quality) throw new TypeError(`Piper voice ids look like "pt_BR-faber-medium", got "${id}"`)
   const path = `${locale.split('_')[0]}/${locale}/${name}/${quality}/${id}`
@@ -107,7 +111,11 @@ export function piperTTS(options: PiperOptions): TextToSpeech & { readonly confi
       const lengthScale = (options.lengthScale ?? inference.length_scale ?? 1) / (speakOptions.prosody?.rate ?? 1)
       const scales = [options.noiseScale ?? inference.noise_scale ?? 0.667, lengthScale, options.noiseW ?? inference.noise_w ?? 0.8]
       const speaker =
-        typeof options.speaker === 'string' ? (config.speaker_id_map?.[options.speaker] ?? 0) : (options.speaker ?? 0)
+        typeof options.speaker === 'string'
+          ? config.speaker_id_map && Object.hasOwn(config.speaker_id_map, options.speaker)
+            ? config.speaker_id_map[options.speaker]!
+            : 0
+          : (options.speaker ?? 0)
       const language = config.espeak?.voice ?? speakOptions.language
       const parts: Float32Array[] = []
       for (const chunk of chunkText(text)) {

@@ -70,7 +70,7 @@ async () => fetch('/api/voice', { headers }) // anything: a signed URL, an authe
 ```
 
 - Helpers build the Hub paths: `piperVoice('pt_BR-faber-medium')` → `{ model, config }`, `kokoroModel({ dtype: 'q8', voices: ['af_heart'] })` → `{ model, tokenizer, voices }`.
-- **Pin a revision** (a commit hash) in production. `main` can change under you.
+- **Pin a revision** (a commit hash) in production, and the file's digest: `huggingFace(repo, file, { revision: '<commit>', sha256: '<hex>' })`. `main` can change under you; with `sha256` a changed or poisoned file (in the network or in Cache Storage) is refused. Voice ids are checked (`pt_BR-faber-medium`, `pf_dora`).
 - **A folder you serve**: mirror the files and point the sources at it. Same-origin files avoid CORS and third-party availability. A mirror of the whole Hub works through `huggingFace(repo, file, { endpoint })`.
 - **Cache**: downloads are kept in Cache Storage (`h4b-voice-models`) and served from there next time. `cache: false` turns it off, `cache: myCache` replaces it (`{ match, put }`), `clearModelCache()` erases it (a "free space" button).
 - **Progress**: `fetchModel` reads the stream and reports `{ loaded, total, file }`. A compressed transfer (`Content-Encoding`) makes the total unknown; set the provider's `size` to show a percentage anyway.
@@ -158,7 +158,7 @@ An effects chain is plain JSON. Effect types and parameter names follow the Web 
 ```
 
 - Effects run in order. Omitted parameters take their defaults; values out of range are rejected by `validateChain` (`set` throws with every problem listed).
-- Limits: prosody `rate` 0.25–4, `pitch` −24 to 24 semitones, `volume` −24 to 24 dB; at most 32 effects per chain (`MAX_CHAIN_EFFECTS`) and 1024 `dispersion` stages in total (`MAX_DISPERSION_STAGES_TOTAL`).
+- Limits: prosody `rate` 0.25–4, `pitch` −24 to 24 semitones, `volume` −24 to 24 dB; at most 32 effects per chain (`MAX_CHAIN_EFFECTS`) and 1024 `dispersion` stages in total (`MAX_DISPERSION_STAGES_TOTAL`). The voice player applies the same prosody limits to whatever reaches it (values are clamped, non-numbers dropped), so a chain or reply that skipped validation cannot blast the volume.
 - `bypass: true` keeps an effect in the chain but silent; `id` lets you address it.
 - Change the chain while the bot talks: `fx.set(chain | 'preset')`, `fx.update('comp', { ratio: 4 })`, `fx.update(0, { bypass: true })`, `fx.setProsody({ pitch: -3 })`. The next sentence uses it.
 - `fx.definitions()` describes every effect type and parameter (label, range, default, units, slider skew), so an editor can be generated instead of written. The lab does exactly that.

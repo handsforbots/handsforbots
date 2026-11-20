@@ -22,6 +22,8 @@ export type HttpSTTOptions = {
   silenceMs?: number
   fetch?: typeof fetch
   name?: string
+  /** Upload timeout in ms. Default 30000. */
+  timeoutMs?: number
 }
 
 /**
@@ -38,6 +40,13 @@ export function httpSTT(options: HttpSTTOptions): SpeechToText {
       typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined',
     async listen(listenOptions, handlers) {
       const stream = await openMicrophone()
+      const session = new AbortController()
+      const timeoutMs = options.timeoutMs ?? 30_000
+      const uploadSignal = () => {
+        const parts: AbortSignal[] = [session.signal]
+        if (typeof AbortSignal.timeout === 'function') parts.push(AbortSignal.timeout(timeoutMs))
+        return typeof AbortSignal.any === 'function' ? AbortSignal.any(parts) : session.signal
+      }
       let discarded = false
       let ended = false
       let continuous = listenOptions.continuous
@@ -47,43 +56,51 @@ export function httpSTT(options: HttpSTTOptions): SpeechToText {
       const finish = () => {
         if (ended) return
         ended = true
+        session.abort()
         stopVad()
         closeStream(stream)
         handlers.onEnd()
       }
 
-      const record = () => {
-        const chunks: Blob[] = []
-        recorder = new MediaRecorder(stream)
-        recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data)
-        recorder.onstop = async () => {
-          if (!discarded && chunks.length) {
-            try {
-              const body = new FormData()
-              body.append('audio', new Blob(chunks, { type: recorder!.mimeType }), 'speech')
-              body.append('language', listenOptions.language)
-              const response = await (options.fetch ?? fetch)(options.url, {
-                method: 'POST',
-                body,
-                headers: await resolveHeaders(options.headers),
-              })
-              if (!response.ok) throw new SpeechError('network', `STT endpoint responded ${response.status}`)
-              const { text, confidence } = parse(await response.json())
-              if (text?.trim()) handlers.onFinal(text.trim(), { confidence })
-            } catch (error) {
-              handlers.onError(error instanceof SpeechError ? error : new SpeechError('network', (error as Error)?.message))
+      try {
+        const record = () => {
+          const chunks: Blob[] = []
+          recorder = new MediaRecorder(stream)
+          recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data)
+          recorder.onstop = async () => {
+            if (!discarded && chunks.length) {
+              try {
+                const body = new FormData()
+                body.append('audio', new Blob(chunks, { type: recorder!.mimeType }), 'speech')
+                body.append('language', listenOptions.language)
+                const response = await (options.fetch ?? fetch)(options.url, {
+                  method: 'POST',
+                  body,
+                  headers: await resolveHeaders(options.headers),
+                  signal: uploadSignal(),
+                })
+                if (!response.ok) throw new SpeechError('network', `STT endpoint responded ${response.status}`)
+                const { text, confidence } = parse(await response.json())
+                if (text?.trim()) handlers.onFinal(text.trim(), { confidence })
+              } catch (error) {
+                if (!session.signal.aborted)
+                  handlers.onError(error instanceof SpeechError ? error : new SpeechError('network', (error as Error)?.message))
+              }
             }
+            if (continuous && !discarded && !ended) record()
+            else finish()
           }
-          if (continuous && !discarded && !ended) record()
-          else finish()
+          recorder.start()
         }
-        recorder.start()
-      }
 
-      stopVad = detectEndOfSpeech(stream, () => recorder?.state === 'recording' && recorder.stop(), {
-        silenceMs: options.silenceMs,
-      })
-      record()
+        stopVad = detectEndOfSpeech(stream, () => recorder?.state === 'recording' && recorder.stop(), {
+          silenceMs: options.silenceMs,
+        })
+        record()
+      } catch (error) {
+        closeStream(stream)
+        throw error
+      }
 
       return {
         stop() {
@@ -93,6 +110,7 @@ export function httpSTT(options: HttpSTTOptions): SpeechToText {
         },
         abort() {
           discarded = true
+          session.abort()
           if (recorder?.state === 'recording') recorder.stop()
           finish()
         },

@@ -1,5 +1,26 @@
 import { SpeechError, type AudioPlayer, type Prosody, type ProsodySupport, type SpeechAudio } from './types.js'
 
+const PROSODY_LIMITS = {
+  rate: { min: 0.25, max: 4 },
+  pitch: { min: -24, max: 24 },
+  volume: { min: -24, max: 24 },
+} as const
+
+const finiteIn = (value: number, min: number, max: number): number | undefined =>
+  Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined
+
+/** Keeps only finite prosody within the same bounds as `@handsforbots/voice-effects`. */
+export function clampProsody(prosody: Prosody = {}): Prosody {
+  const next: Prosody = {}
+  const rate = finiteIn(prosody.rate ?? NaN, PROSODY_LIMITS.rate.min, PROSODY_LIMITS.rate.max)
+  if (rate !== undefined) next.rate = rate
+  const pitch = finiteIn(prosody.pitch ?? NaN, PROSODY_LIMITS.pitch.min, PROSODY_LIMITS.pitch.max)
+  if (pitch !== undefined) next.pitch = pitch
+  const volume = finiteIn(prosody.volume ?? NaN, PROSODY_LIMITS.volume.min, PROSODY_LIMITS.volume.max)
+  if (volume !== undefined) next.volume = volume
+  return next
+}
+
 export type WebAudioPlayerOptions = {
   /** The audio context to play in. Default: one created on the first `unlock()`. */
   context?: AudioContext | (() => AudioContext)
@@ -60,10 +81,12 @@ export function webAudioPlayer(options: WebAudioPlayerOptions = {}): AudioPlayer
       buffer.getChannelData(0).set(processed.samples)
       const source = ctx.createBufferSource()
       source.buffer = buffer
-      source.playbackRate.value = play.playbackRate ?? 1
+      const playback = play.playbackRate ?? 1
+      source.playbackRate.value = Number.isFinite(playback) ? Math.min(16, Math.max(0.25, playback)) : 1
       const chain = play.effects?.connect(ctx, source) ?? { output: source }
       const gain = ctx.createGain()
-      gain.gain.value = 10 ** ((play.gainDb ?? 0) / 20)
+      const gainDb = finiteIn(play.gainDb ?? 0, PROSODY_LIMITS.volume.min, PROSODY_LIMITS.volume.max) ?? 0
+      gain.gain.value = 10 ** (gainDb / 20)
       chain.output.connect(gain).connect(output!)
 
       let released = false
@@ -122,6 +145,7 @@ export type ProsodyPlan = {
  * is never faked with the playback rate: it would change the pitch too.
  */
 export function planProsody(native: ProsodySupport = {}, prosody: Prosody = {}, player: boolean): ProsodyPlan {
+  prosody = clampProsody(prosody)
   const synth: Prosody = {}
   let playbackRate = 1
   let gainDb = 0

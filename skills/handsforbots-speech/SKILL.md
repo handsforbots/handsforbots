@@ -30,7 +30,7 @@ Facts to rely on:
 
 - The app passes the ONNX runtime (`runtime`: the module or a loader) and the phonemizer build. The packages do not depend on `onnxruntime-web` and **do not ship espeak-ng (GPL-3.0)**. Tell the user about the GPL before they ship `espeakPhonemizer`; `@diffusionstudio/piper-wasm` is one build (17 MB data file with every language). Any `Phonemizer` (`phonemize(text, language) → string[]`) can replace it.
 - `piperVoice(id)` and `kokoroModel({ dtype, voices })` build Hugging Face sources. Suggest pinning `revision` to a commit in production. Kokoro voice ids start with the language letter (`a` en-US, `b` en-GB, `e` es, `f` fr, `h` hi, `i` it, `p` pt-BR).
-- `ModelSource` is a URL (same-origin folder avoids CORS), `huggingFace(repo, file, { revision, endpoint })`, a `Blob`, bytes, or an async function. Files go to Cache Storage `h4b-voice-models` (`cache: false` off; `clearModelCache()` erases).
+- `ModelSource` is a URL (same-origin folder avoids CORS), `huggingFace(repo, file, { revision, endpoint, sha256 })` (pin `revision` to a commit and `sha256` in production; a mismatch is refused), a `Blob`, bytes, or an async function. Files go to Cache Storage `h4b-voice-models` (`cache: false` off; `clearModelCache()` erases).
 - Sizes: Piper 15–115 MB per voice; Kokoro 92 MB (q8) to 326 MB (fp32); plus 17 MB of espeak data. Measured once (one Mac, Chrome, one thread): Kokoro q8 took 8.2 s for 5.2 s of audio, Piper had no noticeable wait. Recommend Kokoro only with `whileLoading: 'fallback'`, a worker (`workerTTS`), or a backend.
 
 ## Run the model in a Worker

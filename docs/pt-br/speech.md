@@ -71,7 +71,7 @@ async () => fetch('/api/voz', { headers })  // qualquer coisa: URL assinada, rot
 ```
 
 - Helpers montam os caminhos do Hub: `piperVoice('pt_BR-faber-medium')` → `{ model, config }`, `kokoroModel({ dtype: 'q8', voices: ['pf_dora'] })` → `{ model, tokenizer, voices }`.
-- **Fixe uma revisão** (um hash de commit) em produção. `main` pode mudar sem aviso.
+- **Fixe uma revisão** (um hash de commit) em produção, e o digest do arquivo: `huggingFace(repo, arquivo, { revision: '<commit>', sha256: '<hex>' })`. `main` pode mudar sem aviso; com `sha256`, um arquivo trocado ou envenenado (na rede ou no Cache Storage) é recusado. Os ids de voz são conferidos (`pt_BR-faber-medium`, `pf_dora`).
 - **Uma pasta sua**: espelhe os arquivos e aponte as fontes para ela. Arquivos na mesma origem evitam CORS e a dependência de terceiros. Um espelho do Hub inteiro funciona com `huggingFace(repo, file, { endpoint })`.
 - **Cache**: os downloads ficam no Cache Storage (`h4b-voice-models`) e vêm de lá da próxima vez. `cache: false` desliga, `cache: meuCache` substitui (`{ match, put }`), `clearModelCache()` apaga (um botão "liberar espaço").
 - **Progresso**: `fetchModel` lê o stream e informa `{ loaded, total, file }`. Uma transferência comprimida (`Content-Encoding`) deixa o total desconhecido; declare o `size` do provedor para mostrar porcentagem mesmo assim.
@@ -159,7 +159,7 @@ Uma cadeia de efeitos é JSON puro. Os tipos de efeito e os nomes dos parâmetro
 ```
 
 - Os efeitos rodam em ordem. Parâmetros omitidos usam o padrão; valores fora da faixa são recusados pelo `validateChain` (o `set` lança com todos os problemas listados).
-- Limites: prosódia `rate` de 0,25 a 4, `pitch` de −24 a 24 semitons, `volume` de −24 a 24 dB; no máximo 32 efeitos por cadeia (`MAX_CHAIN_EFFECTS`) e 1024 estágios de `dispersion` no total (`MAX_DISPERSION_STAGES_TOTAL`).
+- Limites: prosódia `rate` de 0,25 a 4, `pitch` de −24 a 24 semitons, `volume` de −24 a 24 dB; no máximo 32 efeitos por cadeia (`MAX_CHAIN_EFFECTS`) e 1024 estágios de `dispersion` no total (`MAX_DISPERSION_STAGES_TOTAL`). O player de voz aplica os mesmos limites de prosódia ao que chega a ele (valores são limitados, não-números descartados), então uma cadeia ou resposta que pulou a validação não estoura o volume.
 - `bypass: true` mantém um efeito na cadeia, mas desligado; `id` permite endereçá-lo.
 - Mude a cadeia enquanto o bot fala: `fx.set(cadeia | 'preset')`, `fx.update('comp', { ratio: 4 })`, `fx.update(0, { bypass: true })`, `fx.setProsody({ pitch: -3 })`. A próxima frase já usa.
 - `fx.definitions()` descreve cada tipo de efeito e parâmetro (rótulo, faixa, padrão, unidade, curva do slider), então um editor pode ser gerado em vez de escrito. O laboratório faz exatamente isso.

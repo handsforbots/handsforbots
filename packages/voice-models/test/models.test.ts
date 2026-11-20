@@ -110,6 +110,35 @@ describe('model sources', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('passes integrator string URLs with percent-encoding unchanged', () => {
+    expect(sourceUrl('https://cdn.test/models/pt%20BR/voz.onnx')).toBe('https://cdn.test/models/pt%20BR/voz.onnx')
+    expect(sourceUrl('/models/file.onnx?sig=abc%3D')).toBe('/models/file.onnx?sig=abc%3D')
+  })
+
+  it('rejects unsafe Piper and Kokoro voice ids and encodes path segments', () => {
+    expect(() => piperVoice('en_US-x-y/../../../attacker/evil/resolve/main/m')).toThrow(TypeError)
+    expect(() => piperVoice('pt_BR-faber-medium/../x')).toThrow()
+    expect(() => kokoroModel({ voices: ['pf_dora', 'pf%2e%2e'] })).toThrow()
+    expect(() => kokoroModel({ voices: ['constructor'] })).toThrow()
+    expect(sourceUrl(huggingFace('org/repo', 'voices/a b.onnx'))).toContain('voices/a%20b.onnx')
+  })
+
+  it('verifies sha256 and re-downloads when the cache is poisoned', async () => {
+    const file = bytes('verified-model')
+    const digest = await crypto.subtle.digest('SHA-256', file)
+    const sha256 = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    const source = huggingFace('org/model', 'weights.onnx', { sha256 })
+    const url = sourceUrl(source)!
+    const cache = memoryCache()
+    cache.store.set(url, bytes('poisoned'))
+    const fetch = fakeFetch({ [url]: file })
+    expect(await fetchModel(source, { fetch, cache })).toEqual(file)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    await expect(
+      fetchModel(huggingFace('org/model', 'weights.onnx', { sha256: 'f'.repeat(64) }), { fetch: fakeFetch({ [url]: file }), cache: false }),
+    ).rejects.toThrow(/SHA-256/)
+  })
+
   it('takes bytes the app already has and stops on abort', async () => {
     expect(await fetchModel(bytes('abc').buffer as ArrayBuffer, { cache: false })).toEqual(bytes('abc'))
     expect(await fetchModel(async () => bytes('xy'), { cache: false })).toEqual(bytes('xy'))
@@ -208,6 +237,8 @@ describe('kokoroTTS', () => {
     expect(Array.from(runs[0]!.speed!.data as Float32Array)).toEqual([1.25])
     await tts.synthesize!('o', { language: 'en-US', voice: 'af_heart' })
     expect(phonemizer.calls[1]).toEqual(['o', 'en-us'])
+    await expect(tts.synthesize!('x', { language: 'en-US', voice: 'constructor' })).resolves.toBeDefined()
+    expect(phonemizer.calls[2]).toEqual(['x', 'pt-br'])
   })
 })
 

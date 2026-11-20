@@ -30,6 +30,8 @@ export type WebSocketSTTOptions = {
    * instead of a silence timer or an end-of-turn model.
    */
   endOfTurn?: boolean
+  /** Consent purpose required to stream audio to the server. */
+  consent?: string
 }
 
 /** Streams PCM16 microphone audio over a WebSocket. Base for streaming cloud and self-hosted STT. */
@@ -39,12 +41,19 @@ export function websocketSTT(options: WebSocketSTTOptions): SpeechToText {
     name: options.name ?? 'websocket',
     capabilities: { partials: true, continuous: true, offline: false, audio: true, endOfTurn: !!options.endOfTurn },
     remote: true,
+    consent: options.consent,
     isSupported: () =>
       typeof WebSocket !== 'undefined' && typeof AudioWorkletNode !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
     async listen(listenOptions, handlers) {
       const url = typeof options.url === 'function' ? await options.url(listenOptions.language) : options.url
       const stream = await openMicrophone()
-      const socket = new WebSocket(url)
+      let socket: WebSocket
+      try {
+        socket = new WebSocket(url)
+      } catch (error) {
+        closeStream(stream)
+        throw error
+      }
       socket.binaryType = 'arraybuffer'
       let stopCapture: (() => Promise<void>) | undefined
       let ended = false
@@ -80,7 +89,15 @@ export function websocketSTT(options: WebSocketSTTOptions): SpeechToText {
           if (!listenOptions.continuous) void graceful()
         }
       }
-      socket.onerror = () => handlers.onError(new SpeechError('network', `Speech server unreachable (${options.name ?? url})`))
+      socket.onerror = () => {
+        let target = options.name ?? 'speech server'
+        if (!options.name) {
+          try {
+            target = new URL(url).host
+          } catch {}
+        }
+        handlers.onError(new SpeechError('network', `Speech server unreachable (${target})`))
+      }
       socket.onclose = () => void finish()
 
       // Stop sending audio, let the server flush the last result, then close.

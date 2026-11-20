@@ -104,22 +104,27 @@ export function createLevelGate({ gapDb = 10, lookbackMs = 3000, remember = 5 }:
  */
 export async function monitorLevel(onLevel: (db: number) => void, { intervalMs = 50 } = {}): Promise<() => void> {
   const stream = await openMicrophone()
-  const context = new AudioContext()
-  const analyser = context.createAnalyser()
-  analyser.fftSize = 1024
-  const source = context.createMediaStreamSource(stream)
-  source.connect(analyser)
-  const data = new Float32Array(analyser.fftSize)
-  const timer = setInterval(() => {
-    analyser.getFloatTimeDomainData(data)
-    let sum = 0
-    for (const v of data) sum += v * v
-    onLevel(toDb(Math.sqrt(sum / data.length)))
-  }, intervalMs)
-  return () => {
-    clearInterval(timer)
-    source.disconnect()
+  try {
+    const context = new AudioContext()
+    const analyser = context.createAnalyser()
+    analyser.fftSize = 1024
+    const source = context.createMediaStreamSource(stream)
+    source.connect(analyser)
+    const data = new Float32Array(analyser.fftSize)
+    const timer = setInterval(() => {
+      analyser.getFloatTimeDomainData(data)
+      let sum = 0
+      for (const v of data) sum += v * v
+      onLevel(toDb(Math.sqrt(sum / data.length)))
+    }, intervalMs)
+    return () => {
+      clearInterval(timer)
+      source.disconnect()
+      closeStream(stream)
+      void context.close()
+    }
+  } catch (error) {
     closeStream(stream)
-    void context.close()
+    throw error
   }
 }

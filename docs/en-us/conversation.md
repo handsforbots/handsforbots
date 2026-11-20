@@ -225,7 +225,7 @@ Every interruption, ignored backchannel or echo and end of turn is reported on `
 ### Privacy and echo
 
 - Providers declare whether audio or text leaves the page (`remote`). `webSpeechSTT` counts as remote: browsers such as Chrome send the audio to their speech service, and in hands-free that is continuous. Remote end-of-turn providers send the transcript to your server and from there to whoever runs the model.
-- Give a provider a `consent` purpose and it is used only while the purpose is granted ([Consent](./consent.md)); the plugin falls back to the next recognizer, or to silence. Showing the notice and storing the decision is your app's job.
+- Give a provider a `consent` purpose and it is used only while the purpose is granted ([Consent](./consent.md)); the plugin falls back to the next recognizer, or to silence. Withdrawing it mid-session aborts listening at once (even before the recognizer finished opening) and drops what it heard. Showing the notice and storing the decision is your app's job.
 - Recognizers that open the microphone (`httpSTT`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`) use echo cancellation, noise suppression and automatic gain. Web Speech manages its own microphone; how well it ignores the bot's own voice depends on the device. The [echo filter](#echo-filter) covers what gets through. Test with and without headphones.
 - Safari on iOS ends recognition sessions on its own; hands-free restarts them, but test long sessions on real devices.
 

@@ -67,7 +67,8 @@ export function voskBrowserSTT(options: VoskBrowserOptions): SpeechToText & { pr
         handlers.onEnd()
       }
 
-      stopCapture = await captureFloat(stream, (frame, sampleRate) => {
+      try {
+        stopCapture = await captureFloat(stream, (frame, sampleRate) => {
         if (!recognizer) {
           recognizer = options.grammar ? new loaded.KaldiRecognizer(sampleRate, options.grammar) : new loaded.KaldiRecognizer(sampleRate)
           recognizer.on('partialresult', (message) => {
@@ -87,6 +88,10 @@ export function voskBrowserSTT(options: VoskBrowserOptions): SpeechToText & { pr
         handlers.onAudio?.(frame, sampleRate)
         recognizer.acceptWaveformFloat(frame, sampleRate)
       })
+      } catch (error) {
+        closeStream(stream)
+        throw error
+      }
 
       return {
         stop() {
