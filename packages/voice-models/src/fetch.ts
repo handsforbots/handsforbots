@@ -12,6 +12,13 @@ export type HuggingFaceFile = {
   sha256?: string
 }
 
+/** A model file at a URL, optionally pinned by its SHA-256 digest. */
+export type ModelUrl = {
+  url: string
+  /** Expected SHA-256 digest (lowercase hex). When set, bytes from the network and cache are verified. */
+  sha256?: string
+}
+
 const HF_REPO = /^[\w.-]+\/[\w.-]+$/
 const UNSAFE_PATH = /(?:^|\/)\.\.(?:\/|$)|(?:^|\/)\.(?:\/|$)|\\|%2e%2e/i
 
@@ -31,8 +38,9 @@ function encodePathSegments(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/')
 }
 
-function expectedSha256(source: ModelSource): string | undefined {
-  if (typeof source === 'object' && source !== null && 'huggingFace' in source && source.sha256) {
+function expectedSha256(source: ModelSource, options?: FetchModelOptions): string | undefined {
+  if (options?.sha256) return options.sha256.toLowerCase()
+  if (typeof source === 'object' && source !== null && 'sha256' in source && source.sha256) {
     return source.sha256.toLowerCase()
   }
   return undefined
@@ -49,14 +57,36 @@ async function verifyDigest(bytes: Uint8Array, expected: string | undefined, whe
   if (actual !== expected) throw new Error(`${where}: SHA-256 mismatch (expected ${expected}, got ${actual})`)
 }
 
+const HTML_PREFIX = /^(?:<!doctype\s+html\b|<html[\s>]|<head[\s>]|<body[\s>]|<meta[\s>]|<script[\s>]|<\?xml[\s?])/i
+
+function isHtmlContentType(response: Response): boolean {
+  const type = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase()
+  return type === 'text/html' || type === 'application/xhtml+xml'
+}
+
+/** True when `bytes` begins like an HTML or XML document (e.g. an SPA 200 fallback). */
+function looksLikeHtml(bytes: Uint8Array): boolean {
+  let start = 0
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3
+  const sample = new TextDecoder().decode(bytes.subarray(start, start + 1024))
+  const stripped = sample.replace(/^(?:\s|<!--[\s\S]*?-->)*/, '')
+  return HTML_PREFIX.test(stripped)
+}
+
+function assertValidBody(bytes: Uint8Array, where: string): void {
+  if (bytes.length === 0) throw new Error(`${where}: empty response body`)
+  if (looksLikeHtml(bytes)) throw new Error(`${where}: expected a model file, got HTML`)
+}
+
 /**
  * Where a model file comes from: a URL (absolute, or relative to the page:
- * a folder your server serves), a Hugging Face file, bytes the app already
- * has (a file the user picked, one kept in OPFS), or a function returning any
- * of those.
+ * a folder your server serves), a `{ url, sha256 }` descriptor, a Hugging Face
+ * file, bytes the app already has (a file the user picked, one kept in OPFS),
+ * or a function returning any of those.
  */
 export type ModelSource =
   | string
+  | ModelUrl
   | HuggingFaceFile
   | Blob
   | ArrayBuffer
@@ -81,13 +111,16 @@ export const huggingFace = (
 /** The URL a source downloads from, if it is downloaded at all. */
 export function sourceUrl(source: ModelSource): string | undefined {
   if (typeof source === 'string') return source
-  if (typeof source === 'object' && source !== null && 'huggingFace' in source) {
-    assertHuggingFaceRepo(source.huggingFace)
-    assertSafeModelPath(source.file, 'Hugging Face file')
-    const revision = source.revision ?? 'main'
-    assertSafeModelPath(revision, 'Hugging Face revision')
-    const endpoint = (source.endpoint ?? 'https://huggingface.co').replace(/\/$/, '')
-    return `${endpoint}/${source.huggingFace}/resolve/${encodeURIComponent(revision)}/${encodePathSegments(source.file)}`
+  if (typeof source === 'object' && source !== null) {
+    if ('url' in source) return source.url
+    if ('huggingFace' in source) {
+      assertHuggingFaceRepo(source.huggingFace)
+      assertSafeModelPath(source.file, 'Hugging Face file')
+      const revision = source.revision ?? 'main'
+      assertSafeModelPath(revision, 'Hugging Face revision')
+      const endpoint = (source.endpoint ?? 'https://huggingface.co').replace(/\/$/, '')
+      return `${endpoint}/${source.huggingFace}/resolve/${encodeURIComponent(revision)}/${encodePathSegments(source.file)}`
+    }
   }
   return undefined
 }
@@ -119,6 +152,13 @@ export type FetchModelOptions = {
   /** `undefined`: Cache Storage when the browser has it. `false`: no cache. */
   cache?: ModelCache | false
   fetch?: typeof fetch
+  /** Expected SHA-256 digest (lowercase hex). Overrides any digest on the source. */
+  sha256?: string
+  /**
+   * Validates the bytes before they are returned or stored in the cache.
+   * Throw to reject a bad response (and evict a poisoned cache entry).
+   */
+  validate?: (bytes: Uint8Array) => void | Promise<void>
 }
 
 export const defaultCache = (cache: ModelCache | false | undefined): ModelCache | undefined =>
@@ -163,12 +203,18 @@ const toBytes = async (value: ArrayBuffer | Uint8Array | Blob): Promise<Uint8Arr
 
 /** Downloads a model file with progress, from the cache when it is there. */
 export async function fetchModel(source: ModelSource, options: FetchModelOptions = {}): Promise<Uint8Array> {
-  const digest = expectedSha256(source)
+  const digest = expectedSha256(source, options)
   const url = sourceUrl(source)
   if (url === undefined) {
     const value = typeof source === 'function' ? await source() : (source as ArrayBuffer | Uint8Array | Blob)
+    if (value instanceof Response) {
+      if (!value.ok) throw new Error(`model: HTTP ${value.status}`)
+      if (isHtmlContentType(value)) throw new Error(`model: expected a model file, got ${value.headers.get('Content-Type')}`)
+    }
     const bytes = value instanceof Response ? await readBody(value, 'file', options) : await toBytes(value)
+    assertValidBody(bytes, 'model')
     await verifyDigest(bytes, digest, 'model')
+    await options.validate?.(bytes)
     options.onProgress?.({ loaded: bytes.length, total: bytes.length, file: 'file' })
     return bytes
   }
@@ -176,19 +222,28 @@ export async function fetchModel(source: ModelSource, options: FetchModelOptions
   const cache = defaultCache(options.cache)
   const cached = await cache?.match(url).catch(() => undefined)
   if (cached) {
-    const bytes = await readBody(cached, file, options)
-    try {
-      await verifyDigest(bytes, digest, url)
-      return bytes
-    } catch (error) {
+    if (isHtmlContentType(cached)) {
       await cache?.delete?.(url).catch(() => {})
-      if (!digest) throw error
+    } else {
+      const bytes = await readBody(cached, file, options)
+      try {
+        assertValidBody(bytes, url)
+        await verifyDigest(bytes, digest, url)
+        await options.validate?.(bytes)
+        return bytes
+      } catch (error) {
+        if (options.signal?.aborted) throw error
+        await cache?.delete?.(url).catch(() => {})
+      }
     }
   }
   const response = await (options.fetch ?? fetch)(url, { signal: options.signal })
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
+  if (isHtmlContentType(response)) throw new Error(`${url}: expected a model file, got ${response.headers.get('Content-Type')}`)
   const bytes = await readBody(response, file, options)
+  assertValidBody(bytes, url)
   await verifyDigest(bytes, digest, url)
+  await options.validate?.(bytes)
   if (cache) {
     const headers = { 'Content-Type': response.headers.get('Content-Type') ?? 'application/octet-stream', 'Content-Length': String(bytes.length) }
     await cache.put(url, new Response(bytes as BodyInit, { headers })).catch(() => {})
@@ -196,8 +251,17 @@ export async function fetchModel(source: ModelSource, options: FetchModelOptions
   return bytes
 }
 
-export const fetchJson = async <T>(source: ModelSource, options: FetchModelOptions = {}): Promise<T> =>
-  JSON.parse(new TextDecoder().decode(await fetchModel(source, options))) as T
+export async function fetchJson<T>(source: ModelSource, options: FetchModelOptions = {}): Promise<T> {
+  let parsed: T | undefined
+  await fetchModel(source, {
+    ...options,
+    validate: async (bytes) => {
+      parsed = JSON.parse(new TextDecoder().decode(bytes)) as T
+      await options.validate?.(bytes)
+    },
+  })
+  return parsed as T
+}
 
 /**
  * Progress of several files as one: `loaded` adds up, `total` is the given

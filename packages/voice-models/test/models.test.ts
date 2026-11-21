@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   chunkText,
+  espeakPhonemizer,
+  fetchJson,
   fetchModel,
   huggingFace,
   kokoroModel,
@@ -19,12 +21,22 @@ import {
 
 const bytes = (text: string) => new TextEncoder().encode(text)
 
-function memoryCache(): ModelCache & { store: Map<string, Uint8Array> } {
-  const store = new Map<string, Uint8Array>()
+function memoryCache(): ModelCache & { store: Map<string, { body: Uint8Array; contentType?: string }> } {
+  const store = new Map<string, { body: Uint8Array; contentType?: string }>()
   return {
     store,
-    match: async (url) => (store.has(url) ? new Response(store.get(url) as BodyInit) : undefined),
-    put: async (url, response) => void store.set(url, new Uint8Array(await response.arrayBuffer())),
+    match: async (url) => {
+      const entry = store.get(url)
+      if (!entry) return undefined
+      const headers = entry.contentType ? { 'Content-Type': entry.contentType } : undefined
+      return new Response(entry.body as BodyInit, { headers })
+    },
+    put: async (url, response) =>
+      void store.set(url, {
+        body: new Uint8Array(await response.arrayBuffer()),
+        contentType: response.headers.get('Content-Type') ?? undefined,
+      }),
+    delete: async (url) => void store.delete(url),
   }
 }
 
@@ -135,13 +147,120 @@ describe('model sources', () => {
     const source = huggingFace('org/model', 'weights.onnx', { sha256 })
     const url = sourceUrl(source)!
     const cache = memoryCache()
-    cache.store.set(url, bytes('poisoned'))
+    cache.store.set(url, { body: bytes('poisoned') })
     const fetch = fakeFetch({ [url]: file })
     expect(await fetchModel(source, { fetch, cache })).toEqual(file)
     expect(fetch).toHaveBeenCalledTimes(1)
     await expect(
       fetchModel(huggingFace('org/model', 'weights.onnx', { sha256: 'f'.repeat(64) }), { fetch: fakeFetch({ [url]: file }), cache: false }),
     ).rejects.toThrow(/SHA-256/)
+  })
+
+  it('supports sha256 on self-hosted URL sources and fetchModel options', async () => {
+    const file = bytes('self-hosted-model')
+    const digest = await crypto.subtle.digest('SHA-256', file)
+    const sha256 = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    const url = '/models/pt_BR-faber-medium.onnx'
+    expect(sourceUrl({ url, sha256 })).toBe(url)
+
+    const cache = memoryCache()
+    cache.store.set(url, { body: bytes('stale-bytes') })
+    const fetch = fakeFetch({ [url]: file })
+    expect(await fetchModel({ url, sha256 }, { fetch, cache })).toEqual(file)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(await fetchModel(url, { fetch, cache, sha256 })).toEqual(file)
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    const badCache = memoryCache()
+    await expect(
+      fetchModel({ url, sha256: '0'.repeat(64) }, { fetch: fakeFetch({ [url]: file }), cache: badCache }),
+    ).rejects.toThrow(/SHA-256/)
+    expect(badCache.store.has(url)).toBe(false)
+  })
+
+  it('refuses HTML 200 responses without caching and evicts poisoned HTML cache entries', async () => {
+    const html = '<!doctype html><html><body>SPA fallback</body></html>'
+    const url = '/models/voice.onnx'
+    const cache = memoryCache()
+
+    // 1. HTML Content-Type is rejected and never cached.
+    const htmlTypeFetch = vi.fn(async () => new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
+    await expect(fetchModel(url, { fetch: htmlTypeFetch, cache })).rejects.toThrow(/text\/html/)
+    expect(cache.store.has(url)).toBe(false)
+
+    // 2. HTML body even with octet-stream Content-Type is rejected and never cached.
+    const htmlBodyFetch = vi.fn(async () => new Response(html, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } }))
+    await expect(fetchModel(url, { fetch: htmlBodyFetch, cache })).rejects.toThrow(/HTML/)
+    expect(cache.store.has(url)).toBe(false)
+
+    // 3. Already-cached HTML (by Content-Type or by body) is evicted and re-fetched.
+    const real = bytes('real-onnx-bytes')
+    const realFetch = fakeFetch({ [url]: real })
+    cache.store.set(url, { body: bytes(html), contentType: 'text/html' })
+    expect(await fetchModel(url, { fetch: realFetch, cache })).toEqual(real)
+    expect(realFetch).toHaveBeenCalledTimes(1)
+    expect(cache.store.get(url)?.body).toEqual(real)
+
+    cache.store.set(url, { body: bytes('  <!-- spa -->\n<html><body>x</body></html>'), contentType: 'application/octet-stream' })
+    expect(await fetchModel(url, { fetch: realFetch, cache })).toEqual(real)
+    expect(realFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetchJson validates JSON before caching and evicts poisoned cache entries', async () => {
+    const url = '/models/voice.onnx.json'
+    const cache = memoryCache()
+    const badFetch = fakeFetch({ [url]: bytes('not json at all') })
+    await expect(fetchJson(url, { fetch: badFetch, cache })).rejects.toThrow()
+    expect(cache.store.has(url)).toBe(false)
+
+    cache.store.set(url, { body: bytes('<html>fallback</html>'), contentType: 'text/html' })
+    const goodFetch = fakeFetch({ [url]: bytes('{"ok":true}') })
+    expect(await fetchJson<{ ok: boolean }>(url, { fetch: goodFetch, cache })).toEqual({ ok: true })
+    expect(goodFetch).toHaveBeenCalledTimes(1)
+    expect(cache.store.get(url)?.body).toEqual(bytes('{"ok":true}'))
+  })
+
+  it('evicts cached ONNX model when InferenceSession.create fails', async () => {
+    const url = '/models/broken.onnx'
+    const cache = memoryCache()
+    cache.store.set(url, { body: bytes('corrupt-binary') })
+    const ort: OnnxRuntime = {
+      Tensor: class {} as unknown as OnnxRuntime['Tensor'],
+      InferenceSession: {
+        create: async () => {
+          throw new Error('invalid protobuf')
+        },
+      },
+    }
+    const tts = piperTTS({
+      model: url,
+      config: bytes(JSON.stringify({ audio: { sample_rate: 22050 }, phoneme_id_map: { _: [0], '^': [1], $: [2] } })),
+      phonemizer: fakePhonemizer(),
+      runtime: ort,
+      cache,
+    })
+    await expect(tts.load!(() => {}, new AbortController().signal)).rejects.toThrow('invalid protobuf')
+    expect(cache.store.has(url)).toBe(false)
+  })
+
+  it('espeakPhonemizer rejects non-wasm bytes without caching', async () => {
+    const cache = memoryCache()
+    const wasmUrl = '/vendor/piper_phonemize.wasm'
+    const dataUrl = '/vendor/piper_phonemize.data'
+    const fetchMock = fakeFetch({ [wasmUrl]: bytes('not-wasm'), [dataUrl]: bytes('data-bytes') })
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const phonemizer = espeakPhonemizer({
+        module: async () => async () => ({ callMain: () => {} }),
+        wasm: wasmUrl,
+        data: dataUrl,
+        cache,
+      })
+      await expect(phonemizer.load!(() => {}, new AbortController().signal)).rejects.toThrow(/WebAssembly/)
+      expect(cache.store.has(wasmUrl)).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('takes bytes the app already has and stops on abort', async () => {

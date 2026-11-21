@@ -64,6 +64,7 @@ import { huggingFace } from '@handsforbots/voice-models'
 
 huggingFace('rhasspy/piper-voices', 'pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx', { revision: 'a1b2c3…' }) // o Hub
 '/models/pt_BR-faber-medium.onnx'           // uma pasta que seu servidor ou CDN serve
+{ url: '/models/pt_BR-faber-medium.onnx', sha256: '<hex>' } // qualquer URL fixada por SHA-256
 'https://cdn.exemplo.com/vozes/x.onnx'      // qualquer URL (o CORS precisa liberar sua origem)
 fileInput.files[0]                          // um Blob que a pessoa escolheu, ou que você guardou no OPFS
 new Uint8Array(bytes)                       // bytes que você já tem
@@ -71,9 +72,9 @@ async () => fetch('/api/voz', { headers })  // qualquer coisa: URL assinada, rot
 ```
 
 - Helpers montam os caminhos do Hub: `piperVoice('pt_BR-faber-medium')` → `{ model, config }`, `kokoroModel({ dtype: 'q8', voices: ['pf_dora'] })` → `{ model, tokenizer, voices }`.
-- **Fixe uma revisão** (um hash de commit) em produção, e o digest do arquivo: `huggingFace(repo, arquivo, { revision: '<commit>', sha256: '<hex>' })`. `main` pode mudar sem aviso; com `sha256`, um arquivo trocado ou envenenado (na rede ou no Cache Storage) é recusado. Os ids de voz são conferidos (`pt_BR-faber-medium`, `pf_dora`).
+- **Fixe uma revisão** (um hash de commit) em produção, e o digest do arquivo: `huggingFace(repo, arquivo, { revision: '<commit>', sha256: '<hex>' })` ou `{ url: '/models/voz.onnx', sha256: '<hex>' }`. `main` pode mudar sem aviso; com `sha256`, um arquivo trocado ou envenenado (na rede ou no Cache Storage) é recusado. Os ids de voz são conferidos (`pt_BR-faber-medium`, `pf_dora`).
 - **Uma pasta sua**: espelhe os arquivos e aponte as fontes para ela. Arquivos na mesma origem evitam CORS e a dependência de terceiros. Um espelho do Hub inteiro funciona com `huggingFace(repo, file, { endpoint })`.
-- **Cache**: os downloads ficam no Cache Storage (`h4b-voice-models`) e vêm de lá da próxima vez. `cache: false` desliga, `cache: meuCache` substitui (`{ match, put }`), `clearModelCache()` apaga (um botão "liberar espaço").
+- **Cache**: os downloads ficam no Cache Storage (`h4b-voice-models`) e vêm de lá da próxima vez. Respostas HTML (como o fallback 200 de uma SPA), corpos vazios, JSON inválido e `.wasm` inválido são recusados antes de gravar no cache; se uma entrada envenenada já estiver gravada, ou se o ONNX/WebAssembly falhar ao abrir o arquivo, ela é apagada. `cache: false` desliga, `cache: meuCache` substitui (`{ match, put, delete? }`), `clearModelCache()` apaga (um botão "liberar espaço").
 - **Progresso**: `fetchModel` lê o stream e informa `{ loaded, total, file }`. Uma transferência comprimida (`Content-Encoding`) deixa o total desconhecido; declare o `size` do provedor para mostrar porcentagem mesmo assim.
 
 ## Quando o download começa e quem fala enquanto isso

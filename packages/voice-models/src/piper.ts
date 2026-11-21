@@ -1,5 +1,5 @@
 import type { LoadProgress, SpeechAudio, TextToSpeech } from '@handsforbots/voice'
-import { assertSafeModelPath, fetchJson, fetchModel, huggingFace, progressOf, type ModelCache, type ModelSource } from './fetch.js'
+import { assertSafeModelPath, defaultCache, fetchJson, fetchModel, huggingFace, progressOf, sourceUrl, type ModelCache, type ModelSource } from './fetch.js'
 import { chunkText, concatAudio, float32, int64, loadRuntime, type OnnxRuntime, type OnnxSession, type RuntimeSource } from './onnx.js'
 import type { Phonemizer } from './phonemizer.js'
 
@@ -85,7 +85,14 @@ export function piperTTS(options: PiperOptions): TextToSpeech & { readonly confi
         fetchModel(options.model, { onProgress: progress('model'), signal, cache: options.cache }),
         options.phonemizer.load?.(progress('phonemizer'), signal ?? new AbortController().signal),
       ])
-      const session = await ort.InferenceSession.create(model, options.sessionOptions)
+      let session: OnnxSession
+      try {
+        session = await ort.InferenceSession.create(model, options.sessionOptions)
+      } catch (error) {
+        const url = sourceUrl(options.model)
+        if (url) await defaultCache(options.cache)?.delete?.(url).catch(() => {})
+        throw error
+      }
       current = { ort, session, config }
       return current
     })().catch((error) => {

@@ -1,5 +1,5 @@
 import type { LoadProgress } from '@handsforbots/voice'
-import { fetchModel, progressOf, type ModelCache, type ModelSource } from './fetch.js'
+import { defaultCache, fetchModel, progressOf, sourceUrl, type ModelCache, type ModelSource } from './fetch.js'
 
 /**
  * Text to phonemes (IPA). Piper and Kokoro read phonemes, not letters; which
@@ -48,15 +48,29 @@ export function espeakPhonemizer(options: EspeakPhonemizerOptions): Phonemizer {
     return typeof loaded === 'function' ? loaded : loaded.createPiperPhonemize
   }
 
+  const assertWasm = (bytes: Uint8Array) => {
+    if (bytes.length < 4 || bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
+      throw new Error('espeak-ng: expected a WebAssembly module')
+    }
+  }
+
   const load = (onProgress?: (progress: LoadProgress) => void, signal?: AbortSignal) => {
     ready ??= (async () => {
       const progress = progressOf(onProgress ?? (() => {}), options.size)
       const [factory, wasmBytes, data] = await Promise.all([
         resolveFactory(),
-        fetchModel(options.wasm, { onProgress: progress('wasm'), signal, cache: options.cache }),
+        fetchModel(options.wasm, { onProgress: progress('wasm'), signal, cache: options.cache, validate: assertWasm }),
         fetchModel(options.data, { onProgress: progress('data'), signal, cache: options.cache }),
       ])
-      return { factory, wasm: await WebAssembly.compile(wasmBytes as BufferSource), data }
+      let wasm: WebAssembly.Module
+      try {
+        wasm = await WebAssembly.compile(wasmBytes as BufferSource)
+      } catch (error) {
+        const url = sourceUrl(options.wasm)
+        if (url) await defaultCache(options.cache)?.delete?.(url).catch(() => {})
+        throw error
+      }
+      return { factory, wasm, data }
     })().catch((error) => {
       ready = undefined
       throw error

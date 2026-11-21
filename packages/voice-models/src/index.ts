@@ -10,6 +10,7 @@ export {
   type HuggingFaceFile,
   type ModelCache,
   type ModelSource,
+  type ModelUrl,
 } from './fetch.js'
 export { chunkText, loadRuntime, type OnnxRuntime, type OnnxSession, type OnnxTensor, type RuntimeSource } from './onnx.js'
 export { espeakPhonemizer, type EspeakPhonemizerOptions, type Phonemizer, type PiperPhonemizeFactory } from './phonemizer.js'
