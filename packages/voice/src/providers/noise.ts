@@ -6,6 +6,12 @@ import { captureFloat, closeStream } from './media.js'
  * plus browser glue (`measureNoise`, `checkNoise`).
  * Levels are dBFS (0 = full scale), not sound pressure: microphones and gains
  * differ, so the default thresholds are a starting point to calibrate.
+ *
+ * `createNoiseMeter` holds a leading run of frames at or below `silentFloorDb`
+ * (digital silence: a track that is not producing yet yields samples of 0).
+ * The run is dropped once a louder frame arrives, so it cannot become the
+ * 10th percentile. If nothing ever rises above that floor, the run is the
+ * report. Silence after the first live frame counts. There is no warmup time.
  */
 
 export type NoiseVerdict = 'quiet' | 'noisy' | 'too-noisy'
@@ -56,9 +62,15 @@ export type NoiseReport = {
 export type NoiseMeter = {
   /** Feeds raw samples at `sampleRate`; frames of `frameMs` are measured as they fill. */
   push(samples: Float32Array, sampleRate: number): void
-  /** Frames measured so far. */
+  /**
+   * Frames that currently count toward the floor. A leading run at or below
+   * the dead-input floor counts only until a louder frame arrives.
+   */
   readonly frames: number
-  /** Report for what was pushed; `undefined` before the first full frame. */
+  /**
+   * Report for what currently counts. `undefined` before the first full frame.
+   * A capture that never rises above the dead-input floor reports that run.
+   */
   report(): NoiseReport | undefined
   reset(): void
 }
@@ -86,16 +98,43 @@ export function createNoiseMeter({
   frameMs = 20,
   thresholds,
 }: { frameMs?: number; thresholds?: NoiseThresholds } = {}): NoiseMeter {
+  const silentFloorDb = { ...DEFAULTS, ...thresholds }.silentFloorDb
   let levels: number[] = []
+  let held: number[] = []
   let sum = 0
   let count = 0
   let clipped = 0
   let samples = 0
+  let heldClipped = 0
+  let heldSamples = 0
+  let pendingClipped = 0
+  let pendingSamples = 0
   let rate = 0
+  let opened = false
+
+  const discardHeld = () => {
+    held = []
+    heldClipped = 0
+    heldSamples = 0
+  }
+
+  const keepPending = (intoHeld: boolean) => {
+    if (intoHeld) {
+      heldClipped += pendingClipped
+      heldSamples += pendingSamples
+    } else {
+      clipped += pendingClipped
+      samples += pendingSamples
+    }
+    pendingClipped = 0
+    pendingSamples = 0
+  }
 
   return {
     push(chunk, sampleRate) {
       if (rate !== sampleRate) {
+        // A partial frame already counted its samples; keep that count and drop its energy.
+        keepPending(!opened)
         rate = sampleRate
         sum = 0
         count = 0
@@ -103,31 +142,54 @@ export function createNoiseMeter({
       const size = Math.max(1, Math.round((sampleRate * frameMs) / 1000))
       for (const value of chunk) {
         sum += value * value
-        if (Math.abs(value) >= 0.99) clipped++
-        samples++
-        if (++count === size) {
-          levels.push(toDb(Math.sqrt(sum / size)))
-          sum = 0
-          count = 0
+        pendingSamples++
+        if (Math.abs(value) >= 0.99) pendingClipped++
+        if (++count !== size) continue
+        const level = toDb(Math.sqrt(sum / size))
+        if (!opened && level <= silentFloorDb) {
+          held.push(level)
+          keepPending(true)
+        } else {
+          if (!opened) {
+            discardHeld()
+            opened = true
+          }
+          levels.push(level)
+          keepPending(false)
         }
+        sum = 0
+        count = 0
       }
     },
     get frames() {
-      return levels.length
+      return levels.length || held.length
     },
     report() {
-      if (levels.length === 0) return undefined
+      const source = levels.length ? levels : held
+      if (source.length === 0) return undefined
+      const clipSamples = (levels.length ? samples : heldSamples) + pendingSamples
+      const clipCount = (levels.length ? clipped : heldClipped) + pendingClipped
       return assessNoise(
-        { levels, clippingRatio: samples ? clipped / samples : 0, durationMs: levels.length * frameMs },
+        {
+          levels: source,
+          clippingRatio: clipSamples ? clipCount / clipSamples : 0,
+          durationMs: source.length * frameMs,
+        },
         thresholds,
       )
     },
     reset() {
       levels = []
+      held = []
       sum = 0
       count = 0
       clipped = 0
       samples = 0
+      heldClipped = 0
+      heldSamples = 0
+      pendingClipped = 0
+      pendingSamples = 0
+      opened = false
     },
   }
 }

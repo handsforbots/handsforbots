@@ -172,6 +172,66 @@ describe('createNoiseMeter', () => {
     expect(measure(new Float32Array(RATE)).reasons).toEqual(['silent-input'])
   })
 
+  it('drops a leading dead run once a louder frame arrives, however long the run is', () => {
+    const dropped = (silentSeconds: number, loudSeconds: number) => {
+      const silent = new Float32Array(Math.round(silentSeconds * RATE))
+      const loud = new Float32Array(Math.round(loudSeconds * RATE)).fill(db(-20))
+      const samples = new Float32Array(silent.length + loud.length)
+      samples.set(loud, silent.length)
+      return measure(samples)
+    }
+    // 200 ms is enough for the zeros to be the 10th percentile of a 1 s capture.
+    const short = dropped(0.2, 0.8)
+    expect(short.verdict).toBe('too-noisy')
+    expect(short.noiseFloorDb).toBeCloseTo(-20, 1)
+    expect(short.durationMs).toBe(800)
+    // Longer than any fixed warmup guess: still the room, not the zeros.
+    const long = dropped(1.2, 0.4)
+    expect(long.noiseFloorDb).toBeCloseTo(-20, 1)
+    expect(long.durationMs).toBe(400)
+  })
+
+  it('reports a capture that never rises as silent input', () => {
+    const report = measure(new Float32Array(Math.round(0.2 * RATE)))
+    expect(report.reasons).toEqual(['silent-input'])
+    expect(report.durationMs).toBe(200)
+    expect(report.noiseFloorDb).toBe(-120)
+  })
+
+  it('counts silence that arrives after the input has woken', () => {
+    const loud = new Float32Array(Math.round(0.2 * RATE)).fill(db(-20))
+    const silent = new Float32Array(Math.round(0.8 * RATE))
+    const samples = new Float32Array(loud.length + silent.length)
+    samples.set(loud)
+    samples.set(silent, loud.length)
+    const report = measure(samples)
+    expect(report.reasons).not.toContain('silent-input')
+    expect(report.noiseFloorDb).toBe(-120)
+    expect(report.durationMs).toBe(1000)
+  })
+
+  it('keeps a quiet opening that is still above the dead-input floor', () => {
+    const quiet = new Float32Array(Math.round(0.2 * RATE)).fill(db(-70))
+    const loud = new Float32Array(Math.round(0.8 * RATE)).fill(db(-25))
+    const samples = new Float32Array(quiet.length + loud.length)
+    samples.set(quiet)
+    samples.set(loud, quiet.length)
+    const report = measure(samples)
+    expect(report.noiseFloorDb).toBeCloseTo(-70, 1)
+    expect(report.durationMs).toBe(1000)
+  })
+
+  it('uses silentFloorDb for the leading run', () => {
+    const quiet = new Float32Array(Math.round(0.2 * RATE)).fill(db(-70))
+    const loud = new Float32Array(Math.round(0.8 * RATE)).fill(db(-20))
+    const samples = new Float32Array(quiet.length + loud.length)
+    samples.set(quiet)
+    samples.set(loud, quiet.length)
+    const report = measure(samples, { silentFloorDb: -60 })
+    expect(report.noiseFloorDb).toBeCloseTo(-20, 1)
+    expect(report.durationMs).toBe(800)
+  })
+
   it('takes custom thresholds and resets', () => {
     const samples = noise(1, db(-45))
     expect(measure(samples, { noisyFloorDb: -40 }).verdict).toBe('quiet')
@@ -179,6 +239,9 @@ describe('createNoiseMeter', () => {
     meter.push(samples, RATE)
     meter.reset()
     expect(meter.report()).toBeUndefined()
+    meter.push(new Float32Array(RATE), RATE)
+    meter.push(new Float32Array(Math.round(0.5 * RATE)).fill(db(-20)), RATE)
+    expect(meter.report()!.noiseFloorDb).toBeCloseTo(-20, 1)
   })
 })
 
