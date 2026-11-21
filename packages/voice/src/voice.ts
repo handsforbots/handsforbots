@@ -1744,9 +1744,13 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       if (state.speaking) set({ speaking: false })
     },
     loadSpeech(name) {
-      if (name === undefined) return loadPreferred()
+      if (name === undefined) {
+        loadingWanted = true
+        const p = ttsProviders.find(allowed)
+        return p ? loadProvider(p) : Promise.resolve(false)
+      }
       const p = ttsProviders.find((provider) => provider.name === name)
-      return p ? loadProvider(p) : Promise.resolve(false)
+      return p && allowed(p) ? loadProvider(p) : Promise.resolve(false)
     },
     async setTTS(tts) {
       const next = (await supportedOf(toArray(tts))).filter(playable)

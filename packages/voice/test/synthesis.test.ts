@@ -307,6 +307,75 @@ describe('models: when they load and who speaks meanwhile', () => {
     expect(errors).toEqual([expect.objectContaining({ source: 'voice:tts:broken' })])
   })
 
+  it('loadSpeech() without a name retries a failed provider', async () => {
+    let shouldFail = true
+    const load = vi.fn(async () => {
+      if (shouldFail) throw new Error('offline')
+    })
+    const provider: TextToSpeech = {
+      name: 'piper',
+      isSupported: () => true,
+      load,
+      synthesize: async (text) => audioOf(text),
+    }
+    const { player, plays } = fakePlayer()
+    const { h4b, voice: v } = await setup({ tts: provider, player, load: { start: 'manual' } })
+
+    expect(await v.loadSpeech()).toBe(false)
+    expect(v.getState().ttsStatus.piper).toEqual({ state: 'failed', error: 'offline' })
+    expect(load).toHaveBeenCalledTimes(1)
+
+    shouldFail = false
+    expect(await v.loadSpeech()).toBe(true)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(v.getState().ttsStatus.piper).toMatchObject({ state: 'ready' })
+
+    h4b.send('oi')
+    await eventually(() => expect(plays).toHaveLength(1))
+    expect(v.getState().tts).toBe('piper')
+  })
+
+  it('loadSpeech() without a name retries the preferred failed provider even with a ready fallback', async () => {
+    let shouldFail = true
+    const load = vi.fn(async () => {
+      if (shouldFail) throw new Error('network')
+    })
+    const model: TextToSpeech = {
+      name: 'piper',
+      isSupported: () => true,
+      load,
+      synthesize: async (text) => audioOf(text),
+    }
+    const browser = fakeSpeaker()
+    const { player } = fakePlayer()
+    const { voice: v } = await setup({ tts: [model, browser.provider], player, load: { start: 'manual' } })
+
+    expect(await v.loadSpeech()).toBe(false)
+    expect(v.getState().ttsStatus.piper?.state).toBe('failed')
+    expect(load).toHaveBeenCalledTimes(1)
+
+    shouldFail = false
+    expect(await v.loadSpeech()).toBe(true)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(v.getState().ttsStatus.piper?.state).toBe('ready')
+  })
+
+  it('loadSpeech() respects provider consent', async () => {
+    const cloud = fakeModel('cloud')
+    cloud.provider.consent = 'voice-cloud'
+    const { player } = fakePlayer()
+    const h4b = createH4B({
+      consent: { initial: { 'voice-cloud': false }, channel: false },
+      plugins: [voice({ tts: cloud.provider, player, load: { start: 'manual' } })],
+    })
+    await h4b.start()
+    const v = h4b.get('voice') as VoiceService
+
+    expect(await v.loadSpeech()).toBe(false)
+    expect(await v.loadSpeech('cloud')).toBe(false)
+    expect(cloud.load).not.toHaveBeenCalled()
+  })
+
   it('a sentence the model fails to synthesize goes to the next ready provider', async () => {
     const model = fakeModel('model', { failSynth: true })
     const browser = fakeSpeaker()
