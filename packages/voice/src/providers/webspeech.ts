@@ -70,7 +70,17 @@ export function webSpeechSTT(sttOptions: WebSpeechSTTOptions = {}): SpeechToText
         if (code !== 'aborted') handlers.onError(new SpeechError(code, event.message || event.error))
       }
       recognition.onend = () => handlers.onEnd()
-      recognition.start()
+      try {
+        recognition.start()
+      } catch (error) {
+        if (error instanceof SpeechError) throw error
+        const name = (error as DOMException)?.name
+        const message = (error as Error)?.message
+        if (name === 'NotAllowedError' || name === 'SecurityError') throw new SpeechError('not-allowed', message)
+        if (name === 'InvalidStateError') throw new SpeechError('audio-capture', message)
+        if (name === 'AbortError') throw new SpeechError('aborted', message)
+        throw new SpeechError('unknown', message)
+      }
 
       return {
         stop: () => recognition.stop(),

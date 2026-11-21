@@ -98,10 +98,10 @@ The browser has no "too noisy" API; `@handsforbots/voice` measures it (levels in
 
 What `noise` does (check `packages/voice/src/voice.ts` if in doubt):
 
-- Only hands-free `listen()` is checked (`check: 'hands-free'`, default); it waits for the measurement (`durationMs`, 1500) before the recognizer starts. Push-to-talk is never checked.
+- Only hands-free `listen()` is checked (`check: 'hands-free'`, default); it waits for the measurement (`durationMs`, 1500; `timeoutMs` defaults to `durationMs + 2000`, `0` disables so a stalled/suspended audio graph cannot hang) and then `settleMs` (default 100 after built-in `checkNoise()`, 0 when `measure` is supplied, 0 disables) before starting the recognizer to avoid audio-device contention (CoreAudio/Bluetooth/mobile). `checkingNoise` stays `true` until `listening` becomes `true` (or fallback/`stop`/`cancel`) with no intermediate idle gap. Push-to-talk is never checked.
 - `too-noisy` → mode becomes `push-to-talk`, `noiseFallback: true`, nothing heard (default `tooNoisy: 'push-to-talk'`). `noiseFallback` clears on the next `setMode()`. `noisy` → listens; the report is in the state.
-- A report newer than `maxAgeMs` (300000) is reused. `stop()`/`cancel()`/`toggle()` during the check abort it. A failed measurement emits `error` (`source: 'voice:noise'`) and listening starts anyway.
-- The check opens the raw microphone (`processing: false`) by default, a separate capture from Web Speech's.
+- A report newer than `maxAgeMs` (300000) is reused. When no fresh check is needed (`noise` off, push-to-talk, `check: 'manual'`, or a cached report within `maxAgeMs`), `listen()` starts the recognizer synchronously inside the call to preserve browser user activation. `stop()`/`cancel()`/`toggle()` and app disposal (`h4b.stop()`) during the check abort it. A failed measurement emits `error` (`source: 'voice:noise'`) and listening starts anyway.
+- The check opens the raw microphone (`processing: false`) by default, a separate capture from Web Speech's. Capture helpers (`captureFloat`, `capturePcm16`, `monitorLevel`) resume a suspended `AudioContext`, and `checkNoise()` creates/resumes its `AudioContext` before `getUserMedia`.
 
 Reasons and what to tell the user:
 
@@ -114,6 +114,7 @@ Reasons and what to tell the user:
 Pitfalls:
 
 - Defaults are a starting point (floor -50/-35 dBFS, SNR 15 dB, fluctuation 6 dB): dBFS is not sound pressure. Calibrate `thresholds` with recordings from the app's real devices before relying on `too-noisy`.
+- With `webSpeechSTT` on Safari/iOS, waiting for `getUserMedia` + `durationMs` in `check: 'hands-free'` can outlive Safari's transient user activation for `SpeechRecognition.start()`: call `voice.checkNoise()` ahead of time (or use `check: 'manual'`) so the cached report lets `listen()` start `SpeechRecognition` synchronously inside the user's click/tap.
 - Do not turn `noise` on for push-to-talk-only apps: it does nothing there. Do not run `checkNoise()` while the recognizer is listening on Safari/iOS without testing: two captures on one device behave differently per browser.
 - The noise check cannot tell nearby voices from the user's; they show up as `fluctuating` (or `low-snr` when the user also spoke). The level gate is what keeps them out of the conversation.
 

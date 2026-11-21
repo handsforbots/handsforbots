@@ -264,6 +264,8 @@ Mude qualquer limite com `thresholds`. Os padrões são um ponto de partida: dBF
 
 Por padrão o `checkNoise()` mede o sinal cru (`processing: false`): a supressão de ruído esconderia o ruído constante, e o ganho automático sobe o piso enquanto ninguém fala. `processing: true` mede o que os reconhecedores de microfone ouvem. O Web Speech abre o próprio microfone, então com ele o teste é sempre uma medição à parte.
 
+`timeoutMs` limita o tempo total de relógio do `checkNoise()` e do `measureNoise()` (padrão `durationMs + 2000`; `0` desliga), para que um grafo de áudio travado ou suspenso lance `audio-capture` em vez de pendurar. Os auxiliares de captura (`captureFloat`, `capturePcm16`, `monitorLevel`) retomam um `AudioContext` suspenso, e o `checkNoise()` cria e retoma o `AudioContext` antes do `getUserMedia`, enquanto o gesto da pessoa ainda vale.
+
 #### Teste antes do mãos-livres
 
 O plugin de voz pode rodar o teste sozinho. Ligue com a opção `noise` (desligada por padrão, porque abre o microfone por um instante antes de ouvir):
@@ -273,12 +275,12 @@ voice({ stt, tts, mode: 'hands-free', noise: true })
 voice({ stt, tts, mode: 'hands-free', noise: { tooNoisy: 'warn', maxAgeMs: 60_000, thresholds: { noisyFloorDb: -45 } } })
 ```
 
-- Com `check: 'hands-free'` (padrão), o `listen()` no mãos-livres mede o ambiente primeiro (`getState().checkingNoise` fica `true`; o reconhecedor ainda não começou) e depois ouve. O push-to-talk não é testado.
+- Com `check: 'hands-free'` (padrão), o `listen()` no mãos-livres mede o ambiente primeiro e depois começa a ouvir. `getState().checkingNoise` permanece `true` até `listening` virar `true` (ou até a troca de modo, `stop()` ou `cancel()`), sem um intervalo ocioso entre os dois. Depois que o `checkNoise()` embutido fecha o microfone, o plugin espera `settleMs` ms (padrão `100`, `0` quando `measure` é passado; `0` desliga) antes de iniciar o reconhecedor, evitando disputa pelo dispositivo de áudio (CoreAudio, Bluetooth, celular). `timeoutMs` é repassado ao `checkNoise()`. O push-to-talk não é testado.
 - `too-noisy` com `tooNoisy: 'push-to-talk'` (padrão): o modo vira `push-to-talk`, `noiseFallback` fica `true` e a escuta não começa. Microfone aberto num ambiente barulhento interrompe o bot e nunca encerra o turno; segurar para falar não tem esse problema. O `noiseFallback` some no próximo `setMode()`. `tooNoisy: 'warn'` só informa.
 - `noisy` (ou `too-noisy` com `warn`): a escuta começa; o relatório fica em `getState().noise` para a interface avisar a pessoa.
-- Um relatório mais novo que `maxAgeMs` (5 minutos) é reaproveitado, então pausar e voltar não mede de novo.
-- `stop()`, `cancel()` ou `toggle()` durante o teste o cancelam, e nada é ouvido. Se a medição falhar (microfone negado, por exemplo), o erro vai para o `h4b.on('error')` com `source: 'voice:noise'` e a escuta começa assim mesmo: o reconhecedor informa os próprios erros de microfone.
-- Cada teste terminado emite `voice.noise` `{ report, action? }`, com `action: 'push-to-talk'` quando o modo mudou. O `voice.checkNoise()` mede quando você pedir (também com `check: 'manual'`, que nunca mede antes de ouvir).
+- Um relatório mais novo que `maxAgeMs` (5 minutos) é reaproveitado, então pausar e voltar não mede de novo. Sempre que não for preciso medir agora (`noise` desligado, push-to-talk, `check: 'manual'` ou relatório em cache dentro de `maxAgeMs`), o `listen()` inicia o reconhecedor de forma síncrona na própria chamada, preservando a ativação por gesto do navegador.
+- `stop()`, `cancel()`, `toggle()` ou desmontar o app (`h4b.stop()`) durante o teste o abortam, e nada é ouvido. Se a medição falhar (microfone negado, por exemplo), o erro vai para o `h4b.on('error')` com `source: 'voice:noise'` e a escuta começa assim mesmo: o reconhecedor informa os próprios erros de microfone.
+- Cada teste terminado emite `voice.noise` `{ report, action? }`, com `action: 'push-to-talk'` quando o modo mudou. O `voice.checkNoise()` mede quando você pedir (também com `check: 'manual'`, que nunca mede antes de ouvir). Com `webSpeechSTT` no Safari/iOS, esperar o `getUserMedia` e o `durationMs` durante `check: 'hands-free'` pode ultrapassar a ativação transitória do gesto exigida pelo `SpeechRecognition.start()`: rode `voice.checkNoise()` antes (ou use `check: 'manual'`) para manter o relatório em cache por `maxAgeMs` e deixar o `listen()` iniciar o `SpeechRecognition` de forma síncrona dentro do clique ou toque.
 - `measure(signal)` substitui a medição (um modelo, o seu servidor, um teste) e deve devolver um `NoiseReport`; o `assessNoise()` monta um a partir dos níveis dos frames.
 
 O widget mostra o teste: "Verificando o ruído do ambiente…" enquanto ele roda (o botão do microfone fica com `aria-busy`), um aviso no lugar de "Ouvindo…" quando há ruído, e "Ruído demais para o mãos-livres. Segure o microfone para falar." depois da troca de modo. Mude os textos com `strings: { noiseChecking, noiseHint, noiseTooLoud }`; estilize o aviso com `.partial.noisy` via `::part()` ou na sua própria interface. Um erro de escuta substitui o aviso.

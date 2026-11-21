@@ -452,6 +452,55 @@ describe('web speech wrapper', () => {
     delete (window as any).webkitSpeechRecognition
   })
 
+  it('maps synchronous exceptions thrown by recognition.start()', () => {
+    let errorToThrow: unknown
+    ;(window as any).webkitSpeechRecognition = class {
+      start = () => {
+        throw errorToThrow
+      }
+      stop = vi.fn()
+      abort = vi.fn()
+    }
+    const stt = webSpeechSTT()
+    const handlers = { onFinal: vi.fn(), onError: vi.fn(), onEnd: vi.fn() }
+    const startWith = (error: unknown) => {
+      errorToThrow = error
+      try {
+        stt.listen({ language: 'pt-BR', continuous: false }, handlers)
+      } catch (caught) {
+        return caught
+      }
+      return undefined
+    }
+
+    try {
+      expect(startWith(new DOMException('denied', 'NotAllowedError'))).toMatchObject({
+        code: 'not-allowed',
+        recoverable: false,
+      })
+      expect(startWith(new DOMException('blocked', 'SecurityError'))).toMatchObject({
+        code: 'not-allowed',
+        recoverable: false,
+      })
+      expect(startWith(new DOMException('already started', 'InvalidStateError'))).toMatchObject({
+        code: 'audio-capture',
+        recoverable: true,
+      })
+      expect(startWith(new DOMException('aborted', 'AbortError'))).toMatchObject({
+        code: 'aborted',
+        recoverable: false,
+      })
+      expect(startWith(new Error('unexpected'))).toMatchObject({
+        code: 'unknown',
+        message: 'unexpected',
+      })
+      const existing = new SpeechError('network', 'offline')
+      expect(startWith(existing)).toBe(existing)
+    } finally {
+      delete (window as any).webkitSpeechRecognition
+    }
+  })
+
   it('splits long text into sentence chunks', () => {
     const long = 'Primeira frase. Segunda frase! Terceira? ' + 'x'.repeat(300) + '. Fim.'
     const chunks = splitSentences(long, 60)

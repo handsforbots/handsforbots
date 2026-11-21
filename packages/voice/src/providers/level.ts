@@ -1,4 +1,4 @@
-import { openMicrophone, closeStream } from './media.js'
+import { openMicrophone, closeStream, resumeAudioContext } from './media.js'
 
 /**
  * Level gate: tells the user's speech from quieter voices around them (TV,
@@ -104,11 +104,14 @@ export function createLevelGate({ gapDb = 10, lookbackMs = 3000, remember = 5 }:
  */
 export async function monitorLevel(onLevel: (db: number) => void, { intervalMs = 50 } = {}): Promise<() => void> {
   const stream = await openMicrophone()
+  let context: AudioContext | undefined
   try {
-    const context = new AudioContext()
-    const analyser = context.createAnalyser()
+    const audio = new AudioContext()
+    context = audio
+    await resumeAudioContext(audio)
+    const analyser = audio.createAnalyser()
     analyser.fftSize = 1024
-    const source = context.createMediaStreamSource(stream)
+    const source = audio.createMediaStreamSource(stream)
     source.connect(analyser)
     const data = new Float32Array(analyser.fftSize)
     const timer = setInterval(() => {
@@ -121,10 +124,11 @@ export async function monitorLevel(onLevel: (db: number) => void, { intervalMs =
       clearInterval(timer)
       source.disconnect()
       closeStream(stream)
-      void context.close()
+      void audio.close()
     }
   } catch (error) {
     closeStream(stream)
+    void context?.close?.().catch(() => {})
     throw error
   }
 }

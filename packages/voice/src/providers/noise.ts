@@ -180,36 +180,79 @@ export function assessNoise(
 export type MeasureNoiseOptions = {
   /** How long to listen. Default 1500 ms. */
   durationMs?: number
+  /**
+   * Wall-clock limit (ms) so a stalled or suspended audio graph cannot hang the
+   * check. Default `durationMs + 2000`; `0` disables.
+   */
+  timeoutMs?: number
   frameMs?: number
   thresholds?: NoiseThresholds
   signal?: AbortSignal
 }
 
-/** Measures an open stream for `durationMs` and resolves with the report. */
-export async function measureNoise(stream: MediaStream, options: MeasureNoiseOptions = {}): Promise<NoiseReport> {
-  const { durationMs = 1500, frameMs, thresholds, signal } = options
-  if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+async function measureStream(
+  stream: MediaStream,
+  options: MeasureNoiseOptions = {},
+  context?: AudioContext,
+): Promise<NoiseReport> {
+  const { durationMs = 1500, frameMs, thresholds, signal, timeoutMs } = options
+  if (signal?.aborted) {
+    void context?.close?.().catch(() => {})
+    throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+  }
   const meter = createNoiseMeter({ frameMs, thresholds })
   let started = 0
+  let doneReached = false
+  let timedOut = false
   let finish!: () => void
-  const done = new Promise<void>(resolve => (finish = resolve))
-  const stop = await captureFloat(stream, (frame, sampleRate) => {
-    meter.push(frame, sampleRate)
-    started += (frame.length / sampleRate) * 1000
-    if (started >= durationMs) finish()
+  const done = new Promise<void>((resolve) => {
+    finish = () => {
+      if (doneReached) return
+      doneReached = true
+      resolve()
+    }
   })
+  const stop = await captureFloat(
+    stream,
+    (frame, sampleRate) => {
+      meter.push(frame, sampleRate)
+      started += (frame.length / sampleRate) * 1000
+      if (started >= durationMs) finish()
+    },
+    context ? { context } : undefined,
+  )
+  if (signal?.aborted) {
+    await stop()
+    throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+  }
   const onAbort = () => finish()
   signal?.addEventListener('abort', onAbort, { once: true })
+  const limit = timeoutMs ?? durationMs + 2000
+  const timer =
+    limit > 0 && !doneReached
+      ? setTimeout(() => {
+          if (doneReached) return
+          timedOut = true
+          finish()
+        }, limit)
+      : undefined
   try {
     await done
   } finally {
+    clearTimeout(timer)
     signal?.removeEventListener('abort', onAbort)
     await stop()
   }
   if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
+  if (timedOut) throw new SpeechError('audio-capture', 'Noise measurement timed out')
   const report = meter.report()
   if (!report) throw new SpeechError('audio-capture', 'No audio frames were captured')
   return report
+}
+
+/** Measures an open stream for `durationMs` and resolves with the report. */
+export function measureNoise(stream: MediaStream, options: MeasureNoiseOptions = {}): Promise<NoiseReport> {
+  return measureStream(stream, options)
 }
 
 export type CheckNoiseOptions = MeasureNoiseOptions & {
@@ -224,9 +267,12 @@ export type CheckNoiseOptions = MeasureNoiseOptions & {
 
 /** Opens the microphone, measures it and closes it. */
 export async function checkNoise(options: CheckNoiseOptions = {}): Promise<NoiseReport> {
+  if (options.signal?.aborted) throw options.signal.reason ?? new DOMException('Aborted', 'AbortError')
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     throw new SpeechError('not-supported', 'Microphone capture is not available')
   }
+  const context = typeof AudioContext !== 'undefined' ? new AudioContext() : undefined
+  if (context?.state === 'suspended') void context.resume?.().catch(() => {})
   const processing = options.processing ?? false
   let stream: MediaStream
   try {
@@ -241,12 +287,13 @@ export async function checkNoise(options: CheckNoiseOptions = {}): Promise<Noise
       video: false,
     })
   } catch (error) {
+    void context?.close?.().catch(() => {})
     const name = (error as DOMException)?.name
     if (name === 'NotAllowedError' || name === 'SecurityError') throw new SpeechError('not-allowed', 'Microphone permission denied')
     throw new SpeechError('audio-capture', (error as Error)?.message)
   }
   try {
-    return await measureNoise(stream, options)
+    return await measureStream(stream, options, context)
   } finally {
     closeStream(stream)
   }

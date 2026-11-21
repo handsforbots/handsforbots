@@ -125,6 +125,10 @@ export type VoiceNoiseOptions = {
   maxAgeMs?: number
   /** Passed to `checkNoise`. */
   durationMs?: number
+  /** Passed to `checkNoise`: wall-clock limit (ms) so a stalled audio graph cannot hang the check. */
+  timeoutMs?: number
+  /** Milliseconds to wait after the built-in noise check closes the microphone before starting the recognizer, avoiding audio-device contention. Default 100 (0 when `measure` is supplied); 0 disables. */
+  settleMs?: number
   thresholds?: NoiseThresholds
   processing?: boolean
   /** Replaces the measurement (a model, a server, a test). Default `checkNoise`. */
@@ -456,50 +460,119 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
 
   const noiseOptions: VoiceNoiseOptions | undefined =
     options.noise === true ? {} : options.noise ? options.noise : undefined
-  let noiseRun: { controller: AbortController; done: Promise<NoiseReport | undefined> } | undefined
+  type NoiseRun = {
+    controller: AbortController
+    forListen: boolean
+    done: Promise<NoiseReport | undefined>
+  }
+  let noiseRun: NoiseRun | undefined
   let noiseAt = 0
 
-  const measureNoise = (): Promise<NoiseReport | undefined> => {
-    if (noiseRun) return noiseRun.done
+  const waitAbortable = (delayMs: number, signal: AbortSignal): Promise<void> =>
+    new Promise((resolve) => {
+      if (signal.aborted || delayMs <= 0) return resolve()
+      const onAbort = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      const timer = setTimeout(() => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      }, delayMs)
+      signal.addEventListener('abort', onAbort, { once: true })
+    })
+
+  const abortNoise = () => {
+    const run = noiseRun
+    noiseRun = undefined
+    run?.controller.abort()
+  }
+
+  const startNoiseRun = (forListen: boolean): NoiseRun => {
     const controller = new AbortController()
     const opts = noiseOptions ?? {}
     const measure =
       opts.measure ??
       ((signal: AbortSignal) =>
-        checkNoise({ durationMs: opts.durationMs, thresholds: opts.thresholds, processing: opts.processing, signal }))
+        checkNoise({
+          durationMs: opts.durationMs,
+          timeoutMs: opts.timeoutMs,
+          thresholds: opts.thresholds,
+          processing: opts.processing,
+          signal,
+        }))
     set({ checkingNoise: true })
-    const done = (async () => {
+    const run: NoiseRun = {
+      controller,
+      forListen,
+      done: Promise.resolve(undefined),
+    }
+    noiseRun = run
+    const finishRun = () => {
+      const current = noiseRun === run
+      if (current) noiseRun = undefined
+      return current
+    }
+    run.done = (async () => {
+      let report: NoiseReport | undefined
       try {
-        const report = await measure(controller.signal)
-        noiseAt = Date.now()
-        set({ noise: report })
-        return report
+        report = await measure(controller.signal)
       } catch (error) {
         if (!controller.signal.aborted) ctx.emit('error', { error, source: 'voice:noise' })
-        return undefined
-      } finally {
-        noiseRun = undefined
-        set({ checkingNoise: false })
       }
-    })()
-    noiseRun = { controller, done }
-    return done
-  }
 
-  /** Before hands-free listening: false when listening should not start. */
-  const noiseAllowsListening = async (): Promise<boolean> => {
-    if (!noiseOptions || (noiseOptions.check ?? 'hands-free') !== 'hands-free' || state.mode !== 'hands-free') return true
-    // Another listen() is already waiting for this check and will start the session.
-    if (noiseRun) return false
-    const fresh = state.noise && Date.now() - noiseAt < (noiseOptions.maxAgeMs ?? 300_000)
-    const report = fresh ? state.noise : await measureNoise()
-    if (!report || !wantListening) return wantListening
-    const fallback = report.verdict === 'too-noisy' && (noiseOptions.tooNoisy ?? 'push-to-talk') === 'push-to-talk'
-    if (!fresh) ctx.emit('voice.noise', fallback ? { report, action: 'push-to-talk' } : { report })
-    if (!fallback) return true
-    wantListening = false
-    set({ mode: 'push-to-talk', noiseFallback: true })
-    return false
+      if (!run.forListen) {
+        const current = finishRun()
+        if (controller.signal.aborted) {
+          if (current && state.checkingNoise) set({ checkingNoise: false })
+          return undefined
+        }
+        if (report) noiseAt = Date.now()
+        set({ ...(report ? { noise: report } : {}), checkingNoise: false })
+        if (report) ctx.emit('voice.noise', { report })
+        return report
+      }
+
+      if (controller.signal.aborted || !wantListening) {
+        const current = finishRun()
+        if (current && state.checkingNoise) {
+          if (report) noiseAt = Date.now()
+          set({ ...(report ? { noise: report } : {}), checkingNoise: false })
+        }
+        return undefined
+      }
+
+      if (report && report.verdict === 'too-noisy' && (opts.tooNoisy ?? 'push-to-talk') !== 'warn') {
+        finishRun()
+        wantListening = false
+        noiseAt = Date.now()
+        set({ noise: report, checkingNoise: false, mode: 'push-to-talk', noiseFallback: true })
+        ctx.emit('voice.noise', { report, action: 'push-to-talk' })
+        return report
+      }
+
+      const settle = opts.settleMs ?? (opts.measure ? 0 : 100)
+      if (settle > 0) await waitAbortable(settle, controller.signal)
+      const current = finishRun()
+
+      if (controller.signal.aborted || !wantListening || active) {
+        if (current && state.checkingNoise) {
+          if (report) noiseAt = Date.now()
+          set({ ...(report ? { noise: report } : {}), checkingNoise: false })
+        }
+        return undefined
+      }
+
+      if (report) noiseAt = Date.now()
+      openMonitor()
+      await startSession(
+        { ...(report ? { noise: report } : {}), checkingNoise: false },
+        report ? () => ctx.emit('voice.noise', { report }) : undefined,
+        true,
+      )
+      return report
+    })()
+    return run
   }
 
   /** Shows the error in the state (for the UI) and on the kernel bus (for the developer). */
@@ -921,10 +994,15 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     }
   }
 
-  const startSession = async (): Promise<void> => {
+  const startSession = async (
+    patch?: Partial<VoiceState>,
+    afterStart?: () => void,
+    afterNoiseCheck = false,
+  ): Promise<void> => {
     const provider = nextProvider()
     if (!provider) {
-      fail(new SpeechError('not-supported', 'No speech recognition available'), { listening: false })
+      fail(new SpeechError('not-supported', 'No speech recognition available'), { ...patch, listening: false })
+      afterStart?.()
       wantListening = false
       if (holding) release(holding)
       return
@@ -934,11 +1012,20 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     active = entry
     const isCurrent = () => active === entry
     set({
+      ...patch,
       listening: true,
       error: undefined,
       stt: provider.name,
       partial: entry.held ? heldText(entry.held) : handsFree ? turnText() : '',
     })
+    afterStart?.()
+    if (!isCurrent() || !wantListening) {
+      if (isCurrent()) {
+        clearTimeout(entry.killTimer)
+        active = undefined
+      }
+      return
+    }
     let failed: SpeechError | undefined
     try {
       entry.session = await provider.listen(
@@ -1093,7 +1180,19 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         sttIndex++
         return startSession()
       }
+      if (
+        afterNoiseCheck &&
+        handsFree &&
+        speechError.code === 'audio-capture' &&
+        !hasFallbackAfter() &&
+        wantListening &&
+        !pausedForSpeech
+      ) {
+        restartTimer = setTimeout(() => wantListening && !active && void startSession(), 250)
+        return
+      }
       wantListening = false
+      closeMonitor()
       if (entry.held) release(entry.held)
     }
   }
@@ -1506,21 +1605,38 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       } else if (state.speaking) {
         service.cancelSpeech()
       }
-      if (!(await noiseAllowsListening())) return
       if (!wantListening || active) return
-      openMonitor()
-      await startSession()
+      if (!noiseOptions || (noiseOptions.check ?? 'hands-free') !== 'hands-free' || state.mode !== 'hands-free') {
+        openMonitor()
+        return startSession()
+      }
+      if (noiseRun) {
+        if (noiseRun.forListen) return
+        noiseRun.forListen = true
+        await noiseRun.done
+        return
+      }
+      if (state.noise && Date.now() - noiseAt < (noiseOptions.maxAgeMs ?? 300_000)) {
+        if (state.noise.verdict === 'too-noisy' && (noiseOptions.tooNoisy ?? 'push-to-talk') === 'push-to-talk') {
+          wantListening = false
+          set({ mode: 'push-to-talk', noiseFallback: true })
+          return
+        }
+        openMonitor()
+        return startSession()
+      }
+      await startNoiseRun(true).done
     },
     stop() {
       wantListening = false
-      noiseRun?.controller.abort()
+      abortNoise()
       closeMonitor()
       clearTimeout(restartTimer)
       const entry = active
       const press = holding
       holding = undefined
       // The mic turns off for the user right away; the provider flushes in the background.
-      set({ listening: false, partial: state.mode === 'hands-free' ? turnText('') : '' })
+      set({ listening: false, checkingNoise: false, partial: state.mode === 'hands-free' ? turnText('') : '' })
       if (!entry || entry.stopping) {
         // Released between two sessions of a hold-to-talk press.
         if (press) release(press)
@@ -1540,14 +1656,14 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     },
     cancel() {
       wantListening = false
-      noiseRun?.controller.abort()
+      abortNoise()
       closeMonitor()
       clearTimeout(restartTimer)
       if (holding) release(holding, false)
       discardPending()
       const entry = active
       active = undefined
-      set({ listening: false, partial: '' })
+      set({ listening: false, checkingNoise: false, partial: '' })
       if (!entry) return
       entry.discarded = true
       if (entry.held) release(entry.held, false)
@@ -1575,10 +1691,8 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         if (wantListening) restartTimer = setTimeout(() => wantListening && !active && void startSession(), 250)
       }
     },
-    async checkNoise() {
-      const report = await measureNoise()
-      if (report) ctx.emit('voice.noise', { report })
-      return report
+    checkNoise() {
+      return (noiseRun ?? startNoiseRun(false)).done
     },
     async toggle() {
       if (state.listening || wantListening) service.stop()
@@ -1694,6 +1808,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
 
   ctx.onDispose(() => {
     disposed = true
+    abortNoise()
     closeMonitor()
     unfollowEffects?.()
     followTraces([])

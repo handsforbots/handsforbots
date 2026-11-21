@@ -14,6 +14,7 @@ vi.mock('../src/providers/media.js', () => ({
   closeStream: (stream: { getTracks: () => { stop: () => void }[] }) => {
     for (const track of stream.getTracks()) track.stop()
   },
+  resumeAudioContext: async () => {},
   captureFloat: async () => {
     if (media.captureFail) throw new Error('capture failed')
     return async () => {}

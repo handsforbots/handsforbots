@@ -264,6 +264,8 @@ Change any limit with `thresholds`. Treat the defaults as a starting point: dBFS
 
 By default `checkNoise()` measures the raw signal (`processing: false`): noise suppression would hide steady noise, and automatic gain raises the floor while nobody speaks. `processing: true` measures what the microphone recognizers hear. Web Speech opens its own microphone, so with it the check is always a separate measurement.
 
+`timeoutMs` caps the wall-clock time of `checkNoise()` and `measureNoise()` (default `durationMs + 2000`; `0` disables), so a stalled or suspended audio graph throws `audio-capture` instead of hanging. The capture helpers (`captureFloat`, `capturePcm16`, `monitorLevel`) resume a suspended `AudioContext`, and `checkNoise()` creates and resumes its `AudioContext` before `getUserMedia` while user activation is still active.
+
 #### Checking before hands-free
 
 The voice plugin can run the check itself. Turn it on with the `noise` option (off by default, since it opens the microphone for a moment before listening):
@@ -273,12 +275,12 @@ voice({ stt, tts, mode: 'hands-free', noise: true })
 voice({ stt, tts, mode: 'hands-free', noise: { tooNoisy: 'warn', maxAgeMs: 60_000, thresholds: { noisyFloorDb: -45 } } })
 ```
 
-- With `check: 'hands-free'` (default), `listen()` in hands-free measures the room first (`getState().checkingNoise` is `true`; the recognizer has not started yet), then listens. Push-to-talk is not checked.
+- With `check: 'hands-free'` (default), `listen()` in hands-free measures the room first and then starts listening. `getState().checkingNoise` stays `true` until `listening` becomes `true` (or the fallback, `stop()` or `cancel()` ends it), with no idle gap between them. After the built-in `checkNoise()` closes the microphone, the plugin waits `settleMs` ms (default `100`, `0` when `measure` is supplied; `0` disables) before starting the recognizer to avoid audio-device contention (CoreAudio, Bluetooth, mobile). `timeoutMs` is forwarded to `checkNoise()`. Push-to-talk is not checked.
 - `too-noisy` with `tooNoisy: 'push-to-talk'` (default): the mode becomes `push-to-talk`, `noiseFallback` is `true` and listening does not start. An open microphone in a loud room interrupts the bot and never ends the turn; holding to talk does not have that problem. `noiseFallback` is cleared at the next `setMode()`. `tooNoisy: 'warn'` only reports.
 - `noisy` (or `too-noisy` with `warn`): listening starts; the report is in `getState().noise` for the UI to warn the user.
-- A report newer than `maxAgeMs` (5 minutes) is reused, so pausing and resuming does not measure again.
-- `stop()`, `cancel()` or `toggle()` during the check cancel it, and nothing is heard. If the measurement fails (microphone denied, for example), the error goes to `h4b.on('error')` with `source: 'voice:noise'` and listening starts anyway: the recognizer reports its own microphone errors.
-- Each finished check emits `voice.noise` `{ report, action? }`, with `action: 'push-to-talk'` when the mode changed. `voice.checkNoise()` measures on demand (also with `check: 'manual'`, which never measures before listening).
+- A report newer than `maxAgeMs` (5 minutes) is reused, so pausing and resuming does not measure again. Whenever no fresh check is needed (`noise` off, push-to-talk, `check: 'manual'`, or a cached report within `maxAgeMs`), `listen()` starts the recognizer synchronously inside the call, preserving browser user activation.
+- `stop()`, `cancel()`, `toggle()` or disposing the app (`h4b.stop()`) during the check abort it, and nothing is heard. If the measurement fails (microphone denied, for example), the error goes to `h4b.on('error')` with `source: 'voice:noise'` and listening starts anyway: the recognizer reports its own microphone errors.
+- Each finished check emits `voice.noise` `{ report, action? }`, with `action: 'push-to-talk'` when the mode changed. `voice.checkNoise()` measures on demand (also with `check: 'manual'`, which never measures before listening). With `webSpeechSTT` on Safari/iOS, waiting for `getUserMedia` and `durationMs` during `check: 'hands-free'` can outlive the browser's transient user activation for `SpeechRecognition.start()`: run `voice.checkNoise()` ahead of time (or use `check: 'manual'`) so the report is cached for `maxAgeMs` and `listen()` starts `SpeechRecognition` synchronously inside the user's click or tap.
 - `measure(signal)` replaces the measurement (a model, your server, a test) and must return a `NoiseReport`; `assessNoise()` builds one from frame levels.
 
 The widget shows the check: "Checking the background noise…" while it runs (the mic button has `aria-busy`), a hint while listening in a noisy room instead of "Listening…", and "Too noisy for hands-free. Hold the mic to talk." after the fallback. Change the texts with `strings: { noiseChecking, noiseHint, noiseTooLoud }`; style the hint with `.partial.noisy` through `::part()` or your own UI. A listening error replaces the hint.

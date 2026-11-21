@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const capture = vi.hoisted(() => ({
   frame: undefined as Float32Array | undefined,
   stopped: 0,
+  silent: false,
+  delay: undefined as (() => Promise<void>) | undefined,
+  lastContext: undefined as AudioContext | undefined,
 }))
 
 vi.mock('../src/providers/media.js', async importOriginal => {
@@ -10,14 +13,22 @@ vi.mock('../src/providers/media.js', async importOriginal => {
   return {
     ...original,
     // Delivers the same 100 ms frame on every microtask until stopped.
-    captureFloat: async (_stream: MediaStream, onFrame: (frame: Float32Array, rate: number) => void) => {
+    captureFloat: async (
+      _stream: MediaStream,
+      onFrame: (frame: Float32Array, rate: number) => void,
+      options?: { context?: AudioContext },
+    ) => {
+      capture.lastContext = options?.context
+      if (capture.delay) await capture.delay()
       let running = true
-      void (async () => {
-        while (running) {
-          onFrame(capture.frame ?? new Float32Array(1600), 16000)
-          await Promise.resolve()
-        }
-      })()
+      if (!capture.silent) {
+        void (async () => {
+          while (running) {
+            onFrame(capture.frame ?? new Float32Array(1600), 16000)
+            await Promise.resolve()
+          }
+        })()
+      }
       return async () => {
         running = false
         capture.stopped++
@@ -76,8 +87,12 @@ function measure(samples: Float32Array, thresholds?: Parameters<typeof assessNoi
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   capture.frame = undefined
   capture.stopped = 0
+  capture.silent = false
+  capture.delay = undefined
+  capture.lastContext = undefined
   vi.unstubAllGlobals()
 })
 
@@ -217,5 +232,132 @@ describe('measureNoise / checkNoise', () => {
     const denied = Object.assign(new Error('no'), { name: 'NotAllowedError' })
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn(async () => Promise.reject(denied)) } })
     await expect(checkNoise()).rejects.toMatchObject({ code: 'not-allowed' })
+  })
+
+  it('aborts cleanly when signal aborts during captureFloat setup', async () => {
+    const controller = new AbortController()
+    let release!: () => void
+    capture.delay = () => new Promise<void>((resolve) => (release = resolve))
+    capture.silent = true
+
+    const pending = measureNoise({} as MediaStream, { signal: controller.signal, timeoutMs: 0 })
+    controller.abort()
+    release()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(capture.stopped).toBe(1)
+  })
+
+  it('times out with SpeechError(audio-capture) and stops capture when no frames arrive', async () => {
+    vi.useFakeTimers()
+    capture.silent = true
+
+    const pending = measureNoise({} as MediaStream, { durationMs: 500, timeoutMs: 250 })
+    const assertion = expect(pending).rejects.toMatchObject({
+      code: 'audio-capture',
+      message: 'Noise measurement timed out',
+    })
+    await vi.advanceTimersByTimeAsync(250)
+    await assertion
+    expect(capture.stopped).toBe(1)
+  })
+
+  it('checkNoise rejects immediately without calling getUserMedia when signal is already aborted', async () => {
+    const getUserMedia = vi.fn()
+    const audioContextCtor = vi.fn()
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+    vi.stubGlobal('AudioContext', audioContextCtor)
+
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(checkNoise({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(audioContextCtor).not.toHaveBeenCalled()
+  })
+
+  it('checkNoise creates and resumes AudioContext synchronously before getUserMedia resolves', async () => {
+    const stop = vi.fn()
+    let resolveMedia!: (stream: MediaStream) => void
+    const getUserMedia = vi.fn(
+      () => new Promise<MediaStream>((resolve) => (resolveMedia = resolve)),
+    )
+    const contexts: { state: string; resume: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }[] = []
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        state = 'suspended'
+        resume = vi.fn(async () => {
+          this.state = 'running'
+        })
+        close = vi.fn(async () => {
+          this.state = 'closed'
+        })
+        constructor() {
+          contexts.push(this)
+        }
+      },
+    )
+
+    capture.frame = noise(0.1, db(-75))
+    const pending = checkNoise({ durationMs: 300 })
+
+    // Synchronously created and resumed before getUserMedia resolves.
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0]!.resume).toHaveBeenCalledTimes(1)
+
+    resolveMedia({ getTracks: () => [{ stop }] } as unknown as MediaStream)
+    const report = await pending
+    expect(report.verdict).toBe('quiet')
+    expect(capture.lastContext).toBe(contexts[0])
+    expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('checkNoise closes the pre-created AudioContext if getUserMedia fails', async () => {
+    const close = vi.fn(async () => {})
+    const resume = vi.fn(async () => {})
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        state = 'suspended'
+        resume = resume
+        close = close
+      },
+    )
+    const denied = Object.assign(new Error('denied'), { name: 'NotAllowedError' })
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn(async () => Promise.reject(denied)) } })
+
+    await expect(checkNoise()).rejects.toMatchObject({ code: 'not-allowed' })
+    expect(resume).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('checkNoise closes both stream and pre-created AudioContext if aborted during getUserMedia', async () => {
+    const stop = vi.fn()
+    const close = vi.fn(async () => {})
+    let resolveMedia!: (stream: MediaStream) => void
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        state = 'suspended'
+        resume = vi.fn(async () => {})
+        close = close
+      },
+    )
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia: vi.fn(() => new Promise<MediaStream>((resolve) => (resolveMedia = resolve))),
+      },
+    })
+
+    const controller = new AbortController()
+    const pending = checkNoise({ signal: controller.signal })
+    controller.abort()
+    resolveMedia({ getTracks: () => [{ stop }] } as unknown as MediaStream)
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
   })
 })
