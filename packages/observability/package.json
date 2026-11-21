@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/observability",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "description": "Plugin. Semantic observability for Hands for Bots v2: turns, routes, actions and signals as logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith).",
   "keywords": [
     "handsforbots",

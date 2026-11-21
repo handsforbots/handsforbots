@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/widget",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "description": "UI. Ready-made conversation surface for Hands for Bots as a Web Component (<h4b-chat>): works in plain HTML, React, Vue…",
   "keywords": [
     "handsforbots",

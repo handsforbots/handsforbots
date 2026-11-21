@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/storage-backend",
-  "version": "2.0.0-alpha.3",
+  "version": "2.0.0-alpha.4",
   "description": "Plugin. Keeps the Hands for Bots conversation on your backend, with retention the server enforces.",
   "keywords": [
     "handsforbots",
