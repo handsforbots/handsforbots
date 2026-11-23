@@ -52,7 +52,7 @@
     "@handsforbots/menu": "workspace:^",
     "@handsforbots/voice": "workspace:^",
     "fast-check": "^4.10.2",
-    "jsdom": "^31.0.0"
+    "jsdom": "^31.0.1"
   },
   "peerDependenciesMeta": {}
 }
