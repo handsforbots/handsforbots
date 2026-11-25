@@ -6,6 +6,7 @@ import {
   type SpeechToText,
   type TextToSpeech,
 } from '../types.js'
+import { cleanTimedWords, parseWordVtt, type TimedWord } from '../words.js'
 import { closeStream, detectEndOfSpeech, openMicrophone } from './media.js'
 
 type Headers = Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
@@ -141,6 +142,42 @@ export type HttpTTSOptions = {
   playback?: 'webaudio' | 'element'
 }
 
+/**
+ * A TTS reply with word timings (ADR 0020), sent as `application/json`
+ * instead of raw audio: `audio` is the file in base64; `words` (positions and
+ * quality) or `vtt` (WebVTT with inline word timestamps) say when each word is
+ * said, in seconds since the start of `audio`. Without either, the voice
+ * plugin estimates.
+ */
+export type HttpTTSJsonReply = {
+  audio: string
+  words?: TimedWord[]
+  vtt?: string
+}
+
+const base64Bytes = (value: string): ArrayBuffer => {
+  const binary = atob(value.replace(/\s+/g, ''))
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes.buffer
+}
+
+/** Reads a TTS reply: raw audio, or JSON with `audio` and word timings. */
+async function readSpeech(response: Response): Promise<SpeechAudio> {
+  const type = response.headers.get('Content-Type') ?? ''
+  if (!/^application\/(?:[\w.+-]*\+)?json/i.test(type)) return decodeAudio(await response.arrayBuffer())
+  const reply = (await response.json()) as Partial<HttpTTSJsonReply> | null
+  if (!reply || typeof reply.audio !== 'string') throw new SpeechError('synthesis-failed', 'TTS JSON reply has no "audio"', 'speak')
+  const audio = await decodeAudio(base64Bytes(reply.audio))
+  const defaults = { quality: 'measured', source: 'backend' } as const
+  const words = Array.isArray(reply.words)
+    ? cleanTimedWords(reply.words, defaults)
+    : typeof reply.vtt === 'string'
+      ? cleanTimedWords(parseWordVtt(reply.vtt), defaults)
+      : []
+  return words.length ? { ...audio, words } : audio
+}
+
 /** Decodes an audio file into mono samples (Web Audio). */
 export async function decodeAudio(bytes: ArrayBuffer): Promise<SpeechAudio> {
   const decoder = new OfflineAudioContext(1, 1, 48000)
@@ -185,10 +222,12 @@ export function httpTTS(options: HttpTTSOptions): TextToSpeech {
     synthesize:
       options.playback === 'element'
         ? undefined
-        : async (text, speakOptions) => decodeAudio(await (await request(text, speakOptions)).arrayBuffer()),
+        : async (text, speakOptions) => readSpeech(await request(text, speakOptions)),
     async speak(text, speakOptions) {
       const response = await request(text, speakOptions)
-      const url = URL.createObjectURL(await response.blob())
+      const json = /json/i.test(response.headers.get('Content-Type') ?? '')
+      const blob = json ? new Blob([base64Bytes(String(((await response.json()) as { audio?: unknown })?.audio ?? ''))]) : await response.blob()
+      const url = URL.createObjectURL(blob)
       try {
         await new Promise<void>((resolve) => {
           const audio = new Audio(url)

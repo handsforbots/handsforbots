@@ -148,3 +148,33 @@ describe('voice service: speaking errors', () => {
     expect(unlock).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('browser voice word boundaries (ADR 0020)', () => {
+  it('reports start and word boundaries with positions in the text it was given', async () => {
+    const { utterances } = fakeSynthesis()
+    const events: unknown[] = []
+    // Spaces are joined in the utterance; positions map back to this text.
+    const text = 'Olá,   mundo.  Tchau  tchau.'
+    const speaking = webSpeechTTS().speak!(text, { language: 'pt-BR', onProgress: (e) => events.push(e) })
+    await eventually(() => expect(utterances).toHaveLength(1))
+    const first = utterances[0]
+    expect(first.text).toBe('Olá, mundo. Tchau tchau.')
+    first.onstart()
+    first.onboundary({ name: 'word', charIndex: 0, charLength: 3, elapsedTime: 0 })
+    first.onboundary({ name: 'sentence', charIndex: 0 })
+    first.onboundary({ name: 'word', charIndex: 5, charLength: 5, elapsedTime: 0.4 })
+    first.onboundary({ name: 'word', charIndex: 18 })
+    first.onboundary({ name: 'word', charIndex: 999 })
+    first.onstart()
+    first.onend()
+    await speaking
+    expect(events).toEqual([
+      { type: 'start' },
+      { type: 'boundary', from: 0, to: 3, elapsed: 0 },
+      { type: 'boundary', from: 7, to: 12, elapsed: 0.4 },
+      { type: 'boundary', from: 22 },
+    ])
+    expect(text.slice(7, 12)).toBe('mundo')
+    expect(text.slice(22, 27)).toBe('tchau')
+  })
+})

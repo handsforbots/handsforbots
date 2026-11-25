@@ -41,6 +41,7 @@ npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsfo
 | Deixar agentes do navegador usarem minhas ações | [`expose-webmcp`](#handsforbotsexpose-webmcp) |
 | Mostrar apps interativos enviados por um servidor MCP | [`mcp-apps`](#handsforbotsmcp-apps) |
 | Fazer a página reagir à conversa (humor, cenário, urgência) | [`cues`](#handsforbotscues) |
+| Legendas que acompanham a voz do bot palavra por palavra | [`captions`](#handsforbotscaptions) |
 | Manter certos os fatos e as decisões de uma conversa longa | [`conversation-state`](#handsforbotsconversation-state) |
 | Controlar quanto histórico é enviado e guardado | [`memory`](#handsforbotsmemory) |
 | Sobreviver a recarregar a página | [`storage-local`](#handsforbotsstorage-local) ou [`storage-backend`](#handsforbotsstorage-backend) |
@@ -208,7 +209,7 @@ Fala na entrada e na saída com provedores que você escolhe e encadeia: as APIs
   npm install @handsforbots/voice@alpha @handsforbots/core@alpha
   ```
 
-- **Funciona com:** o widget (botões de microfone e alto-falante), `keyboard` (segurar para falar), `menu` (comandos falados), `voice-models` e `voice-effects` (a voz do bot), `cues` (no tempo da fala).
+- **Funciona com:** o widget (botões de microfone e alto-falante), `keyboard` (segurar para falar), `menu` (comandos falados), `voice-models` e `voice-effects` (a voz do bot), `cues` (no tempo da fala), `captions` (palavra por palavra).
 - **Por exemplo:** uso sem as mãos enquanto se cozinha, se dirige uma empilhadeira ou se segura uma ferramenta; ditar um texto longo; acessibilidade para quem não pode digitar.
 - Guias: [Interrupção e conversa por voz](./conversation.md), [Síntese de voz](./speech.md).
 
@@ -329,6 +330,21 @@ Categorias de apresentação com vocabulário fechado às quais a página reage:
   ```
 
 - **Por exemplo:** um avatar que fica confuso depois de mal-entendidos repetidos; um fundo que acompanha o assunto; uma borda vermelha quando um atendimento fica urgente.
+
+### `@handsforbots/captions`
+
+Legendas que acompanham a voz do bot palavra por palavra: as palavras já ditas, a atual com o progresso dela, as próximas. Funciona com qualquer voz: os tempos vêm do seu backend (JSON ou WebVTT), dos eventos de palavra do navegador, das durações de fonema do Piper ou do Kokoro, ou de uma estimativa, e cada palavra diz de onde. O widget desenha; a sua interface lê o mesmo serviço.
+
+- **Precisa de:** `@handsforbots/core`, `@handsforbots/voice`.
+- **Instalação:**
+
+  ```bash
+  npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
+  ```
+
+- **Funciona com:** o widget (`.captions` acima do campo de texto), React e Vue (`useStore`), `voice-models` (`durations: true`).
+- **Por exemplo:** um avatar falante com legendas no estilo de podcast; acompanhar a fala numa sala barulhenta ou com perda auditiva; treino de leitura em que a palavra falada acende.
+- Guia: [Legendas palavra por palavra](./speech.md#legendas-palavra-por-palavra).
 
 ## Conversa, memória e armazenamento
 

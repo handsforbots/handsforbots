@@ -101,6 +101,21 @@ Supports [ADR 0013](../adr/0013-sintese-de-voz-e-efeitos.md) and [Speech synthes
 | [Transferable objects (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects) | The synthesized samples come back from the worker by transferring their buffer, without a copy |
 | [Vite: `worker.format`](https://vite.dev/config/worker-options) | `'es'` is needed for workers that import modules on demand; the default `iife` cannot |
 
+## Word-by-word captions
+
+Supports [ADR 0020](../adr/0020-legendas-palavra-por-palavra.md) and [Speech synthesis → Word-by-word captions](./speech.md#word-by-word-captions). Accessed 2026-11-25. No timing error was measured by us; the numbers below are the sources'.
+
+| Source | What it is | Use in H4B |
+|---|---|---|
+| [WebVTT (W3C)](https://www.w3.org/TR/webvtt1/) | The web's caption format; cue text may hold inline timestamps (`<00:00:01.250>`) for karaoke-style captions, and character references (`&amp;`, `&lt;`) | The transport and storage format for word timings from a backend (`vtt` in the `httpTTS` JSON reply), `parseWordVtt`, `toWordVtt`. Text between two timestamps is one unit |
+| [Web Speech API (W3C CG)](https://webaudio.github.io/web-speech-api/) · [`boundary` event (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/boundary_event) · [`SpeechSynthesisEvent.elapsedTime` (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisEvent/elapsedTime) | `speechSynthesis` reports word starts (`charIndex`, `charLength`, `elapsedTime`) for voices that support it | `webSpeechTTS` passes them on as `onProgress` boundaries; the voice uses arrival time, since `elapsedTime` units differ between browsers, and ends a word where the next starts |
+| [`BaseAudioContext.currentTime` (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/currentTime) | The audio clock, which stops while the context is suspended | The clock word timings follow (`PlayOptions.onStart`) |
+| [VITS (Kim et al., 2021)](https://arxiv.org/abs/2106.06103) | The architecture behind Piper: a duration predictor decides how many frames each phoneme lasts | Why phoneme durations exist inside Piper models; `durations: true` reads them when the export exposes them. We found no published Piper voice with that output |
+| [StyleTTS 2 (Li et al., 2023)](https://arxiv.org/abs/2306.07691) · [Kokoro 82M ONNX, timestamped export](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped) | Kokoro's architecture, also with a duration predictor; an ONNX export that adds a durations output (same files as the regular export) | `kokoroTTS({ durations: true })` with `kokoroModel({ repo })`. The output name is detected (`durations`, `duration`, `pred_dur`, `w_ceil`); we did not inspect the graph |
+| [WhisperX](https://github.com/m-bain/whisperX) · [paper (Bain et al., 2023)](https://arxiv.org/abs/2303.00747) · [Montreal Forced Aligner](https://montreal-forced-aligner.readthedocs.io/) | Forced alignment of audio against text, giving word times | Scenario 1 done well: align on the backend and send `quality: 'aligned'`, `source: 'asr'` through the `httpTTS` JSON reply |
+| [`Intl.Segmenter` (MDN)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter) | Word segmentation by locale | Not used yet: captions split on spaces, so scripts without spaces become one unit per sentence (open item in the ADR) |
+| floravox (vendor) | A TTS vendor | Says length-based word estimates are off by 100–300 ms. The vendor's number, passed to us without a link; **not measured by us** |
+
 ## Recognition on the VPS (to be tested)
 
 Supports open decision 10 in the [ROADMAP](../../ROADMAP.md). Accessed 2026-11-09. We have not run any of these models. Sizes and the language-switch behavior are the authors'.

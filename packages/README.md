@@ -21,6 +21,7 @@
 | [`@handsforbots/guided`](./guided) | Guided tours, highlights, `show_section`, `image_gallery` |
 | [`@handsforbots/expose-webmcp`](./expose-webmcp) | Publishes actions to browser agents through WebMCP |
 | [`@handsforbots/mcp-apps`](./mcp-apps) | Hosts MCP Apps (`ui://`) in sandboxed iframes, bridging their tool calls to actions |
+| [`@handsforbots/captions`](./captions) | Word-by-word captions of the bot's speech (spoken, current with progress, upcoming) from the voice's word timings, for the widget or your own UI |
 | [`@handsforbots/cues`](./cues) | Cues: closed-vocabulary presentation categories (mood, scenery, urgency…) from the backend, an action or content rules, with repetition counts and policies |
 | [`@handsforbots/conversation-state`](./conversation-state) | Explicit conversation state: topic, goal, entities, decisions, sourced facts and pending items, changed only by checked operations and sent with every request; `/server` reads it on the backend |
 | [`@handsforbots/memory`](./memory) | Memory policy: turns sent and kept, compaction (mounted by default) |

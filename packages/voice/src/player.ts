@@ -120,6 +120,8 @@ export function webAudioPlayer(options: WebAudioPlayerOptions = {}): AudioPlayer
         }
         play.signal?.addEventListener('abort', abort, { once: true })
         source.start()
+        const startedAt = ctx.currentTime
+        play.onStart?.(() => Math.max(0, ctx.currentTime - startedAt))
       })
     },
     stop() {

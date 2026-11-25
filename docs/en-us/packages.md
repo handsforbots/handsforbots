@@ -41,6 +41,7 @@ npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsfo
 | Let browser agents use my actions | [`expose-webmcp`](#handsforbotsexpose-webmcp) |
 | Show interactive apps sent by an MCP server | [`mcp-apps`](#handsforbotsmcp-apps) |
 | Make the page react to the conversation (mood, scenery, urgency) | [`cues`](#handsforbotscues) |
+| Captions that follow the bot's voice word by word | [`captions`](#handsforbotscaptions) |
 | Keep the facts and decisions of a long conversation straight | [`conversation-state`](#handsforbotsconversation-state) |
 | Control how much history is sent and kept | [`memory`](#handsforbotsmemory) |
 | Survive reloads | [`storage-local`](#handsforbotsstorage-local) or [`storage-backend`](#handsforbotsstorage-backend) |
@@ -208,7 +209,7 @@ Speech in and out with providers you choose and chain: the browser's speech APIs
   npm install @handsforbots/voice@alpha @handsforbots/core@alpha
   ```
 
-- **Works with:** the widget (microphone and speaker buttons), `keyboard` (hold to talk), `menu` (spoken commands), `voice-models` and `voice-effects` (the bot's voice), `cues` (timed to speech).
+- **Works with:** the widget (microphone and speaker buttons), `keyboard` (hold to talk), `menu` (spoken commands), `voice-models` and `voice-effects` (the bot's voice), `cues` (timed to speech), `captions` (word by word).
 - **For instance:** hands-free use while cooking, driving a forklift or holding a tool; dictating a long text; accessibility for people who can't type.
 - Guides: [Interruption and voice conversation](./conversation.md), [Speech synthesis](./speech.md).
 
@@ -329,6 +330,21 @@ Presentation categories with a closed vocabulary that the page reacts to: a char
   ```
 
 - **For instance:** an avatar that looks confused after repeated misunderstandings; a background that follows the topic; a red outline when a support case becomes urgent.
+
+### `@handsforbots/captions`
+
+Captions that follow the bot's voice word by word: words already said, the current one with its progress, the ones to come. Works with any voice: timings come from your backend (JSON or WebVTT), the browser's word events, Piper or Kokoro phoneme durations, or an estimate, and each word says which. The widget draws them; your own UI reads the same service.
+
+- **Needs:** `@handsforbots/core`, `@handsforbots/voice`.
+- **Install:**
+
+  ```bash
+  npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
+  ```
+
+- **Works with:** the widget (`.captions` above the composer), React and Vue (`useStore`), `voice-models` (`durations: true`).
+- **For instance:** a talking avatar with podcast-style captions; following along in a noisy room or with hearing loss; reading practice where the spoken word lights up.
+- Guide: [Word-by-word captions](./speech.md#word-by-word-captions).
 
 ## Conversation, memory and storage
 

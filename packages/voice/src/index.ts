@@ -31,7 +31,7 @@ export {
   type WebSpeechSTTOptions,
   type WebSpeechTTSOptions,
 } from './providers/webspeech.js'
-export { httpSTT, httpTTS, decodeAudio, type HttpSTTOptions, type HttpTTSOptions } from './providers/http.js'
+export { httpSTT, httpTTS, decodeAudio, type HttpSTTOptions, type HttpTTSJsonReply, type HttpTTSOptions } from './providers/http.js'
 export { webAudioPlayer, planProsody, encodeWav, type ProsodyPlan, type WebAudioPlayerOptions } from './player.js'
 export { websocketSTT, voskSTT, type StreamingResult, type WebSocketSTTOptions } from './providers/websocket.js'
 export { voskBrowserSTT, type VoskBrowserModule, type VoskBrowserOptions } from './providers/vosk-browser.js'
@@ -59,4 +59,26 @@ export {
   type NoiseVerdict,
 } from './providers/noise.js'
 export { createLevelGate, monitorLevel, type LevelGate, type LevelGateOptions, type LevelVerdict } from './providers/level.js'
+export {
+  alignWords,
+  cleanTimedWords,
+  decodeVttText,
+  estimateWords,
+  formatVttTime,
+  normalizeWord,
+  parseVttTime,
+  parseWordVtt,
+  splitWords,
+  toWordVtt,
+  voicedSpan,
+  CHARS_PER_SECOND,
+  MAX_TIMED_WORDS,
+  type AlignOptions,
+  type TimedWord,
+  type WordQuality,
+  type WordSource,
+  type WordSpan,
+  type WordTiming,
+} from './words.js'
+export type { ChunkRange, SpeechPosition, VoiceWordEvent } from './word-run.js'
 export * from './types.js'

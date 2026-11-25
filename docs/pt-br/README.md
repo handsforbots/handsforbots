@@ -48,7 +48,7 @@ Além do kernel, de um transporte e de uma interface, cada capacidade é um paco
 
 | Para… | Pacotes | O que trazem |
 |---|---|---|
-| Falar e ouvir | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) | fala de entrada e saída, mãos livres, interrupção por voz; vozes neurais na página; efeitos de voz |
+| Falar e ouvir | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) · [`captions`](https://www.npmjs.com/package/@handsforbots/captions) | fala de entrada e saída, mãos livres, interrupção por voz; vozes neurais na página; efeitos de voz; legendas palavra por palavra |
 | Rodar comandos sem o LLM | [`menu`](https://www.npmjs.com/package/@handsforbots/menu) · [`keyboard`](https://www.npmjs.com/package/@handsforbots/keyboard) | comandos com barra, frases, atalhos, segurar para falar, paleta |
 | Mostrar e guiar na tela | [`guided`](https://www.npmjs.com/package/@handsforbots/guided) · [`cues`](https://www.npmjs.com/package/@handsforbots/cues) | tours, destaques, seções, galerias; estados de tom e cena que a página espelha |
 | Receber mais que texto | [`inputs`](https://www.npmjs.com/package/@handsforbots/inputs) | câmera, arquivos, eventos da interface, inatividade, sensores |
@@ -77,7 +77,7 @@ Agentes de código integram o H4B melhor com as [skills](../../skills/README.md)
 - [Histórico](./history.md): leitura, registro de decisões da interface, linha do tempo
 - [Interrupção e conversa por voz](./conversation.md): mensagens enviadas enquanto o assistente responde, botões de parar, conversa com microfone aberto, modelos de fim de turno, barge-in
 - [Fontes e citações](./sources.md): fontes nas mensagens do assistente, citações como trechos do texto, transportes, referências e lista no widget, agrupamento das seções de um artigo, URLs seguras
-- [Síntese de voz e efeitos](./speech.md): a voz do navegador, um backend ou modelos na página (Piper, Kokoro, transformers.js), quando os modelos baixam e quem fala enquanto isso, efeitos em JSON, presets, exportação para SSML e FFmpeg
+- [Síntese de voz e efeitos](./speech.md): a voz do navegador, um backend ou modelos na página (Piper, Kokoro, transformers.js), quando os modelos baixam e quem fala enquanto isso, efeitos em JSON, presets, exportação para SSML e FFmpeg, legendas palavra por palavra
 - [Persistência, memória e privacidade](./persistence.md): o que é enviado, guardado e armazenado, criptografia, retenção, abas
 - [Estado explícito da conversa](./conversation-state.md): um registro pequeno e auditável de assunto, objetivo, entidades, decisões, fatos com fonte e pendências, com checagens contra fato inventado
 - [Experimentos e atributos da conversa](./experiments.md): testes A/B, códigos presos à conversa, exposições, contadores, W3C `baggage` para o backend

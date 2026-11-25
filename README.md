@@ -56,7 +56,7 @@ Beyond the kernel, a transport and a UI, each capability is its own package:
 
 | To… | Packages | What they bring |
 |---|---|---|
-| Talk and listen | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) | speech in and out, hands-free, barge-in; neural voices in the page; voice effects |
+| Talk and listen | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) · [`captions`](https://www.npmjs.com/package/@handsforbots/captions) | speech in and out, hands-free, barge-in; neural voices in the page; voice effects; word-by-word captions |
 | Run commands without the LLM | [`menu`](https://www.npmjs.com/package/@handsforbots/menu) · [`keyboard`](https://www.npmjs.com/package/@handsforbots/keyboard) | slash commands, phrases, shortcuts, push-to-talk, palette |
 | Show and guide on the page | [`guided`](https://www.npmjs.com/package/@handsforbots/guided) · [`cues`](https://www.npmjs.com/package/@handsforbots/cues) | tours, highlights, sections, galleries; tone and scene states the page mirrors |
 | Take in more than text | [`inputs`](https://www.npmjs.com/package/@handsforbots/inputs) | camera, files, GUI events, idle, sensors |
@@ -85,7 +85,7 @@ Coding agents integrate H4B better with its [skills](./skills/README.md). In Cla
 - [History](./docs/en-us/history.md): reading it, recording GUI decisions, timelines
 - [Interruption and voice conversation](./docs/en-us/conversation.md): messages sent while the assistant answers, stop buttons, open-microphone conversation, end-of-turn models, barge-in
 - [Sources and citations](./docs/en-us/sources.md): sources in assistant messages, citations as spans of the text, transports, widget references and lists, grouping sections of one article, safe URLs
-- [Speech synthesis and voice effects](./docs/en-us/speech.md): the browser voice, a backend or models in the page (Piper, Kokoro, transformers.js), when models download and who speaks meanwhile, effects as JSON, presets, SSML and FFmpeg export
+- [Speech synthesis and voice effects](./docs/en-us/speech.md): the browser voice, a backend or models in the page (Piper, Kokoro, transformers.js), when models download and who speaks meanwhile, effects as JSON, presets, SSML and FFmpeg export, word-by-word captions
 - [Persistence, memory and privacy](./docs/en-us/persistence.md): what is sent, kept and stored, encryption, retention, tabs
 - [Explicit conversation state](./docs/en-us/conversation-state.md): a small, auditable record of topic, goal, entities, decisions, sourced facts and pending items, with checks against invented facts
 - [Experiments and conversation attributes](./docs/en-us/experiments.md): A/B tests, codes attached to a conversation, exposures, counters, W3C `baggage` to the backend

@@ -321,6 +321,62 @@ voice({ tts: [piper, webSpeechTTS()], load: { start: 'idle', whileLoading: 'fall
 
 **Browsers.** Module workers are in Chrome, Edge and Opera (Chromium 80+), Firefox 114+ and Safari 15+. Tested in the lab with Piper in Chrome 129 and Opera 115 (Chromium 130). Older browsers fail at `load` and fall back to the next provider.
 
+## Word-by-word captions
+
+The voice reports when each word is said, so a caption can follow it like synced lyrics: words already said, the current word with its progress, the words to come (ADR [0020](../adr/0020-legendas-palavra-por-palavra.md)). Install `@handsforbots/captions` and the widget draws it:
+
+```ts
+import { voice, webSpeechTTS } from '@handsforbots/voice'
+import { captions } from '@handsforbots/captions'
+import { widget } from '@handsforbots/widget'
+
+createH4B({ plugins: [voice({ tts: webSpeechTTS(), output: 'voice' }), captions(), widget()] })
+```
+
+**Where the timings come from.** Every source ends in the same contract, mapped onto the same words (runs of non-space characters, punctuation included: `voice.wordsOf(text)`):
+
+| Your voice | Timings | `quality` / `source` |
+|---|---|---|
+| Audio without timings (a third-party TTS) | spread over the audio's voiced part by word length, with pauses at punctuation | `estimated` / `estimate` |
+| Your backend sends them (`httpTTS` JSON reply) | as sent; text normalized by the TTS is mapped back to the written words | `measured` / `backend` by default; a forced aligner should send `aligned` / `asr` |
+| The browser's voice (`webSpeechTTS`) | `boundary` events: each word starts when the event arrives and ends where the next starts | `measured` / `boundary`; voices that never fire it stay `estimated` |
+| Piper or Kokoro in the page with `durations: true` | the model's phoneme durations, grouped into words | `measured` / `model`; `estimated` where spoken and written words do not line up |
+
+Each word is `{ text, start, end, from, to, quality, source }`: seconds since the chunk (sentence) started as heard (already divided by the player's playback rate), and UTF-16 positions in the message, the same as `voice.speech`. Estimated timings err; one vendor (floravox) says length-based estimates are off by 100–300 ms, a number we have not measured.
+
+**From your backend.** Answer the `httpTTS` request with `application/json` instead of raw audio:
+
+```json
+{
+  "audio": "<the WAV/MP3/Ogg file in base64>",
+  "words": [
+    { "text": "Custa", "start": 0, "end": 0.32, "from": 0, "to": 5 },
+    { "text": "mil", "start": 0.32, "end": 0.5 }
+  ]
+}
+```
+
+or with `"vtt"`: WebVTT with an inline timestamp before each word (karaoke style), good for storing and reusing outside H4B:
+
+```
+WEBVTT
+
+00:00:00.000 --> 00:00:01.900
+Custa <00:00:00.320>mil <00:00:00.500>duzentos <00:00:00.800>e <00:00:00.850>cinquenta <00:00:01.200>reais
+```
+
+Positions (`from`/`to`) are in the text your backend received; without them the words are matched by text, ignoring case and accents, and "R$ 1.250" shares the time of "mil duzentos e cinquenta reais". In WebVTT several words between two timestamps are one unit: they share its time by length and become `estimated`. Character references (`&amp;`, `&lt;`) are decoded and tags (`<c>`, `<v>`) dropped. Times start at 0 for each request; `toWordVtt(words, { offset })` and `parseWordVtt(vtt)` convert. Use JSON when you need positions or quality. Everything the backend sends is cleaned (finite times, at most 2000 units).
+
+**Piper and Kokoro.** Pass `durations: true` to `piperTTS` or `kokoroTTS`. It needs a model exported with a durations output (`durations`, `duration`, `pred_dur` or `w_ceil`; `durations: { output: 'name' }` for another name). For Kokoro, `kokoroModel({ repo: 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped', voices })`; the official Piper voices have none. Without the output there are no timings and the voice estimates.
+
+**Your own UI.** The `captions` service is headless: `getState()` gives `{ status: 'speaking' | 'gap' | 'idle', messageId?, from?, to?, words, active, ended? }`, each word with `state` `spoken`, `active` or `upcoming`; `subscribe()` fires when a word changes; `progress()` is how much of the active word was said (0–1), from the player's clock: read it on each animation frame. `captions({ scope: 'message' })` keeps the whole reply with the spoken sentence highlighted instead of one sentence at a time. Lower down, the voice emits `voice.word` (`chunk`, `word`, `gap`, `end` with `done`, `interrupted` or `error`) and `voice.getSpeechPosition()` gives the live position.
+
+**In the widget.** `.captions` (part `captions`) has one `.word` per word with `data-state` and `data-quality`, `--progress` on the active one, and `data-status` on the box (`idle` in pauses and at the end). It is `aria-hidden`: screen readers read the message in the log. `widget({ captions: false })` turns it off.
+
+**Clock and pauses.** The clock is the player's: `webAudioPlayer` uses `AudioContext.currentTime` from the moment the sentence starts, so a suspended context stops the caption too. A custom `AudioPlayer` calls `onStart(clock)` from `play`; without it the page's clock counts from `play`. Barge-in, `interrupt()` and `cancelSpeech()` end the sentence as `interrupted`.
+
+**Browsers.** `boundary` support depends on the browser and the voice: network voices in some browsers never fire it, and then the caption stays estimated. Our browser test covers Chromium; Edge, Safari and Firefox are not tested automatically.
+
 ## Writing a provider
 
 ```ts
@@ -339,6 +395,6 @@ const myTTS: TextToSpeech = {
 }
 ```
 
-Implement `speak(text, options)` instead of `synthesize` for engines that play by themselves (they get no effects). `cancel()` stops them. ONNX engines can reuse `fetchModel`, `loadRuntime` and `chunkText` from `@handsforbots/voice-models`, and any provider with `synthesize` runs in a Worker through `serveTTS`.
+Implement `speak(text, options)` instead of `synthesize` for engines that play by themselves (they get no effects). `cancel()` stops them. For captions, `synthesize` may return `words` (see [Word-by-word captions](#word-by-word-captions)), and `speak` may call `options.onProgress({ type: 'start' })` and `options.onProgress({ type: 'boundary', from, to? })` with positions in the text it got. ONNX engines can reuse `fetchModel`, `loadRuntime` and `chunkText` from `@handsforbots/voice-models`, and any provider with `synthesize` runs in a Worker through `serveTTS`.
 
-Sources: [References → Speech synthesis](./references.md#speech-synthesis-and-effects). Decision: [ADR 0013](../adr/0013-sintese-de-voz-e-efeitos.md).
+Sources: [References → Speech synthesis](./references.md#speech-synthesis-and-effects), [Word-by-word captions](./references.md#word-by-word-captions). Decisions: [ADR 0013](../adr/0013-sintese-de-voz-e-efeitos.md), [ADR 0020](../adr/0020-legendas-palavra-por-palavra.md).

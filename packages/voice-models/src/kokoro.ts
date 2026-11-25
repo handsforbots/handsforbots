@@ -1,7 +1,8 @@
-import type { LoadProgress, SpeechAudio, TextToSpeech } from '@handsforbots/voice'
+import type { LoadProgress, SpeechAudio, TextToSpeech, TimedWord } from '@handsforbots/voice'
 import { assertSafeModelPath, defaultCache, fetchJson, fetchModel, huggingFace, progressOf, sourceUrl, type ModelCache, type ModelSource } from './fetch.js'
 import { chunkText, concatAudio, float32, int64, loadRuntime, type OnnxRuntime, type OnnxSession, type RuntimeSource } from './onnx.js'
 import type { Phonemizer } from './phonemizer.js'
+import { chunkOffsets, readDurations, wordsFromDurations, WordOwners, type DurationsOption } from './durations.js'
 
 const STYLE_DIM = 256
 const MAX_TOKENS = 510
@@ -66,6 +67,13 @@ export type KokoroOptions = {
   sessionOptions?: Record<string, unknown>
   cache?: ModelCache | false
   size?: number
+  /**
+   * Word timings from the phoneme durations, for captions (ADR 0020). Needs a
+   * model exported with a durations output, such as
+   * `onnx-community/Kokoro-82M-v1.0-ONNX-timestamped` (pass it as `repo` to
+   * `kokoroModel`). See `DurationsOption`.
+   */
+  durations?: DurationsOption
 }
 
 type Loaded = { ort: OnnxRuntime; session: OnnxSession; vocab: Record<string, number>; styles: Record<string, Float32Array> }
@@ -129,10 +137,23 @@ export function kokoroTTS(options: KokoroOptions): TextToSpeech & { readonly voi
       const style = Object.hasOwn(styles, voice) ? styles[voice] : undefined
       if (!style) throw new Error(`Kokoro voice "${voice}" was not loaded`)
       const parts: Float32Array[] = []
-      for (const chunk of chunkText(text)) {
+      const words: TimedWord[] = []
+      const chunks = chunkText(text)
+      const offsets = chunkOffsets(text, chunks)
+      let samples = 0
+      for (const [index, chunk] of chunks.entries()) {
         if (speakOptions.signal?.aborted) break
         const phonemes = (await options.phonemizer.phonemize(chunk, languageOf(voice))).join('')
-        const ids = [...phonemes].map((c) => vocab[c]).filter((id): id is number => id !== undefined).slice(0, MAX_TOKENS)
+        const owners = new WordOwners()
+        owners.pad()
+        const ids: number[] = []
+        for (const symbol of phonemes) {
+          const id = vocab[symbol]
+          if (id === undefined || ids.length >= MAX_TOKENS) continue
+          ids.push(id)
+          owners.add(symbol, 1)
+        }
+        owners.pad()
         // The style vector depends on the length of the input.
         const row = Math.min(ids.length, Math.floor(style.length / STYLE_DIM) - 1)
         const out = await session.run({
@@ -140,9 +161,25 @@ export function kokoroTTS(options: KokoroOptions): TextToSpeech & { readonly voi
           style: float32(ort, style.subarray(row * STYLE_DIM, (row + 1) * STYLE_DIM), [1, STYLE_DIM]),
           speed: float32(ort, [speakOptions.prosody?.rate ?? 1]),
         })
-        parts.push(out[session.outputNames[0]!]!.data as Float32Array)
+        const audio = (out.waveform ?? out[session.outputNames[0]!])!.data as Float32Array
+        parts.push(audio)
+        const durations = readDurations(options.durations, session, out, ids.length + 2)
+        if (durations) {
+          words.push(
+            ...wordsFromDurations({
+              text: chunk,
+              offset: offsets[index]!,
+              owners: owners.owners,
+              durations,
+              start: samples / SAMPLE_RATE,
+              seconds: audio.length / SAMPLE_RATE,
+            }),
+          )
+        }
+        samples += audio.length
       }
-      return { samples: concatAudio(parts), sampleRate: SAMPLE_RATE }
+      const result: SpeechAudio = { samples: concatAudio(parts), sampleRate: SAMPLE_RATE }
+      return words.length ? { ...result, words } : result
     },
   }
 }

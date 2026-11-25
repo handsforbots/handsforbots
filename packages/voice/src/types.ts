@@ -1,3 +1,5 @@
+import type { TimedWord } from './words.js'
+
 export type SttCapabilities = {
   /** Emits partial transcripts while the user speaks. */
   partials?: boolean
@@ -66,18 +68,42 @@ export type Prosody = {
 /** Which parts of the prosody a provider applies itself. */
 export type ProsodySupport = { rate?: boolean; pitch?: boolean; volume?: boolean }
 
+/**
+ * What a provider that plays speech itself (`speak`) reports while it plays,
+ * for word timings (ADR 0020): `start` when the sound starts, `boundary` when a
+ * word starts (`speechSynthesis` `boundary`). Positions are in the text the
+ * provider received.
+ */
+export type SpeakProgress =
+  | { type: 'start' }
+  | {
+      type: 'boundary'
+      from: number
+      to?: number
+      /** The engine's own elapsed time, if any; units vary between browsers, so the voice plugin uses arrival time. */
+      elapsed?: number
+    }
+
 export type SpeakOptions = {
   language: string
   voice?: string
   signal?: AbortSignal
   /** The part of the prosody this provider applies itself (see `TextToSpeech.prosody`). */
   prosody?: Prosody
+  /** For `speak`: report the start and each word, if the engine can (ADR 0020). */
+  onProgress?(event: SpeakProgress): void
 }
 
 /** Mono audio made by a synthesizer, before it is played. */
 export type SpeechAudio = {
   samples: Float32Array
   sampleRate: number
+  /**
+   * When each word is said (ADR 0020), seconds since the start of `samples`,
+   * positions in the text the provider received. Without it the voice plugin
+   * estimates from the audio's length.
+   */
+  words?: TimedWord[]
 }
 
 /** Download progress of a provider's model, in bytes. */
@@ -165,6 +191,12 @@ export type PlayOptions = {
   /** Gain in decibels. */
   gainDb?: number
   signal?: AbortSignal
+  /**
+   * Called when the sound starts, with a clock: seconds heard since then
+   * (`webAudioPlayer`: `AudioContext.currentTime`, so it stops while the
+   * context is suspended). Word timings follow it (ADR 0020).
+   */
+  onStart?(clock: () => number): void
 }
 
 /** Plays synthesized speech. `webAudioPlayer()` is the default. */

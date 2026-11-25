@@ -1,11 +1,11 @@
 ---
 name: handsforbots-speech
-description: Make a Hands for Bots v2 (H4B) assistant speak with the right voice - the browser's speechSynthesis, a backend TTS through httpTTS, or a neural model in the page with @handsforbots/voice-models (Piper, Kokoro, transformers.js; files from Hugging Face, a URL, a folder or a Blob, downloaded with progress and cached) - decide when models download and who speaks meanwhile (load.start, load.whileLoading, loadSpeech, ttsStatus), and shape the voice with @handsforbots/voice-effects (JSON effect chains in Web Audio terms, presets such as radio, robot or telephone, prosody, custom effects, offline render, SSML and FFmpeg export). Use when code calls voice({ tts }), piperTTS, kokoroTTS, transformersTTS, workerTTS, serveTTS, espeakPhonemizer, voiceEffects, toSSML or toFFmpeg, when the user wants a better, offline, cheaper or stylized bot voice, a download progress bar for a voice model, a page that freezes while the bot speaks, or voice effects.
+description: Make a Hands for Bots v2 (H4B) assistant speak with the right voice - the browser's speechSynthesis, a backend TTS through httpTTS, or a neural model in the page with @handsforbots/voice-models (Piper, Kokoro, transformers.js; files from Hugging Face, a URL, a folder or a Blob, downloaded with progress and cached) - decide when models download and who speaks meanwhile (load.start, load.whileLoading, loadSpeech, ttsStatus), and shape the voice with @handsforbots/voice-effects (JSON effect chains in Web Audio terms, presets such as radio, robot or telephone, prosody, custom effects, offline render, SSML and FFmpeg export). Use when code calls voice({ tts }), piperTTS, kokoroTTS, transformersTTS, workerTTS, serveTTS, espeakPhonemizer, voiceEffects, toSSML or toFFmpeg, when the user wants a better, offline, cheaper or stylized bot voice, a download progress bar for a voice model, a page that freezes while the bot speaks, or voice effects, or captions that follow the bot's speech word by word (@handsforbots/captions, voice.word, getSpeechPosition, word timings from a backend as JSON or WebVTT, speechSynthesis boundary events, Piper/Kokoro phoneme durations).
 ---
 
 # Hands for Bots v2 — speech synthesis and voice effects
 
-Full guide: `docs/en-us/speech.md` (`docs/pt-br/speech.md`) in https://github.com/handsforbots/handsforbots. Decision: `docs/adr/0013-sintese-de-voz-e-efeitos.md`. Sources and measured numbers: `docs/en-us/references.md#speech-synthesis-and-effects`. When the project's code disagrees with this file, trust the code (`packages/voice/src/voice.ts`, `packages/voice-models/src`, `packages/voice-effects/src`). Interruption, barge-in and the echo filter are in the `handsforbots-conversation` skill.
+Full guide: `docs/en-us/speech.md` (`docs/pt-br/speech.md`) in https://github.com/handsforbots/handsforbots. Decisions: `docs/adr/0013-sintese-de-voz-e-efeitos.md`, `docs/adr/0020-legendas-palavra-por-palavra.md` (captions). Sources and measured numbers: `docs/en-us/references.md#speech-synthesis-and-effects`. When the project's code disagrees with this file, trust the code (`packages/voice/src/voice.ts`, `packages/voice-models/src`, `packages/voice-effects/src`). Interruption, barge-in and the echo filter are in the `handsforbots-conversation` skill.
 
 ## Pick the engine
 
@@ -80,6 +80,20 @@ voice({ tts: [piper, webSpeechTTS()] })
 - Audio unlocks on the first pointer/key/touch in the page and on `listen()`. If speech can start long after any gesture, call `voice.unlockAudio()` in a click. Still blocked → `error.code === 'not-allowed'` and that sentence is not spoken.
 - `webAudioPlayer({ context, output })` shares the app's `AudioContext` or routes speech into a node (an `AnalyserNode` for lip sync). `encodeWav(audio)` makes a WAV Blob.
 
+## Word-by-word captions
+
+```ts
+import { captions } from '@handsforbots/captions'
+createH4B({ plugins: [voice({ tts, output: 'voice' }), captions(), widget()] })  // the widget draws `.captions`
+```
+
+- Every source ends in one contract per word: `{ text, start, end (s since the sentence started, as heard), from, to (UTF-16 in the message, like voice.speech), quality: 'measured' | 'aligned' | 'estimated', source: 'model' | 'backend' | 'boundary' | 'asr' | 'estimate' }`. Words are runs of non-space characters (`voice.wordsOf(text)`); never tokenize yourself.
+- Where timings come from: audio without timings → estimate over the voiced audio; `httpTTS` JSON reply `{ audio: base64, words? | vtt? }` → backend (`measured`/`backend` default; a forced aligner such as WhisperX or MFA should send `aligned`/`asr`); `webSpeechTTS` → `boundary` events (a word ends where the next starts; voices that never fire stay estimated); `piperTTS`/`kokoroTTS` with `durations: true` → phoneme durations, only for models exported with a durations output (Kokoro: `kokoroModel({ repo: 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped', voices })`; official Piper voices have none).
+- Backend text normalized by the TTS ("R$ 1.250" read as words) is matched back to the written words; unmatched spans share their time and become `estimated`. In WebVTT, several words between two timestamps are one unit. Use JSON when you need `from`/`to`/`quality`; `parseWordVtt`/`toWordVtt` convert (also in `@handsforbots/voice/words`, safe for Node and workers).
+- Headless: `h4b.get('captions')` → `getState()` (`status` `speaking`/`gap`/`idle`, `words` with `state` `spoken`/`active`/`upcoming`, `active`, `ended`), `subscribe()`, `progress()` (0–1 of the active word from the player's clock: read it in `requestAnimationFrame`). `scope: 'message'` shows the whole reply. Lower level: `voice.word` (`chunk`, `word`, `gap`, `end`) and `voice.getSpeechPosition()`.
+- Custom `AudioPlayer`s should call `options.onStart(clock)` when sound starts; custom `speak` providers may call `options.onProgress({ type: 'start' | 'boundary', from })`. Barge-in, `interrupt()` and `cancelSpeech()` end the sentence as `interrupted`.
+- Estimates err (a vendor, floravox, claims 100–300 ms; not measured by H4B). If the page animates mouths or highlights, consider showing progress only for `quality === 'measured'`.
+
 ## Effects
 
 ```ts
@@ -109,7 +123,7 @@ fx.set({ version: 1, effects: [{ type: 'lowpass', frequency: 900 }, { type: 'rev
 ## Verify
 
 - `pnpm --filter @handsforbots/example-voice-lab dev` (port 5192) exercises every option against real models; `h4b`, `fx` and `clips()` are on `window`.
-- In tests, fake providers with `synthesize` and a fake `AudioPlayer` (`player` option); never wait fixed delays.
+- In tests, fake providers with `synthesize` and a fake `AudioPlayer` (`player` option); never wait fixed delays. For captions, a fake player that calls `onStart(() => time)` lets the test move the clock by hand.
 
 ## Pitfalls
 

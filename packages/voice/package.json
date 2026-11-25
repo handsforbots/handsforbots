@@ -20,7 +20,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./words": "./src/words.ts"
   },
   "publishConfig": {
     "access": "public",
@@ -28,6 +29,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./words": {
+        "types": "./dist/words.d.ts",
+        "import": "./dist/words.js"
       }
     }
   },

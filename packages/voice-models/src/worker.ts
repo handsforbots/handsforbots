@@ -100,7 +100,8 @@ function transferable(audio: SpeechAudio): { audio: SpeechAudio; transfer: Trans
   const owned =
     samples.buffer instanceof ArrayBuffer && samples.byteOffset === 0 && samples.byteLength === samples.buffer.byteLength
   const own = owned ? samples : samples.slice()
-  return { audio: { samples: own, sampleRate: audio.sampleRate }, transfer: [own.buffer as ArrayBuffer] }
+  const words = audio.words?.length ? { words: audio.words } : {}
+  return { audio: { samples: own, sampleRate: audio.sampleRate, ...words }, transfer: [own.buffer as ArrayBuffer] }
 }
 
 /**

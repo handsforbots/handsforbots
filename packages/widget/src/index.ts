@@ -27,6 +27,17 @@ type CueStore = {
   subscribe(listener: () => void): () => void
 }
 
+/** The part of the `captions` service (@handsforbots/captions) the widget reads, without importing the plugin. */
+type CaptionStore = {
+  getState(): {
+    status: 'idle' | 'speaking' | 'gap'
+    words: readonly { text: string; from: number; state: 'spoken' | 'active' | 'upcoming'; quality?: string }[]
+    active: number
+  }
+  subscribe(listener: () => void): () => void
+  progress(): number
+}
+
 export { renderMarkdown, escapeHtml, safeImageUrl } from './markdown.js'
 export { stringsFor, STRINGS, type Strings } from './i18n.js'
 export { PALETTES } from './styles.js'
@@ -122,6 +133,8 @@ export type WidgetOptions = {
   pace?: number
   /** Show cards for actions run by the assistant, the menu or agents. Default true. */
   showActions?: boolean
+  /** Draw word-by-word captions when the `captions` plugin is installed (ADR 0020). Default true. */
+  captions?: boolean
   /** Components for rich content, by name (merged with the built-in `gallery`). */
   renderers?: Record<string, Renderer>
   /**
@@ -226,6 +239,7 @@ export class H4BChatElement extends BaseElement {
     status: HTMLElement
     chips: HTMLElement
     partial: HTMLElement
+    captions: HTMLElement
     form: HTMLFormElement
     input: HTMLInputElement
     mic: HTMLButtonElement
@@ -247,6 +261,8 @@ export class H4BChatElement extends BaseElement {
   private statusTimer?: ReturnType<typeof setTimeout>
   private statusSince = 0
   private cleanups: (() => void)[] = []
+  private captionFrame?: number
+  private captionWords: HTMLElement[] = []
 
   /** Binds the element to an H4B instance (the `widget` plugin does it for you). */
   connect(h4b: H4B, options: WidgetOptions = {}) {
@@ -282,8 +298,19 @@ export class H4BChatElement extends BaseElement {
       this.renderCues(store)
     }
     watchCues()
+    // Captions (ADR 0020): words of the speech, read by shape like the cues.
+    let unsubscribeCaptions: (() => void) | undefined
+    const watchCaptions = () => {
+      unsubscribeCaptions?.()
+      const store =
+        options.captions === false ? undefined : (this.h4b?.get('captions' as keyof Services) as unknown as CaptionStore | undefined)
+      unsubscribeCaptions = store?.subscribe(() => this.renderCaptions(store))
+      this.renderCaptions(store)
+    }
+    watchCaptions()
     const onService = ({ key }: { key: string }) => {
       if (key === 'cues') watchCues()
+      if (key === 'captions') watchCaptions()
       if (key === 'voice') watchVoice()
       if (key === 'files' || key === 'camera') this.renderMedia()
       if (key === 'retention') watchRetention()
@@ -294,6 +321,10 @@ export class H4BChatElement extends BaseElement {
       () => {
         unsubscribeCues?.()
         this.renderCues(undefined)
+      },
+      () => {
+        unsubscribeCaptions?.()
+        this.renderCaptions(undefined)
       },
       h4b.consent.subscribe(() => this.renderPrivacy()),
       h4b.on('service.provided', onService as never),
@@ -350,6 +381,58 @@ export class H4BChatElement extends BaseElement {
     }
   }
 
+  /**
+   * Draws the caption: one span per word with `data-state` (`spoken`,
+   * `active`, `upcoming`), and `--progress` (0–1) on the active word, updated
+   * each frame while a word is being said. Hidden for screen readers: the
+   * same text is in the log.
+   */
+  private renderCaptions(store: CaptionStore | undefined) {
+    const box = this.els?.captions
+    if (!box) return
+    if (this.captionFrame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.captionFrame)
+    this.captionFrame = undefined
+    const state = store?.getState()
+    if (!store || !state || !state.words.length) {
+      box.replaceChildren()
+      box.hidden = true
+      this.captionWords = []
+      return
+    }
+    box.hidden = false
+    box.dataset.status = state.status
+    // Same words: only states change; a new chunk rebuilds the line.
+    const same =
+      this.captionWords.length === state.words.length &&
+      state.words.every((word, i) => this.captionWords[i]!.dataset.from === String(word.from))
+    if (!same) {
+      this.captionWords = state.words.map((word) => {
+        const span = document.createElement('span')
+        span.className = 'word'
+        span.dataset.from = String(word.from)
+        span.textContent = word.text
+        return span
+      })
+      const nodes: Node[] = []
+      this.captionWords.forEach((span, i) => nodes.push(...(i ? [document.createTextNode(' '), span] : [span])))
+      box.replaceChildren(...nodes)
+    }
+    state.words.forEach((word, i) => {
+      const span = this.captionWords[i]!
+      span.dataset.state = word.state
+      if (word.quality) span.dataset.quality = word.quality
+      else delete span.dataset.quality
+      if (word.state !== 'active') span.style.removeProperty('--progress')
+    })
+    const active = this.captionWords[state.active]
+    if (!active) return
+    const tick = () => {
+      active.style.setProperty('--progress', String(Math.min(1, Math.max(0, store.progress()))))
+      if (typeof requestAnimationFrame === 'function' && state.status === 'speaking') this.captionFrame = requestAnimationFrame(tick)
+    }
+    tick()
+  }
+
   private build() {
     const o = this.options
     const s = this.strings
@@ -380,6 +463,7 @@ export class H4BChatElement extends BaseElement {
         </div>
         <div class="status" part="status" aria-live="polite"></div>
         <div class="chips" part="chips"></div>
+        <div class="captions" part="captions" aria-hidden="true" hidden></div>
         <div class="partial" part="partial" aria-live="polite"></div>
         <div class="camera" part="camera" hidden>
           <video playsinline muted></video>
@@ -405,6 +489,7 @@ export class H4BChatElement extends BaseElement {
       status: $('.status'),
       chips: $('.chips'),
       partial: $('.partial'),
+      captions: $('.captions'),
       form: $('form'),
       input: $('#chat_input'),
       mic: $('.mic'),

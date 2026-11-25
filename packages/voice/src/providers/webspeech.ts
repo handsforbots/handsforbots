@@ -147,8 +147,19 @@ export function webSpeechTTS(options: WebSpeechTTSOptions = {}): TextToSpeech {
       if (!s) throw new SpeechError('not-supported', 'Speech synthesis is not available', 'speak')
       const voice = await pickVoice(speakOptions.language, speakOptions.voice)
       const { rate, pitch, volume } = utteranceProsody(options, speakOptions.prosody)
+      // Positions of the non-space characters of `text`: the utterances join spaces, boundaries map back through these.
+      const visible: number[] = []
+      for (let i = 0; i < text.length; i++) if (!/\s/.test(text[i]!)) visible.push(i)
+      let seen = 0
+      let reportedStart = false
       for (const sentence of splitSentences(text)) {
         if (speakOptions.signal?.aborted) return
+        const before = seen
+        seen += sentence.replace(/\s+/g, '').length
+        const toText = (index: number) => {
+          const count = before + sentence.slice(0, index).replace(/\s+/g, '').length
+          return visible[Math.min(count, visible.length - 1)] ?? 0
+        }
         await new Promise<void>((resolve, reject) => {
           let timer: ReturnType<typeof setTimeout> | undefined
           let settled = false
@@ -169,6 +180,25 @@ export function webSpeechTTS(options: WebSpeechTTSOptions = {}): TextToSpeech {
           utterance.onstart = () => {
             started = true
             clearTimeout(timer)
+            if (!reportedStart) {
+              reportedStart = true
+              speakOptions.onProgress?.({ type: 'start' })
+            }
+          }
+          // Word starts (ADR 0020). Many network voices never fire it; the voice plugin estimates then.
+          utterance.onboundary = (event: { name?: string; charIndex?: number; charLength?: number; elapsedTime?: number }) => {
+            if (!speakOptions.onProgress || (event.name && event.name !== 'word')) return
+            const index = event.charIndex
+            if (typeof index !== 'number' || !Number.isFinite(index) || index < 0 || index >= sentence.length) return
+            const from = toText(index)
+            const length = event.charLength
+            const to = typeof length === 'number' && length > 0 ? toText(Math.min(sentence.length, index + length) - 1) + 1 : undefined
+            speakOptions.onProgress({
+              type: 'boundary',
+              from,
+              ...(to !== undefined && to > from ? { to } : {}),
+              ...(typeof event.elapsedTime === 'number' && Number.isFinite(event.elapsedTime) ? { elapsed: event.elapsedTime } : {}),
+            })
           }
           utterance.onend = () => finish()
           utterance.onerror = (event: { error?: string }) => {

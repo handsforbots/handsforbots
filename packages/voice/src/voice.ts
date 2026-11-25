@@ -3,6 +3,8 @@ import { planProsody, webAudioPlayer, type ProsodyPlan } from './player.js'
 import { textEchoFilter } from './providers/echo.js'
 import { checkNoise, type NoiseReport, type NoiseThresholds } from './providers/noise.js'
 import { createLevelGate, monitorLevel, type LevelGateOptions } from './providers/level.js'
+import { startWordRun, type SpeechPosition, type VoiceWordEvent, type WordRun } from './word-run.js'
+import { alignWords, CHARS_PER_SECOND, estimateWords, splitWords, voicedSpan, type WordSpan, type WordTiming } from './words.js'
 import {
   SpeechError,
   type AudioPlayer,
@@ -278,6 +280,14 @@ export type VoiceService = {
   /** Whether a reply arriving now would be spoken (`output` is `voice`, or `auto` after voice input). */
   willSpeakReplies(): boolean
   /**
+   * The chunk being spoken now, with its words, the current one and how much
+   * of it was said (ADR 0020); `undefined` when the voice is silent. Cheap:
+   * call it on each animation frame.
+   */
+  getSpeechPosition(): SpeechPosition | undefined
+  /** The words of `text` as word timings and captions split it (runs of non-space characters). */
+  wordsOf(text: string): WordSpan[]
+  /**
    * Measures the room now (the microphone opens for a moment) and stores the
    * report in `noise`. Resolves `undefined` if the measurement failed (the
    * error goes to the `error` event, `source: 'voice:noise'`).
@@ -296,6 +306,8 @@ declare module '@handsforbots/core' {
     'voice.speech': VoiceSpeechEvent
     /** A reply's text started arriving: whether it will be spoken (for UIs that sync with speech, like cues). */
     'voice.track': VoiceTrackEvent
+    /** Word by word progress of each spoken chunk (ADR 0020): `chunk`, `word`, `gap`, `end`. */
+    'voice.word': VoiceWordEvent
     /** Each speech provider loading its model and, when it traces, its internals (for logs and debugging). */
     'voice.tts': VoiceTtsEvent
     /** A noise check finished, and what the voice did about it. */
@@ -1461,6 +1473,45 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     return undefined
   }
 
+  /* Word timings (ADR 0020): from the provider, the browser's boundaries or an estimate. */
+
+  let currentRun: WordRun | undefined
+  const seconds = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000
+
+  const wordRun = (text: string, prepared: Prepared, range: SpokenRange | undefined): WordRun => {
+    const offset = range?.from ?? 0
+    const rate = prepared.plan.playbackRate > 0 ? prepared.plan.playbackRate : 1
+    let words: WordTiming[]
+    const audio = prepared.audio
+    if (audio) {
+      const duration = audio.samples.length / audio.sampleRate
+      words = audio.words?.length
+        ? alignWords(text, audio.words, { duration, quality: 'measured', source: 'model' })
+        : estimateWords(text, { duration, voiced: voicedSpan(audio.samples, audio.sampleRate) })
+    } else {
+      // Speech the provider plays itself: its length is unknown until it ends.
+      const pace = CHARS_PER_SECOND * (prepared.options.prosody?.rate ?? 1)
+      words = estimateWords(text, { duration: text.trim().length / pace })
+    }
+    words = words.map((word) => ({
+      ...word,
+      start: word.start / rate,
+      end: word.end / rate,
+      from: word.from + offset,
+      to: word.to + offset,
+    }))
+    const run = startWordRun({
+      words,
+      provider: prepared.provider.name,
+      range,
+      offset,
+      now: seconds,
+      emit: (event) => ctx.emit('voice.word', event),
+    })
+    currentRun = run
+    return run
+  }
+
   const willSpeakReplies = () => state.output === 'voice' || (state.output === 'auto' && state.lastInput === 'voice')
 
   const speakChunk = (text: string, onSpoken?: () => void, at?: SpokenRange): Promise<void> => {
@@ -1481,6 +1532,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     speechQueue = speechQueue.then(async () => {
       let prepared: Prepared | undefined
       let sentence: SpokenSentence | undefined
+      let run: WordRun | undefined
       try {
         prepared = job instanceof Promise ? await job : job
         if (controller.signal.aborted) {
@@ -1501,17 +1553,21 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
           pausedForSpeech = true
           active.session.abort()
         }
+        run = wordRun(text, prepared, at)
+        const words = run
         if (prepared.audio) {
           await player.play(prepared.audio, {
             effects,
             playbackRate: prepared.plan.playbackRate,
             gainDb: prepared.plan.gainDb,
             signal: controller.signal,
+            onStart: (clock) => words.setClock(clock),
           })
         } else {
-          await prepared.provider.speak!(text, prepared.options)
+          await prepared.provider.speak!(text, { ...prepared.options, onProgress: (event) => words.progress(event) })
         }
         const interrupted = controller.signal.aborted
+        run.end(interrupted ? 'interrupted' : 'done')
         ctx.emit('voice.speech', {
           phase: 'end',
           provider: prepared.provider.name,
@@ -1521,6 +1577,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
         })
         if (!interrupted) onSpoken?.()
       } catch (error) {
+        run?.end(controller.signal.aborted ? 'interrupted' : 'error')
         if (!controller.signal.aborted) {
           const failure = error instanceof ProviderFailure ? error : undefined
           const speechError = speakError(failure ? failure.error : error)
@@ -1529,6 +1586,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
           fail(speechError, {}, provider ? `voice:tts:${provider}` : 'voice')
         }
       } finally {
+        if (run && currentRun === run) currentRun = undefined
         if (sentence) sentence.endedAt ??= Date.now()
         chunksLeft = Math.max(0, chunksLeft - 1)
         if (chunksLeft === 0 || controller.signal.aborted) set({ speaking: false })
@@ -1768,6 +1826,8 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     },
     unlockAudio,
     willSpeakReplies,
+    getSpeechPosition: () => currentRun?.position(),
+    wordsOf: splitWords,
   }
   publishStatus()
   followEffects()

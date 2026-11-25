@@ -32,7 +32,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `copilotkit` | `useCopilotKitBridge(opts)`, `<CopilotKitBridge />` | `core`, `react`; `@copilotkit/react-core` 1.77+, `react` 18+ | `transport-agui` | CopilotKit owns chat and agent; H4B adds actions, context, voice, menu |
 | `assistant-ui` | `useH4BAssistantRuntime(opts?)` | `core`, `react`; `@assistant-ui/react` 0.15+, `react` 18+ | — | assistant-ui draws the thread over any H4B transport |
 | `menu` | `menu({ commands, language?, sources?, ... })`, type `Command` | `core` | — | Direct commands without the LLM; typed input only from `sources` (default: chat surfaces, voice, shortcuts, `host`) |
-| `voice` | `voice({...})`, `webSpeechSTT`, `webSpeechTTS`, `httpSTT`, `httpTTS`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`, `httpEndOfTurn`, `textEchoFilter`, `checkNoise`, `measureNoise`, `createLevelGate` | `core`; `vosk-browser` only for `voskBrowserSTT` | — | Speech in and out |
+| `voice` | `voice({...})`, `webSpeechSTT`, `webSpeechTTS`, `httpSTT`, `httpTTS`, `websocketSTT`, `voskSTT`, `voskBrowserSTT`, `httpEndOfTurn`, `textEchoFilter`, `checkNoise`, `measureNoise`, `createLevelGate`; word timings: `splitWords`, `alignWords`, `estimateWords`, `parseWordVtt`, `toWordVtt` (also `/words`) | `core`; `vosk-browser` only for `voskBrowserSTT` | — | Speech in and out |
 | `voice-models` | `piperTTS`, `kokoroTTS`, `transformersTTS`, `workerTTS`, `serveTTS`, `espeakPhonemizer`, `piperVoice`, `kokoroModel`, `huggingFace`, `fetchModel` | `core`, `voice`; the app supplies `onnxruntime-web`, a phonemizer build or `@huggingface/transformers` | — | Neural TTS in the page |
 | `voice-effects` | `voiceEffects`, `presets`, `defineEffect`, `validateChain`, `toSSML`, `toFFmpeg` | — (`voice` optional, types only) | — | Effects chains for speech, also outside H4B |
 | `keyboard` | `keyboard({ talk?, interrupt?, palette?, target? })` | `core` (`voice` optional: the talk shortcut needs it) | — | Hold-to-talk, interrupt, palette event |
@@ -41,6 +41,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
 | `mcp-apps` | `mcpAppRenderer({ allowTools?, allowMessages?, allowModelContext?, allowForms?, allowDomains?, confirmLink? })`, `mountMcpApp(h4b, props, opts)`, `unmountMcpApp` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
 | `cues` | `cues({ channels, rules?, classify?, report?, action?, sync? })`; `/server`: `readCuesState` | `core` | — | Closed-vocabulary presentation states |
+| `captions` | `captions({ scope?: 'chunk' \| 'message' })` | `core`, `voice` | `widget` | Word-by-word captions of the bot's speech; headless service + widget `.captions` |
 | `conversation-state` | `conversationState({...})`, `httpStateUpdater`; `/server`: `readConversationState`, `stateUpdateSchema`, `conversationStatePrompt` | `core` | — | Checked, sourced conversation state |
 | `memory` | `memory({...})`, `httpSummarizer`, `localSummary`, `groupTurns` | `core` | — | Turns sent and kept, compaction (mounted by default) |
 | `storage-local` | `storageLocal({...})`, `cookieKey`, `backendKey` | `core` | — | Encrypted browser persistence |
@@ -55,6 +56,6 @@ The docs give ideas per package. They are illustrations, not the supported cases
 
 1. Always `core` + one transport (or `copilotkit`, which brings its own). Which transport: the backend decides — see the `handsforbots-integrations` skill.
 2. UI: the `widget` for a ready window; `react`/`vue` for the project's own components; `copilotkit` or `assistant-ui` when the project already uses them. Don't add the widget to an app that draws its own chat.
-3. Capabilities only when the task asks for them: `voice` (+ `keyboard`), `menu`, `inputs`, `guided`, `expose-webmcp`, `mcp-apps`, `cues`.
+3. Capabilities only when the task asks for them: `voice` (+ `keyboard`, `captions`), `menu`, `inputs`, `guided`, `expose-webmcp`, `mcp-apps`, `cues`.
 4. Infrastructure on purpose: storage and tabs (skill `handsforbots-persistence`), consent (skill `handsforbots-consent`), `observability`, `conversation-state`. `memory` is already on.
 5. Every plugin goes in `createH4B({ plugins: [...] })`; each service has one provider, so never two transports or two storages.

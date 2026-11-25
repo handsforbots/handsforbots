@@ -127,6 +127,14 @@ describe('workerTTS + serveTTS', () => {
     tts.terminate()
   })
 
+  it('passes word timings through (ADR 0020)', async () => {
+    const words = [{ text: 'hi', start: 0, end: 0.5, from: 0, to: 2, quality: 'measured' as const, source: 'model' as const }]
+    const { create } = channelWorker(provider({ synthesize: async () => ({ samples: Float32Array.from([1]), sampleRate: 16000, words }) }))
+    const tts = workerTTS({ worker: create })
+    expect((await tts.synthesize!('hi', { language: 'en' })).words).toEqual(words)
+    tts.terminate()
+  })
+
   it('rejects with the error raised in the worker', async () => {
     const { create } = channelWorker(
       provider({

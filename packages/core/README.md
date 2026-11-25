@@ -27,7 +27,7 @@ Each capability is its own package; install only what the interface uses.
 
 | To… | Packages | What they bring |
 |---|---|---|
-| Talk and listen | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) | speech in and out, hands-free, barge-in; neural voices in the page; voice effects |
+| Talk and listen | [`voice`](https://www.npmjs.com/package/@handsforbots/voice) · [`voice-models`](https://www.npmjs.com/package/@handsforbots/voice-models) · [`voice-effects`](https://www.npmjs.com/package/@handsforbots/voice-effects) · [`captions`](https://www.npmjs.com/package/@handsforbots/captions) | speech in and out, hands-free, barge-in; neural voices in the page; voice effects; word-by-word captions |
 | Run commands without the LLM | [`menu`](https://www.npmjs.com/package/@handsforbots/menu) · [`keyboard`](https://www.npmjs.com/package/@handsforbots/keyboard) | slash commands, phrases, shortcuts, push-to-talk, palette |
 | Show and guide on the page | [`guided`](https://www.npmjs.com/package/@handsforbots/guided) · [`cues`](https://www.npmjs.com/package/@handsforbots/cues) | tours, highlights, sections, galleries; tone and scene states the page mirrors |
 | Take in more than text | [`inputs`](https://www.npmjs.com/package/@handsforbots/inputs) | camera, files, GUI events, idle, sensors |

@@ -1,7 +1,8 @@
-import type { LoadProgress, SpeechAudio, TextToSpeech } from '@handsforbots/voice'
+import type { LoadProgress, SpeechAudio, TextToSpeech, TimedWord } from '@handsforbots/voice'
 import { assertSafeModelPath, defaultCache, fetchJson, fetchModel, huggingFace, progressOf, sourceUrl, type ModelCache, type ModelSource } from './fetch.js'
 import { chunkText, concatAudio, float32, int64, loadRuntime, type OnnxRuntime, type OnnxSession, type RuntimeSource } from './onnx.js'
 import type { Phonemizer } from './phonemizer.js'
+import { chunkOffsets, readDurations, wordsFromDurations, WordOwners, type DurationsOption } from './durations.js'
 
 /** The `.onnx.json` that comes with every Piper voice. */
 export type PiperConfig = {
@@ -33,6 +34,12 @@ export type PiperOptions = {
   cache?: ModelCache | false
   /** Bytes to download, for progress before the download starts. */
   size?: number
+  /**
+   * Word timings from the phoneme durations, for captions (ADR 0020). Needs a
+   * model exported with a durations output; the official Piper voices have
+   * none. See `DurationsOption`.
+   */
+  durations?: DurationsOption
 }
 
 /**
@@ -55,17 +62,22 @@ export function piperVoice(id: string, options: { revision?: string } = {}): { m
 }
 
 /** Phonemes → Piper ids: BOS, pad, (id, pad)*, EOS, with the voice's own map. */
-export function piperIds(phonemes: string[], map: Record<string, number[]>): number[] {
+export function piperIds(phonemes: string[], map: Record<string, number[]>, owners?: WordOwners): number[] {
   const id = (symbol: string) => map[symbol]?.[0]
   const pad = id('_') ?? 0
   const ids = [id('^') ?? 1, pad]
+  owners?.pad(2)
   for (const phoneme of phonemes) {
     for (const symbol of map[phoneme] ? [phoneme] : [...phoneme]) {
       const value = id(symbol)
-      if (value !== undefined) ids.push(value, pad)
+      if (value !== undefined) {
+        ids.push(value, pad)
+        owners?.add(symbol, 2)
+      }
     }
   }
   ids.push(id('$') ?? 2)
+  owners?.pad()
   return ids
 }
 
@@ -125,9 +137,14 @@ export function piperTTS(options: PiperOptions): TextToSpeech & { readonly confi
           : (options.speaker ?? 0)
       const language = config.espeak?.voice ?? speakOptions.language
       const parts: Float32Array[] = []
-      for (const chunk of chunkText(text)) {
+      const words: TimedWord[] = []
+      const chunks = chunkText(text)
+      const offsets = chunkOffsets(text, chunks)
+      let samples = 0
+      for (const [index, chunk] of chunks.entries()) {
         if (speakOptions.signal?.aborted) break
-        const ids = piperIds(await options.phonemizer.phonemize(chunk, language), config.phoneme_id_map)
+        const owners = new WordOwners()
+        const ids = piperIds(await options.phonemizer.phonemize(chunk, language), config.phoneme_id_map, owners)
         const feeds: Record<string, ReturnType<typeof int64>> = {
           input: int64(ort, ids, [1, ids.length]),
           input_lengths: int64(ort, [ids.length]),
@@ -135,9 +152,19 @@ export function piperTTS(options: PiperOptions): TextToSpeech & { readonly confi
         }
         if ((config.num_speakers ?? 1) > 1 || session.inputNames.includes('sid')) feeds.sid = int64(ort, [speaker])
         const out = await session.run(feeds)
-        parts.push((out.output ?? out[session.outputNames[0]!])!.data as Float32Array)
+        const audio = (out.output ?? out[session.outputNames[0]!])!.data as Float32Array
+        parts.push(audio)
+        const durations = readDurations(options.durations, session, out, ids.length)
+        if (durations) {
+          const rate = config.audio.sample_rate
+          words.push(
+            ...wordsFromDurations({ text: chunk, offset: offsets[index]!, owners: owners.owners, durations, start: samples / rate, seconds: audio.length / rate }),
+          )
+        }
+        samples += audio.length
       }
-      return { samples: concatAudio(parts), sampleRate: config.audio.sample_rate }
+      const result: SpeechAudio = { samples: concatAudio(parts), sampleRate: config.audio.sample_rate }
+      return words.length ? { ...result, words } : result
     },
   }
 }

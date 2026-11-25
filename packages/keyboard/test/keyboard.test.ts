@@ -28,6 +28,8 @@ function fakeVoice(mode: VoiceState['mode'] = 'push-to-talk', speaking = false) 
     unlockAudio: vi.fn(),
     willSpeakReplies: () => false,
     checkNoise: vi.fn(async () => undefined),
+    getSpeechPosition: () => undefined,
+    wordsOf: () => [],
   } satisfies VoiceService
 }
 
