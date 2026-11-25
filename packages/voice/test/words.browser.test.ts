@@ -32,11 +32,11 @@ describe('word timings in a real browser', () => {
     await context.close()
   })
 
-  it('webSpeechTTS reports boundaries inside the text it got, when the voice fires them', async () => {
+  it('webSpeechTTS reports boundaries inside the text it got, when the voice fires them', async (context) => {
     const synth = globalThis.speechSynthesis
     const voices = synth?.getVoices() ?? []
-    // Headless Chromium often has no local voice: nothing to listen to then.
-    if (!synth || !voices.some((v) => v.localService)) return
+    // Headless Chromium has no voices: report the test as skipped rather than passed.
+    if (!synth || !voices.some((v) => v.localService)) return context.skip()
     const events: SpeakProgress[] = []
     const text = 'One   two three.'
     await Promise.race([
