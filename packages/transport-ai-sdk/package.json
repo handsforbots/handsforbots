@@ -44,6 +44,6 @@
   "devDependencies": {
     "@handsforbots/core": "workspace:^",
     "@handsforbots/testkit": "workspace:^",
-    "ai": "^7.0.171"
+    "ai": "^7.0.173"
   }
 }
