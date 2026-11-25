@@ -11,8 +11,13 @@ export type ChunkRange = { messageId: string; from: number; to: number }
  * `getSpeechPosition()` on each frame.
  */
 export type VoiceWordEvent = Partial<ChunkRange> & { provider: string } & (
-    /** The chunk started playing: every word with its forecast timing (boundaries correct it later). */
-    | { phase: 'chunk'; words: WordTiming[] }
+    /**
+     * The chunk started playing: every word with its forecast timing
+     * (boundaries correct it later). `revised`: better timings for the chunk
+     * already playing (an aligner that finished late); `word` events follow
+     * up to where speech is now.
+     */
+    | { phase: 'chunk'; words: WordTiming[]; revised?: true }
     /** Word `index` started. */
     | { phase: 'word'; index: number; word: WordTiming }
     /** Word `index` ended and the next has not started (a pause). */
@@ -42,6 +47,8 @@ export type WordRun = {
   progress(event: SpeakProgress): void
   position(): SpeechPosition
   end(reason: 'done' | 'interrupted' | 'error'): void
+  /** Replaces the forecast with better timings while the chunk plays. Ignored once boundaries lead or it ended. */
+  revise(words: WordTiming[]): void
 }
 
 const MIN_WAIT = 16
@@ -161,6 +168,14 @@ export function startWordRun(options: {
         if (led && !ended && index < words.length - 1) progress = Math.min(progress, 0.99)
       }
       return { ...base, words, index, status, time, progress }
+    },
+    revise(next) {
+      if (ended || led || !next.length) return
+      words.splice(0, words.length, ...next)
+      index = -1
+      gap = false
+      options.emit({ phase: 'chunk', ...base, words: words.map((w) => ({ ...w })), revised: true })
+      tick()
     },
     end(reason) {
       if (ended) return

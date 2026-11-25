@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createH4B, type H4B, type Transport } from '@handsforbots/core'
-import { voice, type AudioPlayer, type PlayOptions, type SpeechAudio, type TextToSpeech } from '@handsforbots/voice'
+import { voice, type AudioPlayer, type PlayOptions, type SpeechAudio, type TextToSpeech, type WordAligner } from '@handsforbots/voice'
 import { widget } from '@handsforbots/widget'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { captions, type CaptionsOptions, type CaptionsState } from '../src/index.js'
@@ -154,6 +154,34 @@ describe('captions', () => {
     stop()
     await removeVoice()
     await eventually(() => expect(service.getState()).toMatchObject({ status: 'idle', words: [] }))
+  })
+
+  it('follows a late alignment that revises the chunk while it plays', async () => {
+    let release = () => {}
+    const aligner: WordAligner = {
+      name: 'asr',
+      align: () =>
+        new Promise((resolve) => {
+          release = () => resolve([{ text: 'olá', start: 0, end: 0.4 }, { text: 'mundo', start: 0.5, end: 1 }])
+        }),
+    }
+    const clock = clockedPlayer()
+    const h4b = createH4B({
+      memory: false,
+      plugins: [voice({ language: 'pt-BR', output: 'voice', tts: model, player: clock.player, align: aligner }), captions()],
+    })
+    h4b.provide('transport', transport('Olá mundo.'))
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    const states = () => service.getState().words.map((w) => `${w.text}:${w.state}:${w.quality}`)
+    await h4b.ask('oi')
+    await eventually(() => expect(states()).toEqual(['Olá:active:estimated', 'mundo.:upcoming:estimated']))
+    // At 0.6 s the estimate is still on the first word; what was heard says the second.
+    clock.set(0.6)
+    release()
+    await eventually(() => expect(states()).toEqual(['Olá:spoken:aligned', 'mundo.:active:aligned']))
+    expect(service.getState().status).toBe('speaking')
   })
 
   it('rejects an unknown scope', async () => {

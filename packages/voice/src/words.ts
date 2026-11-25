@@ -8,7 +8,7 @@
 export type WordQuality =
   /** The engine reported the timing of this word itself. */
   | 'measured'
-  /** A forced aligner measured the audio against the text. */
+  /** An aligner measured the audio against the text (forced alignment, or recognition with word timestamps). */
   | 'aligned'
   /** Spread by proportion (word length, a multi-word unit, unmatched text). */
   | 'estimated'

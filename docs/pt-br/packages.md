@@ -333,7 +333,7 @@ Categorias de apresentação com vocabulário fechado às quais a página reage:
 
 ### `@handsforbots/captions`
 
-Legendas que acompanham a voz do bot palavra por palavra: as palavras já ditas, a atual com o progresso dela, as próximas. Funciona com qualquer voz: os tempos vêm do seu backend (JSON ou WebVTT), dos eventos de palavra do navegador, das durações de fonema do Piper ou do Kokoro, ou de uma estimativa, e cada palavra diz de onde. O widget desenha; a sua interface lê o mesmo serviço.
+Legendas que acompanham a voz do bot palavra por palavra: as palavras já ditas, a atual com o progresso dela, as próximas. Funciona com qualquer voz: os tempos vêm do seu backend (JSON ou WebVTT), dos eventos de palavra do navegador, das durações de fonema do Piper ou do Kokoro, do Whisper ouvindo o áudio na página (`whisperAligner`) ou de uma estimativa, e cada palavra diz de onde. O widget desenha; a sua interface lê o mesmo serviço.
 
 - **Precisa de:** `@handsforbots/core`, `@handsforbots/voice`.
 - **Instalação:**
@@ -342,7 +342,7 @@ Legendas que acompanham a voz do bot palavra por palavra: as palavras já ditas,
   npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
   ```
 
-- **Funciona com:** o widget (`.captions` acima do campo de texto), React e Vue (`useStore`), `voice-models` (`durations: true`).
+- **Funciona com:** o widget (`.captions` acima do campo de texto), React e Vue (`useStore`), `voice-models` (`durations: true`, `whisperAligner`).
 - **Por exemplo:** um avatar falante com legendas no estilo de podcast; acompanhar a fala numa sala barulhenta ou com perda auditiva; treino de leitura em que a palavra falada acende.
 - Guia: [Legendas palavra por palavra](./speech.md#legendas-palavra-por-palavra).
 

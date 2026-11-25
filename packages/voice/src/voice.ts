@@ -4,7 +4,7 @@ import { textEchoFilter } from './providers/echo.js'
 import { checkNoise, type NoiseReport, type NoiseThresholds } from './providers/noise.js'
 import { createLevelGate, monitorLevel, type LevelGateOptions } from './providers/level.js'
 import { startWordRun, type SpeechPosition, type VoiceWordEvent, type WordRun } from './word-run.js'
-import { alignWords, CHARS_PER_SECOND, estimateWords, splitWords, voicedSpan, type WordSpan, type WordTiming } from './words.js'
+import { alignWords, CHARS_PER_SECOND, estimateWords, splitWords, voicedSpan, type TimedWord, type WordSpan, type WordTiming } from './words.js'
 import {
   SpeechError,
   type AudioPlayer,
@@ -20,6 +20,7 @@ import {
   type TextToSpeech,
   type TtsTraceEvent,
   type TurnHistoryEntry,
+  type WordAligner,
 } from './types.js'
 
 export type VoiceMode = 'push-to-talk' | 'hands-free'
@@ -363,6 +364,22 @@ export type VoiceOptions = {
    * microphone capture while listening. `true` for the defaults. Off by default.
    */
   levelGate?: boolean | LevelGateOptions
+  /**
+   * Measures word timings in synthesized audio that came without them (ADR
+   * 0020), for captions. Off by default.
+   */
+  align?: WordAligner | WordAlignment | null
+}
+
+export type WordAlignment = {
+  aligner: WordAligner
+  /**
+   * Milliseconds a sentence may wait for its alignment before it plays with
+   * the estimate. Default 0: speech never waits, and an alignment that comes
+   * while the sentence plays revises its words (`voice.word` `chunk` with
+   * `revised: true`).
+   */
+  waitMs?: number
 }
 
 const toArray = <T>(value: T | T[] | undefined): T[] => (value === undefined ? [] : Array.isArray(value) ? value : [value])
@@ -408,6 +425,10 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     options.language || (typeof document !== 'undefined' && document.documentElement.lang) || 'en-US'
   const sttProviders = await supportedOf(toArray(options.stt))
   const player = options.player ?? webAudioPlayer()
+  const alignment: WordAlignment | undefined =
+    options.align ? ('aligner' in options.align ? options.align : { aligner: options.align }) : undefined
+  const aligner =
+    alignment && (await Promise.resolve(alignment.aligner.isSupported?.() ?? true).catch(() => false)) ? alignment.aligner : undefined
   const playable = (p: TextToSpeech) => !!p.speak || (!!p.synthesize && player.isSupported())
   let ttsProviders = (await supportedOf(toArray(options.tts))).filter(playable)
   const allowed = (provider: { consent?: string }) => !provider.consent || ctx.app.consent.granted(provider.consent)
@@ -1417,7 +1438,14 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
   type Track = { speak: boolean; queued: number; spoken: number }
   const tracks = new Map<string, Track>()
 
-  type Prepared = { provider: TextToSpeech; options: SpeakOptions; plan: ProsodyPlan; audio?: SpeechAudio }
+  type Prepared = {
+    provider: TextToSpeech
+    options: SpeakOptions
+    plan: ProsodyPlan
+    audio?: SpeechAudio
+    /** The aligner's units for `audio`, while or once it hears them. */
+    alignment?: { done: Promise<void>; units?: TimedWord[] }
+  }
   const viaPlayer = (p: TextToSpeech) => !!p.synthesize && player.isSupported()
 
   const synthesize = (provider: TextToSpeech, text: string, speakOptions: SpeakOptions, signal: AbortSignal) => {
@@ -1459,7 +1487,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       const speakOptions: SpeakOptions = { language, voice: options.voiceName, signal, prosody: plan.synth }
       try {
         const audio = await synthesize(provider, text, speakOptions, signal)
-        return audio && { provider, options: speakOptions, plan, audio }
+        return audio && { provider, options: speakOptions, plan, audio, alignment: align(audio, text, signal) }
       } catch (error) {
         if (signal.aborted) return undefined
         // This sentence goes to the next ready provider (the backend is down, the model choked).
@@ -1473,35 +1501,80 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
     return undefined
   }
 
-  /* Word timings (ADR 0020): from the provider, the browser's boundaries or an estimate. */
+  /* Word timings (ADR 0020): from the provider, an aligner, the browser's boundaries or an estimate. */
+
+  let alignQueue: Promise<unknown> = Promise.resolve()
+  /** Audio with no timings, or only estimated ones, goes to the aligner, one sentence at a time. */
+  const align = (audio: SpeechAudio, text: string, signal: AbortSignal): Prepared['alignment'] => {
+    if (!aligner || !allowed(aligner)) return undefined
+    if (audio.words?.length && audio.words.some((w) => (w.quality ?? 'measured') !== 'estimated')) return undefined
+    const alignment: NonNullable<Prepared['alignment']> = { done: Promise.resolve() }
+    const job = alignQueue.then(async () => {
+      if (signal.aborted) return
+      try {
+        const units = await aligner.align(audio, text, { language, signal })
+        if (!signal.aborted && units?.length) alignment.units = units
+      } catch (error) {
+        if (!signal.aborted) ctx.emit('error', { error, source: `voice:align:${aligner.name}` })
+      }
+    })
+    alignQueue = job
+    alignment.done = job
+    return alignment
+  }
+
+  /** Waits up to `waitMs` for the alignment; speech goes on without it after that or when cut. */
+  const awaitAlignment = async (prepared: Prepared, signal: AbortSignal) => {
+    const wait = Math.max(0, alignment?.waitMs ?? 0)
+    if (!prepared.alignment || prepared.alignment.units || !wait) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let onAbort = () => {}
+    await Promise.race([
+      prepared.alignment.done,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, wait)
+        onAbort = resolve
+        signal.addEventListener('abort', onAbort, { once: true })
+      }),
+    ])
+    clearTimeout(timer)
+    signal.removeEventListener('abort', onAbort)
+  }
 
   let currentRun: WordRun | undefined
   const seconds = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000
 
-  const wordRun = (text: string, prepared: Prepared, range: SpokenRange | undefined): WordRun => {
-    const offset = range?.from ?? 0
+  /** The chunk's words, as heard (playback rate) and placed in the message. */
+  const timingsOf = (text: string, prepared: Prepared, offset: number): WordTiming[] => {
     const rate = prepared.plan.playbackRate > 0 ? prepared.plan.playbackRate : 1
     let words: WordTiming[]
     const audio = prepared.audio
+    const heard = prepared.alignment?.units
     if (audio) {
       const duration = audio.samples.length / audio.sampleRate
-      words = audio.words?.length
-        ? alignWords(text, audio.words, { duration, quality: 'measured', source: 'model' })
-        : estimateWords(text, { duration, voiced: voicedSpan(audio.samples, audio.sampleRate) })
+      words = heard
+        ? alignWords(text, heard, { duration, quality: 'aligned', source: 'asr' })
+        : audio.words?.length
+          ? alignWords(text, audio.words, { duration, quality: 'measured', source: 'model' })
+          : estimateWords(text, { duration, voiced: voicedSpan(audio.samples, audio.sampleRate) })
     } else {
       // Speech the provider plays itself: its length is unknown until it ends.
       const pace = CHARS_PER_SECOND * (prepared.options.prosody?.rate ?? 1)
       words = estimateWords(text, { duration: text.trim().length / pace })
     }
-    words = words.map((word) => ({
+    return words.map((word) => ({
       ...word,
       start: word.start / rate,
       end: word.end / rate,
       from: word.from + offset,
       to: word.to + offset,
     }))
+  }
+
+  const wordRun = (text: string, prepared: Prepared, range: SpokenRange | undefined): WordRun => {
+    const offset = range?.from ?? 0
     const run = startWordRun({
-      words,
+      words: timingsOf(text, prepared, offset),
       provider: prepared.provider.name,
       range,
       offset,
@@ -1509,6 +1582,9 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       emit: (event) => ctx.emit('voice.word', event),
     })
     currentRun = run
+    // A late alignment revises the words while they play.
+    const late = prepared.alignment
+    if (late && !late.units) void late.done.then(() => late.units && run.revise(timingsOf(text, prepared, offset)))
     return run
   }
 
@@ -1535,6 +1611,7 @@ export async function createVoice(ctx: PluginContext, options: VoiceOptions): Pr
       let run: WordRun | undefined
       try {
         prepared = job instanceof Promise ? await job : job
+        if (prepared?.audio) await awaitAlignment(prepared, controller.signal)
         if (controller.signal.aborted) {
           if (at) ctx.emit('voice.speech', { phase: 'skip', reason: 'cancelled', ...at })
           return

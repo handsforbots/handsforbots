@@ -14,6 +14,16 @@ export {
 } from './fetch.js'
 export { chunkText, loadRuntime, type OnnxRuntime, type OnnxSession, type OnnxTensor, type RuntimeSource } from './onnx.js'
 export { espeakPhonemizer, type EspeakPhonemizerOptions, type Phonemizer, type PiperPhonemizeFactory } from './phonemizer.js'
+export {
+  asrWords,
+  resample,
+  whisperAligner,
+  WHISPER_SAMPLE_RATE,
+  type AsrOutput,
+  type AsrPipeline,
+  type AsrWordChunk,
+  type WhisperAlignerOptions,
+} from './aligner.js'
 export { readDurations, wordsFromDurations, WordOwners, type DurationsOption } from './durations.js'
 export { piperTTS, piperVoice, piperIds, type PiperConfig, type PiperOptions } from './piper.js'
 export { kokoroTTS, kokoroModel, type KokoroDtype, type KokoroOptions } from './kokoro.js'

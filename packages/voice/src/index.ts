@@ -22,6 +22,7 @@ export {
   type VoiceLevelEvent,
   type VoiceLevelReading,
   type VoiceState,
+  type WordAlignment,
 } from './voice.js'
 export {
   webSpeechSTT,

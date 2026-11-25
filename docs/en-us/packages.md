@@ -333,7 +333,7 @@ Presentation categories with a closed vocabulary that the page reacts to: a char
 
 ### `@handsforbots/captions`
 
-Captions that follow the bot's voice word by word: words already said, the current one with its progress, the ones to come. Works with any voice: timings come from your backend (JSON or WebVTT), the browser's word events, Piper or Kokoro phoneme durations, or an estimate, and each word says which. The widget draws them; your own UI reads the same service.
+Captions that follow the bot's voice word by word: words already said, the current one with its progress, the ones to come. Works with any voice: timings come from your backend (JSON or WebVTT), the browser's word events, Piper or Kokoro phoneme durations, Whisper listening to the audio in the page (`whisperAligner`), or an estimate, and each word says which. The widget draws them; your own UI reads the same service.
 
 - **Needs:** `@handsforbots/core`, `@handsforbots/voice`.
 - **Install:**
@@ -342,7 +342,7 @@ Captions that follow the bot's voice word by word: words already said, the curre
   npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
   ```
 
-- **Works with:** the widget (`.captions` above the composer), React and Vue (`useStore`), `voice-models` (`durations: true`).
+- **Works with:** the widget (`.captions` above the composer), React and Vue (`useStore`), `voice-models` (`durations: true`, `whisperAligner`).
 - **For instance:** a talking avatar with podcast-style captions; following along in a noisy room or with hearing loss; reading practice where the spoken word lights up.
 - Guide: [Word-by-word captions](./speech.md#word-by-word-captions).
 

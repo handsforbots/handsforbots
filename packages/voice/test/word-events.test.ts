@@ -9,7 +9,10 @@ import {
   type SpeakOptions,
   type SpeechAudio,
   type TextToSpeech,
+  type TimedWord,
+  type VoiceOptions,
   type VoiceWordEvent,
+  type WordAligner,
 } from '../src/index.js'
 
 const eventually = async (check: () => void, timeout = 1000) => {
@@ -85,10 +88,15 @@ function model(words?: (text: string) => SpeechAudio['words']): TextToSpeech {
   }
 }
 
-async function setup(tts: TextToSpeech, player?: AudioPlayer, script = [reply('Olá mundo. Tchau.', 'm1')]) {
+async function setup(
+  tts: TextToSpeech,
+  player?: AudioPlayer,
+  script = [reply('Olá mundo. Tchau.', 'm1')],
+  extra: Partial<VoiceOptions> = {},
+) {
   const h4b = await createH4B({
     memory: false,
-    plugins: [voice({ language: 'pt-BR', output: 'voice', tts, player })],
+    plugins: [voice({ language: 'pt-BR', output: 'voice', tts, player, ...extra })],
   }).start()
   h4b.provide('transport', scriptedTransport(script))
   const events: VoiceWordEvent[] = []
@@ -289,3 +297,117 @@ describe('httpTTS word timings', () => {
   })
 })
 
+
+describe('voice.word with an aligner', () => {
+  /** An aligner whose answers the test releases; it records what it was asked. */
+  function heldAligner(answer: (text: string) => TimedWord[] | undefined) {
+    const calls: { text: string; language: string; release(): void }[] = []
+    const aligner: WordAligner = {
+      name: 'asr',
+      align: (audio, text, options) =>
+        new Promise((resolve) => {
+          calls.push({ text, language: options.language, release: () => resolve(answer(text)) })
+          expect(audio.samples.length).toBeGreaterThan(0)
+        }),
+    }
+    return { aligner, calls }
+  }
+  const heard = (text: string): TimedWord[] =>
+    text.includes('Olá') ? [{ text: 'olá', start: 0.2, end: 0.5 }, { text: 'mundo', start: 1.1, end: 1.8 }] : []
+  const chunks = (events: VoiceWordEvent[]) =>
+    events.flatMap((e) => (e.phase === 'chunk' ? [e] : []))
+
+  it('waits up to waitMs and plays with the timings it heard, aligned / asr', async () => {
+    const clock = clockedPlayer()
+    const { aligner, calls } = heldAligner(heard)
+    const { h4b, events } = await setup(model(), clock.player, undefined, { align: { aligner, waitMs: 5000 } })
+    await h4b.ask('oi')
+    await eventually(() => expect(calls.length).toBeGreaterThan(0))
+    expect(calls[0]).toMatchObject({ text: 'Olá mundo.', language: 'pt-BR' })
+    // Nothing plays while the alignment may still come.
+    expect(clock.plays).toHaveLength(0)
+    calls[0]!.release()
+    await eventually(() => expect(clock.plays).toHaveLength(1))
+    expect(chunks(events)[0]!.words.map((w) => [w.text, w.start, w.end, w.quality, w.source])).toEqual([
+      ['Olá', 0.2, 0.5, 'aligned', 'asr'],
+      ['mundo.', 1.1, 1.8, 'aligned', 'asr'],
+    ])
+    // The second sentence heard nothing: it keeps the estimate.
+    await eventually(() => expect(calls).toHaveLength(2))
+    calls[1]!.release()
+    clock.finish()
+    await eventually(() => expect(chunks(events)).toHaveLength(2))
+    expect(chunks(events)[1]!.words[0]).toMatchObject({ quality: 'estimated', source: 'estimate' })
+    await playAll(clock, 1)
+    await waitForIdle(h4b)
+  })
+
+  it('never delays speech by default: a late alignment revises the words while they play', async () => {
+    const clock = clockedPlayer()
+    const { aligner, calls } = heldAligner(heard)
+    const { h4b, events, voice: service } = await setup(model(), clock.player, [reply('Olá mundo.', 'm1')], { align: aligner })
+    await h4b.ask('oi')
+    await eventually(() => expect(clock.plays).toHaveLength(1))
+    expect(chunks(events)[0]!.words[0]!.quality).toBe('estimated')
+    clock.set(1.2)
+    await eventually(() => expect(phases(events)).toContain('word:mundo.'))
+    await eventually(() => expect(calls).toHaveLength(1))
+    calls[0]!.release()
+    await eventually(() => expect(chunks(events)).toHaveLength(2))
+    expect(chunks(events)[1]).toMatchObject({ revised: true, messageId: 'm1', from: 0 })
+    expect(chunks(events)[1]!.words.map((w) => w.quality)).toEqual(['aligned', 'aligned'])
+    // The words up to now start again, in order, on the revised timings.
+    expect(phases(events).slice(-3)).toEqual(['chunk', 'word:Olá', 'word:mundo.'])
+    expect(service.getSpeechPosition()).toMatchObject({ index: 1, status: 'speaking' })
+    expect(service.getSpeechPosition()!.progress).toBeCloseTo(0.1 / 0.7)
+    clock.finish()
+    await waitForIdle(h4b)
+  })
+
+  it('is skipped for audio with measured timings and asked for audio with estimated ones only', async () => {
+    const clock = clockedPlayer()
+    const { aligner, calls } = heldAligner(heard)
+    const tts = model((text) =>
+      text.includes('Olá')
+        ? [{ text: 'olá', start: 0, end: 1 }, { text: 'mundo', start: 1, end: 2 }]
+        : [{ text: 'Tchau.', start: 0, end: 1, quality: 'estimated' }],
+    )
+    const { h4b } = await setup(tts, clock.player, undefined, { align: aligner })
+    await h4b.ask('oi')
+    await playAll(clock, 2)
+    await waitForIdle(h4b)
+    await eventually(() => expect(calls.map((c) => c.text.trim())).toEqual(['Tchau.']))
+    calls[0]!.release()
+  })
+
+  it('reports a failing aligner and speaks with the estimate', async () => {
+    const clock = clockedPlayer()
+    const aligner: WordAligner = {
+      name: 'broken',
+      align: async () => {
+        throw new Error('no model')
+      },
+    }
+    const { h4b, events } = await setup(model(), clock.player, [reply('Olá mundo.', 'm1')], { align: { aligner, waitMs: 5000 } })
+    const errors: unknown[] = []
+    h4b.on('error', (e) => errors.push(e.source))
+    await h4b.ask('oi')
+    await eventually(() => expect(clock.plays).toHaveLength(1))
+    expect(errors).toEqual(['voice:align:broken'])
+    expect(chunks(events)[0]!.words[0]!.quality).toBe('estimated')
+    clock.finish()
+    await waitForIdle(h4b)
+  })
+
+  it('ignores an unsupported aligner', async () => {
+    const clock = clockedPlayer()
+    const align = vi.fn(async () => [])
+    const { h4b } = await setup(model(), clock.player, [reply('Olá.', 'm1')], {
+      align: { name: 'none', isSupported: () => false, align },
+    })
+    await h4b.ask('oi')
+    await playAll(clock, 1)
+    await waitForIdle(h4b)
+    expect(align).not.toHaveBeenCalled()
+  })
+})

@@ -155,6 +155,26 @@ export type TextToSpeech = {
   trace?(listener: (event: TtsTraceEvent) => void): () => void
 }
 
+/**
+ * Measures word timings in synthesized audio against its text (ADR 0020):
+ * speech recognition with word timestamps (`whisperAligner` in
+ * `@handsforbots/voice-models`) or anything else that hears the audio. The
+ * voice plugin calls it for audio that came without timings, or only with
+ * estimated ones, while the sentence waits to play; units it returns become
+ * `aligned` / `asr` and are matched to the text like a backend's.
+ */
+export type WordAligner = {
+  name: string
+  remote?: boolean
+  consent?: string
+  isSupported?(): boolean | Promise<boolean>
+  /** Downloads and prepares the model; `align` calls it itself when needed. */
+  load?(onProgress: (progress: LoadProgress) => void, signal: AbortSignal): Promise<void>
+  /** Units heard in `audio`, times in seconds of the audio; none or `undefined` when it heard nothing. */
+  align(audio: SpeechAudio, text: string, options: { language: string; signal: AbortSignal }): Promise<TimedWord[] | undefined>
+  size?: number
+}
+
 /** One step inside a provider: `event` names it, the rest are plain values (no content). */
 export type TtsTraceEvent = { event: string } & Record<string, string | number | boolean | undefined>
 

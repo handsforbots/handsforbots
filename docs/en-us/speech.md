@@ -338,6 +338,7 @@ createH4B({ plugins: [voice({ tts: webSpeechTTS(), output: 'voice' }), captions(
 | Your voice | Timings | `quality` / `source` |
 |---|---|---|
 | Audio without timings (a third-party TTS) | spread over the audio's voiced part by word length, with pauses at punctuation | `estimated` / `estimate` |
+| Any synthesized audio, with an aligner (`voice({ align: whisperAligner(...) })`) | Whisper hears the audio in the page and gives the time of each word it recognized | `aligned` / `asr`; misheard words `estimated` between the ones it got |
 | Your backend sends them (`httpTTS` JSON reply) | as sent; text normalized by the TTS is mapped back to the written words | `measured` / `backend` by default; a forced aligner should send `aligned` / `asr` |
 | The browser's voice (`webSpeechTTS`) | `boundary` events: each word starts when the event arrives and ends where the next starts | `measured` / `boundary`; voices that never fire it stay `estimated` |
 | Piper or Kokoro in the page with `durations: true` | the model's phoneme durations, grouped into words | `measured` / `model`; `estimated` where spoken and written words do not line up |
@@ -369,7 +370,26 @@ Positions (`from`/`to`) are in the text your backend received; without them the 
 
 **Piper and Kokoro.** Pass `durations: true` to `piperTTS` or `kokoroTTS`. It needs a model exported with a durations output (`durations`, `duration`, `pred_dur` or `w_ceil`; `durations: { output: 'name' }` for another name). For Kokoro, `kokoroModel({ repo: 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped', voices })`; the official Piper voices have none. Without the output there are no timings and the voice estimates.
 
-**Your own UI.** The `captions` service is headless: `getState()` gives `{ status: 'speaking' | 'gap' | 'idle', messageId?, from?, to?, words, active, ended? }`, each word with `state` `spoken`, `active` or `upcoming`; `subscribe()` fires when a word changes; `progress()` is how much of the active word was said (0–1), from the player's clock: read it on each animation frame. `captions({ scope: 'message' })` keeps the whole reply with the spoken sentence highlighted instead of one sentence at a time. Lower down, the voice emits `voice.word` (`chunk`, `word`, `gap`, `end` with `done`, `interrupted` or `error`) and `voice.getSpeechPosition()` gives the live position.
+**Measuring audio that has no timings.** An aligner listens to the synthesized audio and gives the time of each word. `whisperAligner` (in `@handsforbots/voice-models`) runs Whisper with word timestamps through transformers.js, in the page:
+
+```ts
+import { env, pipeline } from '@huggingface/transformers'
+import { whisperAligner, transformersProgress } from '@handsforbots/voice-models'
+
+env.backends.onnx.wasm.proxy = true // inference off the main thread, so captions do not stutter
+const align = whisperAligner({
+  pipeline: (progress) =>
+    pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny_timestamped', {
+      dtype: 'q8',
+      progress_callback: transformersProgress(progress),
+    }),
+})
+voice({ tts: myTTS, align })
+```
+
+It needs a model exported with cross-attentions (the `_timestamped` repositories; `whisper-tiny_timestamped` in `q8` is about 40 MB, downloaded on the first sentence). The voice calls it only for audio with no timings or only estimated ones, one sentence at a time, while the previous one plays, and maps what it heard onto the text like a backend's words: a misheard word becomes `estimated` between the words it got. Speech never waits by default: a sentence that starts before its alignment plays with the estimate, and when the alignment arrives `voice.word` emits `chunk` again with `revised: true` and the words up to now start again on the measured times. `align: { aligner, waitMs: 400 }` lets a sentence wait up to that long. A failing aligner is reported as `error` with `source: 'voice:align:<name>'` and the sentence keeps the estimate. Whisper's word times come from its attention (DTW), not phoneme-level forced alignment: better than the estimate, coarser than MFA on your server. Pass `language: false` for English-only `.en` models. Any other `WordAligner` (`align(audio, text, { language, signal })` returning `{ text, start, end? }[]`) works the same way.
+
+**Your own UI.** The `captions` service is headless: `getState()` gives `{ status: 'speaking' | 'gap' | 'idle', messageId?, from?, to?, words, active, ended? }`, each word with `state` `spoken`, `active` or `upcoming`; `subscribe()` fires when a word changes; `progress()` is how much of the active word was said (0–1), from the player's clock: read it on each animation frame. `captions({ scope: 'message' })` keeps the whole reply with the spoken sentence highlighted instead of one sentence at a time. Lower down, the voice emits `voice.word` (`chunk`, again with `revised: true` after a late alignment, `word`, `gap`, `end` with `done`, `interrupted` or `error`) and `voice.getSpeechPosition()` gives the live position.
 
 **In the widget.** `.captions` (part `captions`) has one `.word` per word with `data-state` and `data-quality`, `--progress` on the active one, and `data-status` on the box (`idle` in pauses and at the end). It is `aria-hidden`: screen readers read the message in the log. `widget({ captions: false })` turns it off.
 
