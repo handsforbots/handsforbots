@@ -79,6 +79,7 @@ Coding agents integrate H4B better with its [skills](./skills/README.md). In Cla
 
 - [Getting started](./docs/en-us/getting-started.md)
 - [Concepts](./docs/en-us/concepts.md): signals, turns, stimuli, routes, sync/async
+- [Ecosystem: A2UI, MCP Apps, AG-UI and CopilotKit](./docs/en-us/ecosystem.md): boundaries, combinations and when to use each piece
 - [Packages](./docs/en-us/packages.md): what each package is for, what it needs, what it works with
 - [Plugins](./docs/en-us/plugins.md): every package and its options
 - [Writing plugins](./docs/en-us/writing-plugins.md)

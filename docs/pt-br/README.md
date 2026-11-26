@@ -71,6 +71,7 @@ Agentes de código integram o H4B melhor com as [skills](../../skills/README.md)
 
 - [Primeiros passos](./getting-started.md)
 - [Conceitos](./concepts.md): sinais, turnos, estímulos, rotas, síncrono/assíncrono
+- [Ecossistema: A2UI, MCP Apps, AG-UI e CopilotKit](./ecosystem.md): fronteiras, combinações e quando usar cada peça
 - [Pacotes](./packages.md): para que serve cada pacote, do que precisa, com o que funciona
 - [Plugins](./plugins.md): todos os pacotes e opções
 - [Escrevendo plugins](./writing-plugins.md)
