@@ -1,14 +1,22 @@
 # @handsforbots/captions
 
-Plugin. Word-by-word captions for Hands for Bots: follows the bot's speech word by word (spoken, current with progress, upcoming) from the voice plugin's word timings, for the widget or your own UI.
+Plugin. Word-by-word captions and reading cadence for Hands for Bots: follows voice timings or drives text on its own, with a ready-made renderer and custom element.
 
 Part of [Hands for Bots](https://github.com/handsforbots/handsforbots), a headless multimodal and action layer between users, GUIs and agents.
 
 ## Install
 
 ```bash
-npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
+npm install @handsforbots/captions@alpha @handsforbots/core@alpha
 ```
+
+Add `@handsforbots/voice@alpha` when you also want voice-synced timings.
+
+## Subpaths
+
+- `@handsforbots/captions` — the `captions()` plugin (`follow: 'auto' | 'voice' | 'text'`, `forMessage(id)`, `skip()`) and all re-exports.
+- `@handsforbots/captions/cadence` — headless `createCadence()` reading cadence (standalone or streamed text).
+- `@handsforbots/captions/element` — `renderCaption()` and `<h4b-caption>` (`mode: 'karaoke' | 'reveal'`, `aria: 'mirror' | 'standalone'`).
 
 ## Documentation
 

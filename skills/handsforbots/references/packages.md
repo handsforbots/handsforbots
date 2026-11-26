@@ -41,7 +41,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
 | `mcp-apps` | `mcpAppRenderer({ allowTools?, allowMessages?, allowModelContext?, allowForms?, allowDomains?, confirmLink? })`, `mountMcpApp(h4b, props, opts)`, `unmountMcpApp` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
 | `cues` | `cues({ channels, rules?, classify?, report?, action?, sync? })`; `/server`: `readCuesState` | `core` | — | Closed-vocabulary presentation states |
-| `captions` | `captions({ scope?: 'chunk' \| 'message' })` | `core`, `voice` | `widget` | Word-by-word captions of the bot's speech; headless service + widget `.captions` |
+| `captions` | `captions({ scope?, follow?, pace?, cutOnInterrupt? })`, `createCadence` (`/cadence`), `renderCaption` & `<h4b-caption>` (`/element`) | `core` | `voice`, `widget`, `react`, `vue` | Word-by-word captions and reading cadence (with or without voice); headless store, per-message `forMessage()`, renderer and custom element |
 | `conversation-state` | `conversationState({...})`, `httpStateUpdater`; `/server`: `readConversationState`, `stateUpdateSchema`, `conversationStatePrompt` | `core` | — | Checked, sourced conversation state |
 | `memory` | `memory({...})`, `httpSummarizer`, `localSummary`, `groupTurns` | `core` | — | Turns sent and kept, compaction (mounted by default) |
 | `storage-local` | `storageLocal({...})`, `cookieKey`, `backendKey` | `core` | — | Encrypted browser persistence |

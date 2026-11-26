@@ -333,17 +333,17 @@ Categorias de apresentação com vocabulário fechado às quais a página reage:
 
 ### `@handsforbots/captions`
 
-Legendas que acompanham a voz do bot palavra por palavra: as palavras já ditas, a atual com o progresso dela, as próximas. Funciona com qualquer voz: os tempos vêm do seu backend (JSON ou WebVTT), dos eventos de palavra do navegador, das durações de fonema do Piper ou do Kokoro, do Whisper ouvindo o áudio na página (`whisperAligner`) ou de uma estimativa, e cada palavra diz de onde. O widget desenha; a sua interface lê o mesmo serviço.
+Legendas palavra por palavra e cadência de leitura: acompanha a voz do bot quando ela fala (`voice.word`), ou conduz as respostas em texto com uma cadência suave quando não há voz ou ela está desligada. Traz a cadência headless (`@handsforbots/captions/cadence`) e um renderizador pronto com o elemento `<h4b-caption>` (`@handsforbots/captions/element`) nos modos `karaoke` e `reveal` (balão de fala).
 
-- **Precisa de:** `@handsforbots/core`, `@handsforbots/voice`.
+- **Precisa de:** `@handsforbots/core` (`@handsforbots/voice` é opcional).
 - **Instalação:**
 
   ```bash
-  npm install @handsforbots/captions@alpha @handsforbots/core@alpha @handsforbots/voice@alpha
+  npm install @handsforbots/captions@alpha @handsforbots/core@alpha
   ```
 
-- **Funciona com:** o widget (`.captions` acima do campo de texto), React e Vue (`useStore`), `voice-models` (`durations: true`, `whisperAligner`).
-- **Por exemplo:** um avatar falante com legendas no estilo de podcast; acompanhar a fala numa sala barulhenta ou com perda auditiva; treino de leitura em que a palavra falada acende.
+- **Funciona com:** o widget (`.captions`, `captions: { mode: 'reveal' }`), `<h4b-caption>`, React e Vue (`useCaption` / `useStore`), `voice` + `voice-models` (`durations: true`, `whisperAligner`).
+- **Por exemplo:** um balão de fala revelando a resposta palavra por palavra sem voz; um avatar falante com legendas no estilo de podcast; acompanhar a fala numa sala barulhenta ou com perda auditiva.
 - Guia: [Legendas palavra por palavra](./speech.md#legendas-palavra-por-palavra).
 
 ## Conversa, memória e armazenamento
