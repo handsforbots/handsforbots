@@ -116,6 +116,9 @@ export function useService<K extends keyof Services>(key: K): Readonly<ShallowRe
 /** Any store-like plugin service (e.g. `voice`): `getState()` + `subscribe()`. */
 export type ExternalStore<S> = { getState(): S; subscribe(listener: () => void): () => void }
 
+/** Any caption store (`h4b.get('captions')`, `captions.forMessage(id)` or `createCadence()`). */
+export type CaptionStoreLike<S = unknown> = ExternalStore<S> & { progress(): number }
+
 /**
  * Subscribes to a plugin service with state, e.g.
  * `const voiceState = useStore(useService('voice'))`. The source may be a
@@ -136,6 +139,42 @@ export function useStore<S>(
     { immediate: true, flush: 'sync' },
   )
   return shallowReadonly(state)
+}
+
+/**
+ * Subscribes to a caption store (or ref/getter returning one) and exposes
+ * reactive `state` and `progress` (0–1, updated per animation frame while speaking).
+ */
+export function useCaption<S extends { status?: string }>(
+  source: MaybeRefOrGetter<CaptionStoreLike<S> | undefined>,
+): { state: Readonly<ShallowRef<S | undefined>>; progress: Readonly<ShallowRef<number>> } {
+  const state = useStore(source)
+  const progress = shallowRef(0)
+  watch(
+    [() => toValue(source), state],
+    ([store, current], _prev, onCleanup) => {
+      const status = current?.status
+      if (!store || !status || status === 'idle') {
+        progress.value = 0
+        return
+      }
+      if (status === 'gap') {
+        progress.value = 1
+        return
+      }
+      let frame: number | undefined
+      const tick = () => {
+        progress.value = Math.min(1, Math.max(0, store.progress()))
+        if (typeof requestAnimationFrame === 'function') frame = requestAnimationFrame(tick)
+      }
+      tick()
+      onCleanup(() => {
+        if (frame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
+      })
+    },
+    { immediate: true },
+  )
+  return { state, progress: shallowReadonly(progress) }
 }
 
 /**

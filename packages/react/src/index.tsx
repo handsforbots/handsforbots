@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
@@ -131,6 +132,9 @@ export function useH4BEvent<K extends keyof Events>(event: K, listener: (payload
 /** Any store-like plugin service (e.g. `voice`): `getState()` + `subscribe()`. */
 export type ExternalStore<S> = { getState(): S; subscribe(listener: () => void): () => void }
 
+/** Any caption store (`h4b.get('captions')`, `captions.forMessage(id)` or `createCadence()`). */
+export type CaptionStoreLike<S = unknown> = ExternalStore<S> & { progress(): number }
+
 /**
  * Subscribes to a plugin service with state, e.g.
  * `const voice = useStore(useH4B().get('voice'))`. Returns undefined when the
@@ -139,6 +143,38 @@ export type ExternalStore<S> = { getState(): S; subscribe(listener: () => void):
 export function useStore<S>(store: ExternalStore<S> | undefined): S | undefined {
   const subscribe = useCallback((onChange: () => void) => store?.subscribe(onChange) ?? (() => {}), [store])
   return useSyncExternalStore(subscribe, () => store?.getState(), () => store?.getState())
+}
+
+/**
+ * Subscribes to a caption store and updates `progress` (0–1) on every
+ * animation frame while `status === 'speaking'`.
+ */
+export function useCaption<S extends { status?: string }>(
+  store: CaptionStoreLike<S> | undefined,
+): { state: S | undefined; progress: number } {
+  const state = useStore(store)
+  const [progress, setProgress] = useState(0)
+  const status = state?.status
+  useEffect(() => {
+    if (!store || !status || status === 'idle') {
+      setProgress(0)
+      return
+    }
+    if (status === 'gap') {
+      setProgress(1)
+      return
+    }
+    let frame: number | undefined
+    const tick = () => {
+      setProgress(Math.min(1, Math.max(0, store.progress())))
+      if (typeof requestAnimationFrame === 'function') frame = requestAnimationFrame(tick)
+    }
+    tick()
+    return () => {
+      if (frame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
+    }
+  }, [store, status, state])
+  return { state, progress }
 }
 
 /** Every stimulus as it arrives (UI effects, renders, deltas…). */

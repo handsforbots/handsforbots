@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createH4B, textOf, type Message, type Transport, type TurnRequest } from '@handsforbots/core'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { H4BProvider, useAction, useBusy, useContextSignal, useMessages, useSources, useStimulus, useTextFocus } from '../src/index.js'
+import { H4BProvider, useAction, useBusy, useCaption, useContextSignal, useMessages, useSources, useStimulus, useTextFocus } from '../src/index.js'
 
 afterEach(cleanup)
 
@@ -181,5 +181,35 @@ describe('useTextFocus', () => {
     expect(focus).not.toHaveBeenCalled()
     fireEvent.click(screen.getByText('nota'))
     expect(focus).toHaveBeenCalled()
+  })
+})
+
+describe('useCaption', () => {
+  it('subscribes to state and reads progress while speaking, 1 in gap and 0 when idle', () => {
+    const listeners = new Set<() => void>()
+    let current = { status: 'speaking' as 'idle' | 'speaking' | 'gap', active: 0 }
+    let prog = 0.4
+    const store = {
+      getState: () => current,
+      subscribe: (fn: () => void) => {
+        listeners.add(fn)
+        return () => void listeners.delete(fn)
+      },
+      progress: () => prog,
+    }
+    const emit = (next: typeof current) => {
+      current = next
+      listeners.forEach((fn) => fn())
+    }
+    function View() {
+      const { state, progress } = useCaption(store)
+      return <output>{`${state?.status}:${progress}`}</output>
+    }
+    render(<View />)
+    expect(screen.getByRole('status').textContent).toBe('speaking:0.4')
+    act(() => emit({ status: 'gap', active: -1 }))
+    expect(screen.getByRole('status').textContent).toBe('gap:1')
+    act(() => emit({ status: 'idle', active: -1 }))
+    expect(screen.getByRole('status').textContent).toBe('idle:0')
   })
 })

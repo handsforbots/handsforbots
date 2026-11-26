@@ -7,6 +7,7 @@ import {
   h4bVue,
   useAction,
   useBusy,
+  useCaption,
   useContextSignal,
   useMessages,
   useService,
@@ -233,5 +234,41 @@ describe('text focus', () => {
     onLoad.value = true
     await nextTick()
     expect(document.activeElement).toBe(input)
+  })
+})
+
+describe('useCaption', () => {
+  it('tracks caption state and progress across speaking, gap and idle', async () => {
+    const listeners = new Set<() => void>()
+    let current = { status: 'speaking' as 'idle' | 'speaking' | 'gap', active: 0 }
+    const store = {
+      getState: () => current,
+      subscribe: (fn: () => void) => {
+        listeners.add(fn)
+        return () => void listeners.delete(fn)
+      },
+      progress: () => 0.6,
+    }
+    const emit = (next: typeof current) => {
+      current = next
+      listeners.forEach((fn) => fn())
+    }
+    const h4b = createH4B()
+    let caption!: ReturnType<typeof useCaption<typeof current>>
+    mount(
+      h4b,
+      defineComponent(() => {
+        caption = useCaption(store)
+        return () => h('output', `${caption.state.value?.status}:${caption.progress.value}`)
+      }),
+    )
+    expect(caption.state.value?.status).toBe('speaking')
+    expect(caption.progress.value).toBe(0.6)
+    emit({ status: 'gap', active: -1 })
+    await nextTick()
+    expect(caption.progress.value).toBe(1)
+    emit({ status: 'idle', active: -1 })
+    await nextTick()
+    expect(caption.progress.value).toBe(0)
   })
 })
