@@ -119,10 +119,12 @@ describe('page tools (v1 ShowRelevantContent and ImageGallery successors)', () =
     const { h4b } = await setup({ gallery: true })
     const outcome = await h4b.runAction('image_gallery', { topics: ['cozinha'], title: 'Cozinhas' }, { origin: 'assistant' })
     expect(outcome.result).toEqual({ images: 2, texts: 1 })
-    const ui = h4b.messages.flatMap((m: any) => m.parts ?? []).find((p: any) => p.name === 'ui')
-    expect(ui.value).toEqual({
-      component: 'gallery',
-      props: { title: 'Cozinhas', images: [{ src: 'https://x.test/c1.jpg', alt: 'Cozinha 1' }, { src: 'https://x.test/c2.jpg', alt: '' }], texts: ['Projeto integrado.'] },
+    const surface = h4b.messages.flatMap((m: any) => m.parts ?? []).find((p: any) => p.name === 'surface')
+    expect(surface.value.component).toBe('gallery')
+    expect(surface.value.payload).toEqual({
+      title: 'Cozinhas',
+      images: [{ src: 'https://x.test/c1.jpg', alt: 'Cozinha 1' }, { src: 'https://x.test/c2.jpg', alt: '' }],
+      texts: ['Projeto integrado.'],
     })
   })
 

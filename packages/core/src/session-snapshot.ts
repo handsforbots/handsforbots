@@ -136,11 +136,12 @@ function parsePart(value: unknown): value is Part {
     }
     case 'data': {
       if (typeof raw.name !== 'string') return false
-      if (raw.name === 'ui') {
+      if (raw.name === 'surface') {
         const value = raw.value
         if (!value || typeof value !== 'object' || Array.isArray(value)) return false
         const record = value as Record<string, unknown>
-        if (typeof record.component !== 'string') return false
+        if (typeof record.surfaceId !== 'string' || typeof record.kind !== 'string') return false
+        if (record.component !== undefined && typeof record.component !== 'string') return false
       }
       return true
     }

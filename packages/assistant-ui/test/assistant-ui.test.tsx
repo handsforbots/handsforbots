@@ -101,10 +101,10 @@ describe('assistant-ui runtime', () => {
       { id: 'u', role: 'user', parts: [{ type: 'text', text: '/atrasados' }], modality: 'text', source: 'menu', route: 'direct', createdAt: 1 },
       { id: 'a', role: 'assistant', parts: [], toolCalls: [{ id: 'c', name: 'filter', args: {} }], route: 'direct', createdAt: 2 },
       { id: 't', role: 'tool', toolCallId: 'c', name: 'filter', result: 3, route: 'direct', createdAt: 3 },
-      { id: 'b', role: 'assistant', parts: [{ type: 'text', text: '3 pedidos.' }, { type: 'data', name: 'ui', value: { component: 'gallery' } }], route: 'direct', createdAt: 4 },
+      { id: 'b', role: 'assistant', parts: [{ type: 'text', text: '3 pedidos.' }, { type: 'data', name: 'surface', value: { surfaceId: 's1', kind: 'component', component: 'gallery' } }], route: 'direct', createdAt: 4 },
     ])
     expect(thread).toHaveLength(3)
     expect(thread[1]).toMatchObject({ role: 'assistant', content: [{ type: 'tool-call', result: 3 }], metadata: { custom: { route: 'direct' } } })
-    expect(thread[2]!.content).toEqual([{ type: 'text', text: '3 pedidos.' }, { type: 'data-h4b-ui', data: { component: 'gallery' } }])
+    expect(thread[2]!.content).toEqual([{ type: 'text', text: '3 pedidos.' }, { type: 'data-h4b-surface', data: { surfaceId: 's1', kind: 'component', component: 'gallery' } }])
   })
 })

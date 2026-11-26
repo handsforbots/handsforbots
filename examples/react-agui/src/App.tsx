@@ -333,7 +333,9 @@ function MessageView({ message }: { message: Message }) {
   }
   const text = textOf(message)
   const apps = message.parts.flatMap((p) =>
-    p.type === 'data' && p.name === 'ui' && (p.value as any)?.component === 'mcp-app' ? [(p.value as any).props as McpAppProps] : [],
+    p.type === 'data' && p.name === 'surface' && ((p.value as any)?.component === 'mcp-app' || (p.value as any)?.kind === 'mcp-app')
+      ? [(p.value as any).payload as McpAppProps]
+      : [],
   )
   if (!text && !apps.length) return null
   const spoken = message.role === 'user' && message.modality === 'transcript'

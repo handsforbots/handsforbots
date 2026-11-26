@@ -53,10 +53,10 @@ A2UI define o que desenhar; MCP Apps entrega UI em hosts de terceiros (Claude, C
 |---|---|
 | Sessão e histórico | Integra superfícies declarativas e recursos `ui://` ao histórico, persistência, sincronia entre abas (`tab-sync`) e regras de consentimento |
 | Voz e multimodalidade | Soma entrada/saída de voz, barge-in e legendas sincronizadas às interações visuais |
-| Ações ("declare uma vez") | Uma mesma ação declarada no app fica disponível ao LLM, ao WebMCP, ao `@handsforbots/mcp-apps` e às funções do catálogo A2UI (`callRendererFunction`), sob `exposeTo`, schema e `confirm` |
+| Ações ("declare uma vez") | Uma mesma ação declarada no app fica disponível ao LLM, ao WebMCP, ao `@handsforbots/mcp-apps` e às superfícies A2UI (`allowActions` já entregue no `@handsforbots/a2ui`; `callRendererFunction` / `functions` do catálogo planejados), sob `exposeTo`, schema e `confirm` |
 | Qualquer backend | Leva A2UI também a backends fora do AG-UI (como Laravel, Rasa e HTTP), sem prender o app a um framework |
 
-Nesse desenho, `ui.render` segue como recurso secundário e leve para desenvolvimento rápido sem dependências pesadas, enquanto superfícies declarativas do A2UI terão o estímulo próprio `ui.surface` ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)).
+Nesse desenho, `ui.surface` é o estímulo único do `@handsforbots/core` para superfícies persistentes e endereçáveis (componentes do host como `gallery`, MCP Apps e superfícies declarativas do A2UI), substituindo o antigo `ui.render`, enquanto `ui.effect` permanece para reações efêmeras ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)).
 
 **Quando não faz sentido:** se o app só existe dentro de hosts de terceiros como Claude ou ChatGPT, o caminho é o servidor MCP do backend (fora do escopo do H4B). No modo A do CopilotKit (CopilotKit dono do chat), o CopilotKit já traz renderers de A2UI e MCP Apps; o H4B só agrega se o app quiser voz, menu, ações ou WebMCP.
 
@@ -216,7 +216,7 @@ type Signal = {
 | `message.start / delta / end` | Texto progressivo | `TEXT_MESSAGE_*` |
 | `audio` | Áudio pronto ou em stream (realtime) | `CUSTOM` |
 | `action.call` | Pedido para executar ação registrada | `TOOL_CALL_*` |
-| `ui.render` | Componente do host ou MCP App em um slot | `CUSTOM` / tool result com UI |
+| `ui.surface` | Superfície de UI persistente e endereçável (componente do host, MCP App ou A2UI) | `CUSTOM` (`h4b.ui.surface`) / `ACTIVITY_*` (`a2ui-surface`) |
 | `ui.effect` | Destacar, rolar, navegar, tour, som, vibração | `CUSTOM` |
 | `state.patch` | Estado compartilhado app ↔ agente | `STATE_DELTA` / `STATE_SNAPSHOT` |
 | `turn.end / error` | Fim do turno | `RUN_FINISHED` / `RUN_ERROR` |
@@ -428,7 +428,7 @@ O registro de ações substitui o `BotsCommands` (que hoje executa `window[comma
 | `react` | Hooks finos (`useH4B`, `useAction`, `useModality`, `useStimuli`) | P0 |
 | `expose-webmcp` | Publica ações em `document.modelContext` (absorve mudanças da spec) | P1 |
 | `render-mcp-apps` | `@handsforbots/mcp-apps` (entregue): renderiza `ui://` de MCP Apps em iframe com sandbox dentro de slots e liga chamadas a ações H4B; complementar ao modo A do CopilotKit | P1 |
-| `a2ui` | `@handsforbots/a2ui`: runtime de host sobre `@a2ui/web_core` — superfícies no histórico via `ui.surface`, `action` → sinal `gui-event`, `callRendererFunction` → ações do H4B ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)) | P1 |
+| `a2ui` | `@handsforbots/a2ui` (base headless entregue): runtime headless sobre `@a2ui/web_core` — superfícies A2UI 1.0 em `ui.surface` e no histórico, `action` → `allowActions` ou sinal `gui-event`, `a2ui.dataModel` / `a2ui.capabilities`; apresentação fica com o app host. Próximos passos: `callRendererFunction`, geração de `functions` no catálogo e bindings de renderers do host ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)) | P1 |
 | `transport-ai-sdk` / `bridge-assistant-ui` | Alternativas ao AG-UI / CopilotKit; provam a substituibilidade | P1 |
 | `transport-rasa`, `transport-universal-llm`, `transport-turn-based` | Backends existentes e APIs síncronas genéricas (ex.: Laravel) | P1 |
 | `transport-realtime` | Sessão fala-a-fala (áudio e vídeo) com ações pelo canal de dados; provedor de referência em aberto (seção 8) | P1 |
@@ -458,7 +458,7 @@ Nada fica de fora: tudo vira plugin, serviço do kernel ou é aposentado com sub
 | `MCPHelper` (tools via prompt + regex `<tool>`) | Ações + function calling nativo do transporte; `prompt-tools` (P2) só para modelos sem tool calling | Prompt com persona fixa é removido |
 | Plugin Photo | `input-camera` | Foto + vídeo |
 | Plugin GUIDed (tour, balões, `redirect_input`) | `guided`: ações `highlight`, `tour`, `explain_element` + captura no router | Agentes externos também podem guiar o usuário |
-| ImageGallery, ShowRelevantContent | Componentes de `ui.render` (slots) | Descritor compatível com MCP Apps |
+| ImageGallery, ShowRelevantContent | Componentes de `ui.surface` (slots) | Descritor compatível com MCP Apps |
 | HexPresentation | Plugin de apresentação do `widget` | |
 | Analytics | Aposentado → sink do `observability` | |
 | Observability + SemanticEventObservability | `observability` (pacote já existente) | `traceparent` no transporte |
@@ -477,7 +477,7 @@ Nada fica de fora: tudo vira plugin, serviço do kernel ou é aposentado com sub
 | 1 | Monorepo TS (pnpm, TS 7, vitest); `core` (plugins, Sinal/Estímulo, router, ações, interceptadores, captura seletiva, `ask`/`push`/`runAction`, conteúdo rico); `transport-agui` (SSE próprio); `react`; `testkit` com suíte de conformidade de transportes | — |
 | 2 | `voice` (Web Speech, HTTP, WebSocket, Vosk remoto, Vosk WASM offline; push-to-talk, segurar para falar com pausas, `cancel()` que descarta a fala, mãos-livres com fim de turno plugável, saída segue entrada falada frase a frase, barge-in completo, filtro de eco plugável; ADR 0011); `keyboard`; `vue` | Provedor de nuvem de referência (adapter genérico pronto). Teste do whisper.cpp na VPS da Hostinger (decisão 10): ainda não rodou |
 | 3 | `menu` (explícito, padrão, fuzzy); `copilotkit` (modo A); estados unificados com duração mínima no `widget`; latência percebida por rota (`h4b_first_response_ms`) no `observability`; mensagens na fila visíveis; ponte CopilotKit validada contra o runtime real (agente self-managed) | Validar com um runtime CopilotKit remoto (CopilotRuntime) |
-| 4 | `expose-webmcp`; `mcp-apps` (host de `ui://` em iframe com sandbox, validado no Chrome); `inputs` (câmera com foto e quadros de vídeo, arquivos, eventos da GUI, sensores); `ui.render` persistido + renderizadores no widget | Transporte `realtime` (fala-a-fala via WebRTC): é baseado em sessão, precisa coordenar com o plugin `voice` e devolver resultados de ações pelo data channel; fica para quando houver um provedor e uma chave para validar |
+| 4 | `expose-webmcp`; `mcp-apps` (host de `ui://` em iframe com sandbox, validado no Chrome); `inputs` (câmera com foto e quadros de vídeo, arquivos, eventos da GUI, sensores); `ui.surface` persistido + renderizadores no widget | Transporte `realtime` (fala-a-fala via WebRTC): é baseado em sessão, precisa coordenar com o plugin `voice` e devolver resultados de ações pelo data channel; fica para quando houver um provedor e uma chave para validar |
 | 5 | `transport-rasa`, `transport-http` (genérico + UniversalLLM + compatível com OpenAI/Ollama), `transport-ai-sdk` (validado contra o `streamText` real), `assistant-ui` (runtime real), `widget`, `guided` (tours, destaques, `show_section`, `image_gallery`), `storage-local`, `tab-sync`, `observability`; exemplo Rasa na v2; **v1 removida**; documentação v2 (en-us / pt-br). Substituibilidade provada: AG-UI ↔ AI SDK ↔ Rasa ↔ HTTP passam na mesma suíte; CopilotKit ↔ assistant-ui ↔ widget como superfícies; exemplo Rasa validado no Docker com o Rasa real | — |
 
 Exemplos da v2: [examples/react-agui](./examples/react-agui/README.md) e [examples/vite](./examples/README.md) (Rasa), ambos validados em Chrome headless (o Rasa simulado por interceptação de rede).
@@ -514,12 +514,12 @@ Em 2026-11-14 ([ADR 0019](./docs/adr/0019-estado-explicito-da-conversa.md)): pac
 Antes da 1.0, revisar o H4B contra XSS, de ponta a ponta. A cripto do `storage-local` só limita o tempo em que a conversa fica legível; um script injetado na página lê o cookie da chave (não pode ser `HttpOnly`, o JavaScript precisa dela), chama o `backendKey` com as credenciais da sessão e lê `h4b.messages` em memória. Pontos a revisar:
 
 - Arquitetura da chave: chave não exportável (`extractable: false`) no IndexedDB combinada com expiração; chave só no servidor com descriptografia no servidor; vincular `X-H4B-Conversation` à sessão autenticada no `storage-backend`.
-- Superfícies de renderização: Markdown do `widget`, renderizadores customizados, `gallery`, `mcp-apps` (sandbox e CSP), `ui.render` vindo do backend, fontes e citações (URLs por `safeSourceUrl`, títulos e trechos como texto; ADR 0014).
+- Superfícies de renderização: Markdown do `widget`, renderizadores customizados, `gallery`, `mcp-apps` (sandbox e CSP), `ui.surface` vindo do backend, fontes e citações (URLs por `safeSourceUrl`, títulos e trechos como texto; ADR 0014).
 - Entradas que viram HTML ou URL: links, imagens, `data-h4b-*` do `gui()`, argumentos de ações.
 - Recomendações para quem integra: CSP, Trusted Types, `request.before` para dados pessoais, o que nunca guardar na conversa. Com duas receitas, sem pacote novo: lado cliente do Cloudflare Turnstile (pegar o token, anexá-lo ao pedido no `request.before` e renovar quando vencer; quem valida é o backend) e checagens de UX antes de enviar (limite de tamanho e aviso de dado pessoal com `request.before` + `redact` do `consent`; o backend refaz as checagens, porque no navegador elas são contornáveis).
 - Testes automatizados com payloads conhecidos em cada superfície.
 
-Andamento (2026-11-17): suíte de payloads em `packages/widget/test/xss.test.ts` sobre `renderMarkdown`, `renderCitedText`, galeria, partes de imagem e mensagens no `<h4b-chat>` (payloads conhecidos + propriedades com `fast-check`), e CodeQL (`security-extended`) na CI. O Markdown e as citações passaram sem mudança. Correções que a suíte trouxe: imagens só http(s), `blob:`, relativas ou base64 rasterizado (antes, partes de imagem aceitavam qualquer URL e a galeria fazia link para `data:`); renderizadores do `ui.render` procurados só pelo nome próprio (antes, `constructor` ou `toString` alcançavam o `Object.prototype`). Em seguida: o `withCsp` do `mcp-apps` punha a CSP depois do primeiro `<head` do HTML, então um `<head>` num comentário, um `<header>` ou um script antes do `<head>` deixavam o app rodar sem política (conferido no Chrome 156: `fetch` liberado em 3 de 5 formatos). Agora a `<meta>` vai antes de toda marcação do app (depois de um doctype inicial; sem doctype, entra `<!doctype html>`), e os mesmos formatos ficam bloqueados.
+Andamento (2026-11-17): suíte de payloads em `packages/widget/test/xss.test.ts` sobre `renderMarkdown`, `renderCitedText`, galeria, partes de imagem e mensagens no `<h4b-chat>` (payloads conhecidos + propriedades com `fast-check`), e CodeQL (`security-extended`) na CI. O Markdown e as citações passaram sem mudança. Correções que a suíte trouxe: imagens só http(s), `blob:`, relativas ou base64 rasterizado (antes, partes de imagem aceitavam qualquer URL e a galeria fazia link para `data:`); renderizadores do `ui.surface` procurados só pelo nome próprio (antes, `constructor` ou `toString` alcançavam o `Object.prototype`). Em seguida: o `withCsp` do `mcp-apps` punha a CSP depois do primeiro `<head` do HTML, então um `<head>` num comentário, um `<header>` ou um script antes do `<head>` deixavam o app rodar sem política (conferido no Chrome 156: `fetch` liberado em 3 de 5 formatos). Agora a `<meta>` vai antes de toda marcação do app (depois de um doctype inicial; sem doctype, entra `<!doctype html>`), e os mesmos formatos ficam bloqueados.
 
 Depois: testes no Chromium de verdade (`pnpm test:browser`, modo browser do Vitest com Playwright, job `browser` na CI). Canários contam qualquer payload que rode nas superfícies do widget, e o sandbox dos MCP Apps é conferido em 10 formatos de HTML; os dois pegam as falhas antigas quando reintroduzidas.
 
@@ -581,7 +581,7 @@ Os prazos assumem uma equipe pequena. Cada fase só termina quando o critério d
 | # | Entrega |
 |---|---------|
 | 4.1 | `expose-webmcp` |
-| 4.2 | `render-mcp-apps` + slots `ui.render` para componentes do host |
+| 4.2 | `render-mcp-apps` + slots `ui.surface` para componentes do host |
 | 4.3 | `input-camera` (foto, frames de vídeo), `input-files`, `input-gui` |
 | 4.4 | Primeiros `sensor-*` (geolocalização, orientação) com consentimento e `beforeSend` |
 | 4.5 | Transporte `realtime` (1 provedor de referência), promovido a P1 em 2026-11 (seção 1) |
@@ -692,7 +692,7 @@ P3 — reavaliar com demanda
 
 | Data | Alteração |
 |------|-----------|
-| 2026-11-26 | Posicionamento frente a A2UI 1.0 e MCP Apps (H4B como runtime de host; `ui.render` secundário; futuro `ui.surface` e `@handsforbots/a2ui` sobre `@a2ui/web_core`), mapeamento de `a2ui-surface` (`ACTIVITY_SNAPSHOT`/`ACTIVITY_DELTA`) no `transport-agui`, e plano do guia de arquiteturas de referência (`docs/*/architectures.md`) (ADR 0020) |
+| 2026-11-26 | `ui.surface` implementado no `@handsforbots/core` como estímulo único de superfície (unificando componentes do host, MCP Apps e A2UI; `ui.render` removido sem compatibilidade) com separação explícita de `ui.effect`; `transport-agui` mapeando `a2ui-surface` (`ACTIVITY_SNAPSHOT`/`ACTIVITY_DELTA`) e `h4b.ui.surface` diretamente para `ui.surface`; base headless de `@handsforbots/a2ui` sobre `@a2ui/web_core` implementada (mantendo apresentação no app host; `callRendererFunction` / geração de `functions` no catálogo, bindings de renderers do host e guia `docs/*/architectures.md` permanecem planejados; ADR 0020) |
 | 2026-11-17 | Testes de XSS e do sandbox dos MCP Apps no Chromium (`pnpm test:browser`, job `browser` na CI) (seção 3) |
 | 2026-11-17 | CSP do `mcp-apps` antes de toda marcação do app; avisos de segurança em produção só genéricos (seção 3) |
 | 2026-11-17 | Revisão de XSS começou: suíte de payloads e propriedades no widget, CodeQL na CI; imagens restritas a esquemas seguros e renderizadores só por nome próprio (seção 3) |

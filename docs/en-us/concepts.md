@@ -10,7 +10,7 @@ flowchart LR
   R -->|"direct command"| A["Action"]
   R -->|"captured (e.g. tour)"| C["Capturing plugin"]
   R -->|"otherwise"| T["Transport"]
-  T --> ST["Stimuli<br/>message, action.call, ui.render,<br/>ui.effect, state, audio, error"]
+  T --> ST["Stimuli<br/>message, action.call, ui.surface,<br/>ui.effect, state, audio, error"]
   A --> ST
   ST --> H["History"]
   ST --> UI["UI / voice / GUI effects"]
@@ -18,7 +18,14 @@ flowchart LR
 
 - A **trigger** signal starts a turn. A **context** signal (`kind: 'context'`) is kept and sent with every turn until replaced (same `key`) or removed: current page, selection, sensor readings, camera frames. With `once: true` it goes with the next request to the backend only, for news such as an interruption ([ADR 0015](../adr/0015-retorno-da-interrupcao.md)).
 - **Parts** carry content: `text` (optionally with `citations`), media (`image`, `audio`, `video`, `file` as Blob, base64 or URL), `data` (structured values) and `source` (where an answer came from; see [Sources and citations](./sources.md)).
-- **Stimuli** are what backends (and direct commands) produce: `message.start/delta/part/end`, `message.citations`, `action.call`, `action.result`, `ui.render`, `ui.effect`, `state.snapshot/patch`, `audio`, `custom`, `error`. A synchronous backend is just a stream with one batch.
+- **Stimuli** are what backends (and direct commands) produce: `message.start/delta/part/end`, `message.citations`, `action.call`, `action.result`, `ui.surface`, `ui.effect`, `state.snapshot/patch`, `audio`, `custom`, `error`. A synchronous backend is just a stream with one batch.
+
+## Surfaces and effects
+
+H4B separates persistent interface surfaces from one-off reactions:
+
+- **`ui.surface`** (`{ surfaceId?, kind?, op?: 'snapshot' | 'delta' | 'delete', component?, payload?, slot?, messageId? }`): persistent, addressable UI with a lifecycle (`snapshot` creates or replaces, `delta` updates incrementally, `delete` removes by `surfaceId`). When placed in the message slot (omitted `slot` or `slot: 'message'`), a `snapshot` is stored on the assistant message as a `data` part named `'surface'` (replacing any existing part with the same `surfaceId`) and removed on `delete`, so it stays in history and survives reloads; other `slot` values and `delta` events go to surface plugins and the host. It unifies host components (`kind: 'component'`, e.g. `gallery`), MCP Apps (`kind: 'mcp-app'`), and declarative surfaces (`kind: 'a2ui'`).
+- **`ui.effect`** (`{ name, value? }`): an ephemeral reaction or side-effect with no mounted state, no update/delete lifecycle, and no replay on reload (e.g. `scroll`, `highlight`, sound, `cues`, or plugin channels such as `conversation.state`).
 
 ## Routes
 
@@ -41,7 +48,7 @@ An action is a capability of your GUI: name, description, input schema (Standard
 - **One action, three triggers:** the assistant (tool call), the user (menu, buttons, `runAction`) and browser agents (WebMCP).
 - **Origins and trust:** `user` > `assistant` > `agent`. `exposeTo` limits who can call it; `destructive: true` asks for confirmation (through the `confirm` service) for every origin.
 - **Validation** happens before the handler; invalid calls return an error to the caller, they never throw into your UI.
-- `call.render(component, props)` lets a handler show rich content in the reply (e.g. a gallery).
+- `call.surface({ component, payload })` lets a handler show or update a rich UI surface in the reply (e.g. a gallery).
 
 ## Input while busy
 

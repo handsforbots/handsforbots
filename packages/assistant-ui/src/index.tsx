@@ -86,7 +86,7 @@ export function toThreadMessages(messages: Message[], options: ToThreadOptions =
     for (const part of message.parts) {
       const image = imageUrl(part, options)
       if (image) content.push({ type: 'image', image })
-      if (part.type === 'data' && part.name === 'ui') content.push({ type: 'data-h4b-ui', data: part.value })
+      if (part.type === 'data' && part.name === 'surface') content.push({ type: 'data-h4b-surface', data: part.value })
     }
     if (!content.length) continue
     thread.push({

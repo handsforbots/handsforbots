@@ -36,11 +36,11 @@ The `memory` plugin trims `request.messages` before any transport sees it (defau
 
 | Transport | History | Context signals | Actions as tools | Notes |
 |---|---|---|---|---|
-| `agui({ url })` | Full, AG-UI format (tool calls + results) | AG-UI `context` | Yes | CUSTOM `h4b.ui.effect` / `h4b.ui.render` / `h4b.sources` / `h4b.citations` events |
+| `agui({ url })` | Full, AG-UI format (tool calls + results) | AG-UI `context` | Yes | CUSTOM `h4b.ui.effect` / `h4b.ui.surface` / `h4b.sources` / `h4b.citations` events; `ACTIVITY_*` (`a2ui-surface`) → `ui.surface` |
 | `http({ url, ... })` | All received, as chat messages + `message` | `context` object | `tools` | Customize with `body` / `parse` / `parseChunk` |
 | `universalLLM({ url, provider, model })` | All received (optional extra cap `contextWindow`) + the new message | `context.h4b_context` | `context.tools` | v1 PHP/Laravel backend format |
 | `openAICompatible({ baseUrl, model })` | All received (optional extra cap `contextWindow`) | In the system prompt | native `tools` | Browser key only for localhost |
-| `aiSdk({ url })` | Full, as UIMessages | `context` | `tools` (declare without `execute` on the route) | `data-ui-*` parts become effects/render/state |
+| `aiSdk({ url })` | Full, as UIMessages | `context` | `tools` (declare without `execute` on the route) | `data-ui-effect` / `data-ui-surface` / `data-state` parts become effects/surfaces/state |
 | `rasa({ url })` | **No** (Rasa keeps its tracker; thread id = sender) | `metadata.h4b_context` | No (Rasa drives the GUI with `custom.h4b`) | `reportActionResults` sends results after assistant-requested actions |
 | CopilotKit bridge | The agent's own history; direct commands are mirrored into it | agent context | frontend tools | |
 
@@ -62,7 +62,7 @@ A call id runs at most once per conversation. If the transport repeats an `actio
 
 ## Stimuli a backend (or `push`) can send
 
-`message.start | message.delta | message.part | message.end` (assistant text and parts; a `source` part replaces the one with the same `id`), `message.citations` (citations into the last text part, UTF-16 positions; see `docs/en-us/sources.md`), `action.call` (client runs an action), `action.result` (a tool the backend already ran — recorded), `ui.render` (rich content; without `slot` it becomes a `data` part named `ui` in the message, kept in history), `ui.effect` (one-off GUI effect, not in history), `state.snapshot | state.patch` (shared state, JSON Patch), `audio`, `custom`, `error`.
+`message.start | message.delta | message.part | message.end` (assistant text and parts; a `source` part replaces the one with the same `id`), `message.citations` (citations into the last text part, UTF-16 positions; see `docs/en-us/sources.md`), `action.call` (client runs an action), `action.result` (a tool the backend already ran — recorded), `ui.surface` (persistent, addressable UI surface with lifecycle `snapshot` | `delta` | `delete`, unifying host components, MCP Apps and A2UI; in the message slot — omitted `slot` or `slot: 'message'` — `snapshot` becomes a `data` part named `surface` in the assistant message replaced by `surfaceId` and `delete` removes it, kept in history), `ui.effect` (ephemeral reaction/side-effect with no mounted state and no replay on reload, not in history), `state.snapshot | state.patch` (shared state, JSON Patch), `audio`, `custom`, `error`.
 
 Push an assistant message outside a turn:
 

@@ -249,7 +249,17 @@ export function createChunkMapper(): (chunk: any) => Stimulus[] {
         if (typeof chunk.type === 'string' && chunk.type.startsWith('data-')) {
           const name = chunk.type.slice(5)
           if (name === 'ui-effect') return [{ type: 'ui.effect', name: chunk.data?.name, value: chunk.data?.value }]
-          if (name === 'ui-render') return [{ type: 'ui.render', component: chunk.data?.component, props: chunk.data?.props, slot: chunk.data?.slot }]
+          if (name === 'ui-surface') {
+            return [{
+              type: 'ui.surface',
+              surfaceId: chunk.data?.surfaceId,
+              kind: chunk.data?.kind,
+              op: chunk.data?.op,
+              component: chunk.data?.component,
+              payload: chunk.data?.payload,
+              slot: chunk.data?.slot,
+            }]
+          }
           if (name === 'state') return [{ type: 'state.snapshot', state: chunk.data }]
           if (name === 'citations') return [{ type: 'message.citations', messageId, citations: Array.isArray(chunk.data?.citations) ? chunk.data.citations : [] }]
           return [{ type: 'custom', name: `ai-sdk.data.${name}`, value: chunk.data }]

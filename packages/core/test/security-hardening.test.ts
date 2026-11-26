@@ -399,7 +399,7 @@ describe('parseSessionSnapshot', () => {
             { type: 'source', id: 's1', title: 'T', trail: 'abc' },
             { type: 'source', id: 's2', title: 'T', url: {} },
             { type: 'image', mimeType: 'image/png', source: {} },
-            { type: 'data', name: 'ui', value: null },
+            { type: 'data', name: 'surface', value: null },
           ],
           createdAt: 1,
         },
@@ -416,7 +416,7 @@ describe('parseSessionSnapshot', () => {
     expect(parsed?.messages[1]).toMatchObject({ role: 'assistant', parts: [{ type: 'text', text: 'also kept' }] })
   })
 
-  it('accepts snapshots stored by storage plugins (omitted_media and ui parts)', () => {
+  it('accepts snapshots stored by storage plugins (omitted_media and surface parts)', () => {
     const raw = storableSnapshot({
       threadId: 't',
       messages: [
@@ -433,7 +433,7 @@ describe('parseSessionSnapshot', () => {
         {
           id: 'a',
           role: 'assistant',
-          parts: [{ type: 'data', name: 'ui', value: { component: 'Card', props: { title: 'Hi' } } }],
+          parts: [{ type: 'data', name: 'surface', value: { surfaceId: 's1', kind: 'component', component: 'Card', payload: { title: 'Hi' } } }],
           createdAt: 2,
         },
       ],
@@ -441,7 +441,7 @@ describe('parseSessionSnapshot', () => {
     const parsed = parseSessionSnapshot(raw)
     expect(parsed?.messages).toHaveLength(2)
     expect(parsed?.messages[0]).toMatchObject({ role: 'user', parts: [{ name: 'omitted_media' }] })
-    expect(parsed?.messages[1]).toMatchObject({ role: 'assistant', parts: [{ name: 'ui' }] })
+    expect(parsed?.messages[1]).toMatchObject({ role: 'assistant', parts: [{ name: 'surface' }] })
   })
 })
 

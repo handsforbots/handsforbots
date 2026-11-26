@@ -125,6 +125,16 @@ importers:
         specifier: ^8.3.3
         version: 8.3.8(@types/node@26.6.6)
 
+  packages/a2ui:
+    dependencies:
+      '@a2ui/web_core':
+        specifier: ^0.15.0
+        version: 0.15.0(patch_hash=66acc64e43852bf1003a18e1bf66e52de4d426d7166153b74a0eea49a5ce644d)
+    devDependencies:
+      '@handsforbots/core':
+        specifier: workspace:^
+        version: link:../core
+
   packages/assistant-ui:
     devDependencies:
       '@assistant-ui/react':

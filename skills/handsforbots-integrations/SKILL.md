@@ -1,6 +1,6 @@
 ---
 name: handsforbots-integrations
-description: Connect Hands for Bots v2 (H4B) to a backend, an agent framework or another UI library - choose and wire a transport (AG-UI agents such as LangGraph, Mastra, PydanticAI or the CopilotKit runtime; your own HTTP API with the request and response formats it accepts; OpenAI-compatible APIs; a Vercel AI SDK route; Rasa with custom.h4b), drive the GUI from the backend (action calls, ui.effect, ui.render, shared state, sources), use H4B under CopilotKit (useCopilotKitBridge) or assistant-ui (useH4BAssistantRuntime), publish actions to browser agents with WebMCP (expose-webmcp) and render MCP Apps (ui:// resources) with mcp-apps. Use when code imports @handsforbots/transport-*, @handsforbots/copilotkit, @handsforbots/assistant-ui, @handsforbots/expose-webmcp or @handsforbots/mcp-apps, when writing the server endpoint an H4B page talks to, or when the task is "make my agent/chatbot control the page". Load together with the handsforbots skill.
+description: Connect Hands for Bots v2 (H4B) to a backend, an agent framework or another UI library - choose and wire a transport (AG-UI agents such as LangGraph, Mastra, PydanticAI or the CopilotKit runtime; your own HTTP API with the request and response formats it accepts; OpenAI-compatible APIs; a Vercel AI SDK route; Rasa with custom.h4b), drive the GUI from the backend (action calls, ui.effect, ui.surface, shared state, sources), use H4B under CopilotKit (useCopilotKitBridge) or assistant-ui (useH4BAssistantRuntime), publish actions to browser agents with WebMCP (expose-webmcp) and render MCP Apps (ui:// resources) with mcp-apps. Use when code imports @handsforbots/transport-*, @handsforbots/copilotkit, @handsforbots/assistant-ui, @handsforbots/expose-webmcp or @handsforbots/mcp-apps, when writing the server endpoint an H4B page talks to, or when the task is "make my agent/chatbot control the page". Load together with the handsforbots skill.
 ---
 
 # Hands for Bots v2 — transports, backends and other UIs
@@ -28,8 +28,8 @@ Keys never go to the browser. Every transport takes `headers` as an object or a 
 - **Sends**: the history the `memory` plugin lets through (default: last 20 turns + a summary in the context signal `memory.summary`), the context signals (what is on screen), and the actions exposed to `assistant` as tools with JSON Schema. Rasa is the exception: no history, no tools.
 - **Expects**: assistant text (streamed or whole), tool calls for actions the page runs, and optionally effects, rich content, shared state, sources and citations.
 - **Tool calls run on the page.** The page validates, confirms if `destructive`, runs the handler, records the call and its result in the history, and (by default) calls the backend again with the result in the history, up to `maxActionRoundtrips` (5) per turn. Give every tool call its own id: a repeated id is ignored (`error` with `source: 'action.call'`). Use the id as an idempotency key for server writes.
-- **Effects on the page** arrive as the stimulus `ui.effect` `{ name, value }` and are not stored. Handle them in the host: `h4b.on('stimulus', ({ stimulus }) => { if (stimulus.type === 'ui.effect' && stimulus.name === 'scroll') … })` (React/Vue: `useStimulus`). Plugins also consume some by name (`cues`, `conversation.state`).
-- **Rich content** arrives as `ui.render` `{ component, props, slot? }`; without `slot` it becomes part of the message and is stored. The widget draws it with `renderers: { name: (props) => HTMLElement }` (`gallery` built in; `mcp-app` with `mcp-apps`). Treat props as untrusted.
+- **Ephemeral effects on the page** arrive as `ui.effect` `{ name, value? }`: one-off side-effects with no mounted lifecycle, not stored in history and never replayed on reload (e.g. `scroll`, `highlight`, sounds, `cues`, `conversation.state`). Handle them in the host: `h4b.on('stimulus', ({ stimulus }) => { if (stimulus.type === 'ui.effect' && stimulus.name === 'scroll') … })` (React/Vue: `useStimulus`). Plugins also consume some by name (`cues`, `conversation.state`).
+- **Persistent, addressable UI surfaces** arrive as `ui.surface` `{ surfaceId?, kind?, op?: 'snapshot' | 'delta' | 'delete', component?, payload?, slot?, messageId? }`, unifying host components (`kind: 'component'`), MCP Apps (`kind: 'mcp-app'`) and A2UI (`kind: 'a2ui'`). Without `slot` (or `slot: 'message'`), `snapshot` becomes a `data` part named `'surface'` on the assistant message (replacing any existing part with the same `surfaceId`, kept in history) and `delete` removes it; `delta` and other `slot` values are emitted for surface plugins and the host. The widget draws component surfaces with `renderers: { name: (payload) => HTMLElement }` (`gallery` built in; `mcp-app` with `mcp-apps`). Treat payloads as untrusted.
 
 ## AG-UI
 
@@ -44,11 +44,11 @@ Backend side (`RunAgentInput`): `messages` (with tool calls and `tool` results),
 | `name` | `value` | Becomes |
 |---|---|---|
 | `h4b.ui.effect` | `{ name, value }` | `ui.effect` |
-| `h4b.ui.render` | `{ component, props, slot? }` | `ui.render` |
+| `h4b.ui.surface` | `{ surfaceId?, kind?, op?, component?, payload?, slot?, messageId? }` | `ui.surface` |
 | `h4b.sources` | `{ messageId?, sources: [...] }` | sources of the message |
 | `h4b.citations` | `{ messageId?, citations }` | citations into its text |
 
-Sources are not sent back in the history. `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELTA` events with `activityType: 'a2ui-surface'` (emitted by `@ag-ui/a2ui-middleware`) map to custom stimuli `a2ui.surface.snapshot` and `a2ui.surface.delta` (`A2UI_STIMULI`, `A2UI_ACTIVITY_TYPE`), while other activity types stay as `agui.ACTIVITY_*`.
+Sources are not sent back in the history. `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELTA` events with `activityType: 'a2ui-surface'` (`A2UI_ACTIVITY_TYPE`, emitted by `@ag-ui/a2ui-middleware`) map directly to `ui.surface` (`kind: 'a2ui'`, `op: 'snapshot' | 'delta'`), while other activity types stay as `agui.ACTIVITY_*`.
 
 ## Your own HTTP endpoint
 
@@ -62,7 +62,7 @@ Sources are not sent back in the history. `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELT
   "state": { } }
 ```
 
-It accepts, as JSON: a string; `{ response | content | text | message | output }`; an array of such messages (with `image`, `buttons` / `quick_replies`); `{ messages: [...] }`; a chat completion (`choices[0].message` with `tool_calls`); `tool_calls` on any message (OpenAI shape); `state` (shared state snapshot); `sources` and `citations`; `{ error }`. A `text/event-stream` response is streamed: OpenAI-style deltas (fragmented tool calls included) or `{ delta | content | response | text }` per event. Anything else: write `body(request, session)` and `parse(json)` / `parseChunk(data)` returning stimuli (that is also how an HTTP backend sends `ui.effect` or `ui.render`). `session: { url, method?, extract }` opens one backend session per thread. `sendToolResults: false` stops the follow-up call after client actions. Limits: one SSE event up to `maxEventBytes` (1 MiB), a body up to `maxResponseBytes` (10 MiB); a session id outside `[A-Za-z0-9._:-]{1,256}` is refused (`onSessionIssue`). On errors the person sees a generic `Backend error (HTTP n)`: put your diagnostics in your logs or in `error.code` (an identifier), not in the message text.
+It accepts, as JSON: a string; `{ response | content | text | message | output }`; an array of such messages (with `image`, `buttons` / `quick_replies`); `{ messages: [...] }`; a chat completion (`choices[0].message` with `tool_calls`); `tool_calls` on any message (OpenAI shape); `state` (shared state snapshot); `sources` and `citations`; `{ error }`. A `text/event-stream` response is streamed: OpenAI-style deltas (fragmented tool calls included) or `{ delta | content | response | text }` per event. Anything else: write `body(request, session)` and `parse(json)` / `parseChunk(data)` returning stimuli (that is also how an HTTP backend sends `ui.effect` or `ui.surface`). `session: { url, method?, extract }` opens one backend session per thread. `sendToolResults: false` stops the follow-up call after client actions. Limits: one SSE event up to `maxEventBytes` (1 MiB), a body up to `maxResponseBytes` (10 MiB); a session id outside `[A-Za-z0-9._:-]{1,256}` is refused (`onSessionIssue`). On errors the person sees a generic `Backend error (HTTP n)`: put your diagnostics in your logs or in `error.code` (an identifier), not in the message text.
 
 ## Vercel AI SDK
 
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 }
 ```
 
-Declare the tools **without `execute`** so the page runs them. Data parts `data-ui-effect`, `data-ui-render` and `data-state` become effects, rich content and shared state; `source-url` / `source-document` become sources; `data-citations` (`{ citations }`) becomes citations.
+Declare the tools **without `execute`** so the page runs them. Data parts `data-ui-effect`, `data-ui-surface` and `data-state` become effects, persistent UI surfaces and shared state; `source-url` / `source-document` become sources; `data-citations` (`{ citations }`) becomes citations.
 
 ## Rasa
 
@@ -97,7 +97,7 @@ responses:
       h4b:
         action: { name: guided_highlight, args: { target: 'save', text: 'Save here' } } # <button data-h4b-target="save">
         # effect: { name: scroll, value: '#top' }
-        # render: { component: gallery, props: { images: [...] } }
+        # surface: { component: gallery, payload: { images: [...] } }
 ```
 
 `reportActionResults: (results) => '/action_done{…}'` sends the results back as a message; by default they are not reported.
@@ -143,7 +143,7 @@ Tool calls show with their results; rich content arrives as `data-h4b-ui` parts;
 
 ## MCP Apps
 
-Your backend, acting as MCP client, gets a `ui://` resource (`text/html;profile=mcp-app`) with a tool result and sends it as `ui.render` with component `mcp-app` and props `{ html, toolName?, input?, result?, csp?, title? }` (AG-UI: `CUSTOM h4b.ui.render`).
+Your backend, acting as MCP client, gets a `ui://` resource (`text/html;profile=mcp-app`) with a tool result and sends it as `ui.surface` (`kind: 'mcp-app'` / `component: 'mcp-app'`) with `payload` `{ html, toolName?, input?, result?, csp?, title? }` (AG-UI: `CUSTOM h4b.ui.surface`).
 
 ```ts
 import { mcpAppRenderer, mountMcpApp } from '@handsforbots/mcp-apps'
@@ -158,6 +158,6 @@ The app runs in a sandboxed iframe (opaque origin) with a restrictive CSP built 
 - [ ] One transport (or the CopilotKit bridge), chosen by what the backend speaks; keys on the server.
 - [ ] The backend gives each tool call a unique id and treats tool results arriving in the history as the outcome.
 - [ ] The backend reads the screen from the context signals, not from fake user messages.
-- [ ] Every `ui.effect` name the backend sends has a handler on the page; every `ui.render` component has a renderer.
+- [ ] Every `ui.effect` name the backend sends has a handler on the page; every `ui.surface` component or kind has a renderer.
 - [ ] Actions for browser agents and MCP Apps are allowed explicitly (`exposeTo: [..., 'agent']`, `allowTools`).
 - [ ] Tested with `@handsforbots/testkit` (`scriptedTransport`, or `transportConformance` for a new transport).

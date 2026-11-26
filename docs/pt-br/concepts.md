@@ -10,7 +10,7 @@ flowchart LR
   R -->|"comando direto"| A["Ação"]
   R -->|"capturado (ex.: tour)"| C["Plugin que captura"]
   R -->|"demais casos"| T["Transporte"]
-  T --> ST["Estímulos<br/>mensagem, action.call, ui.render,<br/>ui.effect, estado, áudio, erro"]
+  T --> ST["Estímulos<br/>mensagem, action.call, ui.surface,<br/>ui.effect, estado, áudio, erro"]
   A --> ST
   ST --> H["Histórico"]
   ST --> UI["UI / voz / efeitos na GUI"]
@@ -18,7 +18,14 @@ flowchart LR
 
 - Um sinal **trigger** inicia um turno. Um sinal de **contexto** (`kind: 'context'`) fica guardado e vai junto em todo turno até ser substituído (mesma `key`) ou removido: página atual, seleção, leituras de sensores, quadros da câmera. Com `once: true`, vai só na próxima requisição ao backend, para notícias como uma interrupção ([ADR 0015](../adr/0015-retorno-da-interrupcao.md)).
 - **Parts** carregam o conteúdo: `text` (com `citations` opcionais), mídia (`image`, `audio`, `video`, `file` como Blob, base64 ou URL), `data` (valores estruturados) e `source` (de onde saiu uma resposta; veja [Fontes e citações](./sources.md)).
-- **Estímulos** são o que os backends (e os comandos diretos) produzem: `message.start/delta/part/end`, `message.citations`, `action.call`, `action.result`, `ui.render`, `ui.effect`, `state.snapshot/patch`, `audio`, `custom`, `error`. Um backend síncrono é só um stream com um lote.
+- **Estímulos** são o que os backends (e os comandos diretos) produzem: `message.start/delta/part/end`, `message.citations`, `action.call`, `action.result`, `ui.surface`, `ui.effect`, `state.snapshot/patch`, `audio`, `custom`, `error`. Um backend síncrono é só um stream com um lote.
+
+## Superfícies e efeitos
+
+O H4B separa superfícies de interface persistentes de reações pontuais:
+
+- **`ui.surface`** (`{ surfaceId?, kind?, op?: 'snapshot' | 'delta' | 'delete', component?, payload?, slot?, messageId? }`): UI persistente e endereçável com ciclo de vida (`snapshot` cria ou substitui, `delta` atualiza incrementalmente, `delete` remove por `surfaceId`). Quando vai no slot de mensagem (sem `slot` ou `slot: 'message'`), o `snapshot` é salvo na mensagem do assistente como uma parte `data` chamada `'surface'` (substituindo qualquer parte existente com o mesmo `surfaceId`) e removido com `delete`, permanecendo no histórico e na restauração; outros valores de `slot` e operações `delta` ficam para os plugins de superfície e o host aplicarem. Unifica componentes do host (`kind: 'component'`, ex.: `gallery`), MCP Apps (`kind: 'mcp-app'`) e superfícies declarativas (`kind: 'a2ui'`).
+- **`ui.effect`** (`{ name, value? }`): reação ou efeito colateral efêmero sem estado montado, sem ciclo de atualização/remoção e sem replay ao recarregar a página (ex.: `scroll`, `highlight`, som, `cues` ou canais de plugins como `conversation.state`).
 
 ## Rotas
 
@@ -41,7 +48,7 @@ Uma ação é uma capacidade da sua interface: nome, descrição, schema de entr
 - **Uma ação, três gatilhos:** o assistente (tool call), o usuário (menu, botões, `runAction`) e agentes do navegador (WebMCP).
 - **Origens e confiança:** `user` > `assistant` > `agent`. `exposeTo` limita quem pode chamar; `destructive: true` pede confirmação (pelo serviço `confirm`) para qualquer origem.
 - **Validação** acontece antes do handler; chamadas inválidas devolvem erro a quem chamou, nunca estouram na sua UI.
-- `call.render(componente, props)` permite que um handler mostre conteúdo rico na resposta (ex.: uma galeria).
+- `call.surface({ component, payload })` permite que um handler mostre ou atualize uma superfície de UI rica na resposta (ex.: uma galeria).
 
 ## Entrada com o assistente ocupado
 

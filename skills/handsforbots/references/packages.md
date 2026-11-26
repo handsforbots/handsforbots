@@ -40,6 +40,7 @@ The docs give ideas per package. They are illustrations, not the supported cases
 | `guided` | `guided({ tours?, autoStart?, sectionsAttribute?, gallery?, targetsAttribute?, allowAssistantSelectors?, ... })` | `core` | `menu` | Tours, highlights, `show_section`, `image_gallery`; the assistant targets `data-h4b-target` names |
 | `expose-webmcp` | `webmcp({ include?, prefix?, modelContext? })` | `core` | — | Actions for browser agents (WebMCP) |
 | `mcp-apps` | `mcpAppRenderer({ allowTools?, allowMessages?, allowModelContext?, allowForms?, allowDomains?, confirmLink? })`, `mountMcpApp(h4b, props, opts)`, `unmountMcpApp` | `core` | — | Host for MCP Apps (`ui://`) in sandboxed iframes |
+| `a2ui` | `a2ui({ catalogs?, allowActions?, reportDataModel?, reportCapabilities? })`, `A2UIService` (`processor`, `getState`, `getSurface`, `subscribe`, `process`, `dispatchAction`, `deleteSurface`) | `core` | `@a2ui/web_core` | Headless A2UI 1.0 surface host, leaving rendering to the host app |
 | `cues` | `cues({ channels, rules?, classify?, report?, action?, sync? })`; `/server`: `readCuesState` | `core` | — | Closed-vocabulary presentation states |
 | `conversation-state` | `conversationState({...})`, `httpStateUpdater`; `/server`: `readConversationState`, `stateUpdateSchema`, `conversationStatePrompt` | `core` | — | Checked, sourced conversation state |
 | `memory` | `memory({...})`, `httpSummarizer`, `localSummary`, `groupTurns` | `core` | — | Turns sent and kept, compaction (mounted by default) |

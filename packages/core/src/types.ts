@@ -185,6 +185,31 @@ export type Message = UserMessage | AssistantMessage | ToolMessage
 /* Stimuli (output)                                                           */
 /* -------------------------------------------------------------------------- */
 
+export type SurfaceOp = 'snapshot' | 'delta' | 'delete'
+
+export type SurfaceInput = {
+  /** Stable identifier for updates and removal. Generated when omitted on `snapshot`. */
+  surfaceId?: string
+  /** Surface kind or protocol: `'component'` (default when `component` is set), `'mcp-app'`, `'a2ui'`, etc. */
+  kind?: string
+  /** Lifecycle operation. Default `'snapshot'`. */
+  op?: SurfaceOp
+  /** Host component name (e.g. `'gallery'`, `'mcp-app'`). */
+  component?: string
+  /** Surface payload: component props, McpAppProps, A2UI content/patch, etc. */
+  payload?: unknown
+  /** Target region on the page. Omitted or `'message'` attaches to the assistant message. */
+  slot?: string
+  messageId?: string
+}
+
+export type SurfacePartValue = {
+  surfaceId: string
+  kind: string
+  component?: string
+  payload?: unknown
+}
+
 export type Stimulus =
   | { type: 'message.start'; messageId: string }
   | { type: 'message.delta'; messageId: string; delta: string }
@@ -198,11 +223,15 @@ export type Stimulus =
   /** A tool already executed by the backend; recorded for display and history. */
   | { type: 'action.result'; callId: string; name?: string; result: unknown }
   /**
-   * Rich content. Without a slot (or slot 'message') it becomes part of the
-   * assistant message (`data` part named 'ui', kept in history); other slots are
-   * for the host to place elsewhere on the page.
+   * Persistent, addressable UI surface (host component, MCP App, A2UI…).
+   * Without a slot (or slot `'message'`), `snapshot` becomes part of the
+   * assistant message (`data` part named `'surface'`, replacing any existing
+   * part with the same `surfaceId`, kept in history); `delete` removes it;
+   * `delta` is emitted as a stimulus for surface plugins/hosts to apply.
+   * Other slots are for the host to place elsewhere on the page.
    */
-  | { type: 'ui.render'; slot?: string; component: string; props?: unknown; messageId?: string }
+  | ({ type: 'ui.surface' } & SurfaceInput)
+  /** Ephemeral UI or device reaction (scroll, highlight, sound, cues…). Not stored as message content. */
   | { type: 'ui.effect'; name: string; value?: unknown }
   | { type: 'state.snapshot'; state: unknown }
   | { type: 'state.patch'; patch: JsonPatchOperation[] }
@@ -249,8 +278,8 @@ export type ActionCallContext = {
   origin: Origin
   callId: string
   signal?: AbortSignal
-  /** Shows rich content (e.g. a gallery) in the reply that triggered the action. */
-  render?: (component: string, props?: unknown) => void
+  /** Shows or updates a UI surface (e.g. a gallery) in the reply that triggered the action. */
+  surface?: (surface: SurfaceInput) => void
 }
 
 export type ActionDescriptor = {

@@ -6,7 +6,6 @@ import { createH4B, textOf, type Message } from '@handsforbots/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   A2UI_ACTIVITY_TYPE,
-  A2UI_STIMULI,
   agui,
   createEventMapper,
   toAguiMessages,
@@ -83,6 +82,34 @@ describe('event mapper', () => {
       { type: 'message.delta', messageId: 'm', delta: 'b' },
       { type: 'action.call', callId: 't', name: 'go', args: { x: 1 }, messageId: undefined },
       { type: 'message.end', messageId: 'm' },
+    ])
+  })
+
+  it('maps CUSTOM h4b.ui.surface to ui.surface', () => {
+    const map = createEventMapper()
+    const out = map(ev(EventType.CUSTOM, {
+      name: 'h4b.ui.surface',
+      value: {
+        surfaceId: 's1',
+        kind: 'mcp-app',
+        op: 'snapshot',
+        component: 'mcp-app',
+        payload: { html: '<p>hi</p>' },
+        slot: 'message',
+        messageId: 'm1',
+      },
+    }))
+    expect(out).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: 's1',
+        kind: 'mcp-app',
+        op: 'snapshot',
+        component: 'mcp-app',
+        payload: { html: '<p>hi</p>' },
+        slot: 'message',
+        messageId: 'm1',
+      },
     ])
   })
 })
@@ -311,7 +338,7 @@ describe('interop with @ag-ui/client', () => {
 })
 
 describe('A2UI activity events', () => {
-  it('maps A2UI ACTIVITY_SNAPSHOT to a2ui.surface.snapshot and defaults replace to true', () => {
+  it('maps A2UI ACTIVITY_SNAPSHOT to ui.surface and defaults replace to true', () => {
     const map = createEventMapper()
     const content = { surfaceId: 'main', components: [] }
     const omittedReplace = map(ev(EventType.ACTIVITY_SNAPSHOT, {
@@ -328,21 +355,25 @@ describe('A2UI activity events', () => {
 
     expect(omittedReplace).toEqual([
       {
-        type: 'custom',
-        name: A2UI_STIMULI.snapshot,
-        value: { messageId: 'm1', content, replace: true },
+        type: 'ui.surface',
+        surfaceId: 'm1',
+        kind: 'a2ui',
+        op: 'snapshot',
+        payload: { content, replace: true },
       },
     ])
     expect(explicitFalse).toEqual([
       {
-        type: 'custom',
-        name: 'a2ui.surface.snapshot',
-        value: { messageId: 'm2', content, replace: false },
+        type: 'ui.surface',
+        surfaceId: 'm2',
+        kind: 'a2ui',
+        op: 'snapshot',
+        payload: { content, replace: false },
       },
     ])
   })
 
-  it('maps A2UI ACTIVITY_DELTA to a2ui.surface.delta and defaults non-array patch to []', () => {
+  it('maps A2UI ACTIVITY_DELTA to ui.surface and defaults non-array patch to []', () => {
     const map = createEventMapper()
     const patch = [{ op: 'replace', path: '/title', value: 'Updated' }]
     const validPatch = map(ev(EventType.ACTIVITY_DELTA, {
@@ -357,16 +388,20 @@ describe('A2UI activity events', () => {
 
     expect(validPatch).toEqual([
       {
-        type: 'custom',
-        name: A2UI_STIMULI.delta,
-        value: { messageId: 'm1', patch },
+        type: 'ui.surface',
+        surfaceId: 'm1',
+        kind: 'a2ui',
+        op: 'delta',
+        payload: { patch },
       },
     ])
     expect(invalidPatch).toEqual([
       {
-        type: 'custom',
-        name: 'a2ui.surface.delta',
-        value: { messageId: undefined, patch: [] },
+        type: 'ui.surface',
+        surfaceId: undefined,
+        kind: 'a2ui',
+        op: 'delta',
+        payload: { patch: [] },
       },
     ])
   })

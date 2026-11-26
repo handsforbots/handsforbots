@@ -22,6 +22,7 @@ Cada pacote exporta uma fábrica de plugin: chame com as opções e passe para `
 | [`guided`](#guided) | `guided` | `guided` |
 | [`expose-webmcp`](#expose-webmcp) | `webmcp` | `webmcp` |
 | [`mcp-apps`](#mcp-apps) | `mountMcpApp`, `mcpAppRenderer` | — |
+| [`a2ui`](#a2ui) | `a2ui` | `a2ui` |
 | [`cues`](#cues) | `cues` | `cues` |
 | [`conversation-state`](#conversation-state) | `conversationState`, `httpStateUpdater` | `conversationState` |
 | [`memory`](#memory) | `memory`, `httpSummarizer`, `localSummary`, `groupTurns` | `memory` |
@@ -55,7 +56,7 @@ Fontes e citações ([guia](./sources.md)): `sourceView`, `sourceGroups`, `sourc
 
 ## transport-agui
 
-`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.render` viram efeitos na GUI e conteúdo rico; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). Eventos `ACTIVITY_SNAPSHOT` e `ACTIVITY_DELTA` com `activityType: 'a2ui-surface'` (emitidos por `@ag-ui/a2ui-middleware`) viram os estímulos personalizados `a2ui.surface.snapshot` e `a2ui.surface.delta` (`A2UI_STIMULI`, `A2UI_ACTIVITY_TYPE`), enquanto outros tipos de atividade continuam como `agui.ACTIVITY_*`. As fontes não voltam no histórico. Um evento SSE acima de `maxEventBytes` (1 MiB) faz o turno falhar; `RUN_ERROR` mostra à pessoa `Agent run failed` e mantém só um `code` de verdade.
+`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.surface` viram efeitos efêmeros na GUI e superfícies de UI persistentes; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). Eventos `ACTIVITY_SNAPSHOT` e `ACTIVITY_DELTA` com `activityType: 'a2ui-surface'` (`A2UI_ACTIVITY_TYPE`, emitidos por `@ag-ui/a2ui-middleware`) mapeiam diretamente para `ui.surface` (`kind: 'a2ui'`, `op: 'snapshot' | 'delta'`), enquanto outros tipos de atividade continuam como `agui.ACTIVITY_*`. As fontes não voltam no histórico. Um evento SSE acima de `maxEventBytes` (1 MiB) faz o turno falhar; `RUN_ERROR` mostra à pessoa `Agent run failed` e mantém só um `code` de verdade.
 
 ## transport-rasa
 
@@ -69,7 +70,7 @@ responses:
       h4b:
         action: { name: guided_highlight, args: { target: 'save', text: 'Salve aqui' } } # <button data-h4b-target="save">
         # effect: { name: scroll, value: '#top' }
-        # render: { component: gallery, props: { images: [...] } }
+        # surface: { component: gallery, payload: { images: [...] } }
 ```
 
 ## transport-http
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
 }
 ```
 
-Data parts `data-ui-effect`, `data-ui-render` e `data-state` viram efeitos na GUI, conteúdo rico e estado compartilhado. Partes `source-url` e `source-document` viram [fontes](./sources.md) (o documento como referência só texto) e `data-citations` (`{ citations }`) vira citações.
+Data parts `data-ui-effect`, `data-ui-surface` e `data-state` viram efeitos na GUI, superfícies de UI persistentes e estado compartilhado. Partes `source-url` e `source-document` viram [fontes](./sources.md) (o documento como referência só texto) e `data-citations` (`{ citations }`) vira citações.
 
 ## widget
 
@@ -256,7 +257,7 @@ Fontes (`ModelSource`): uma URL (absoluta ou relativa à página), `{ url, sha25
 
 ## mcp-apps
 
-Renderiza [MCP Apps](https://modelcontextprotocol.io) (recursos `ui://`, `text/html;profile=mcp-app`) que o seu backend, como cliente MCP, envia como `ui.render` com o componente `mcp-app` e as props `{ html, toolName?, input?, result?, csp? }`. O app roda num iframe com sandbox (`allow-scripts`, origem opaca; formulários só com `allowForms: true`) e CSP restritiva (`form-action 'none'`, `base-uri 'none'`) posta antes de qualquer marcação do app, então nenhum script do app roda antes dela. Os domínios declarados em `csp` precisam ser `https://host[:porta]` ou `https://*.host`; `allowDomains` mantém só os da sua lista (`[]` não libera nenhum). A CSP limita o que o app carrega, não para onde ele navega: o JSON-RPC passa por um `MessageChannel` que o primeiro documento do app abre (handshake com nonce); quando esse documento é trocado o canal fica para trás, então a página nova não tem ponte, e o iframe sair da página ou `unmountMcpApp(elemento)` a fecha. O H4B é o host: `ui/initialize`, entrada e resultado da ferramenta depois do `initialized`, `tools/call` ligado às ações do H4B listadas em `allowTools` (nenhuma por padrão; origem `agent`, registrado no histórico), `size-changed`. Desligados até você ligar: `ui/message` como entrada do usuário (`allowMessages: true`; no máximo uma por segundo e 20 por app, 4000 caracteres, `messageRate`) e `ui/update-model-context` como sinal de contexto (`allowModelContext: true`; até 16 KB). `ui/open-link` abre http(s) sem credenciais, no máximo um por segundo e 10 por app (`linkRate`); `confirmLink(url)` pode perguntar à pessoa antes.
+Renderiza [MCP Apps](https://modelcontextprotocol.io) (recursos `ui://`, `text/html;profile=mcp-app`) que o seu backend, como cliente MCP, envia como `ui.surface` (`kind: 'mcp-app'` / `component: 'mcp-app'`) com `payload` `{ html, toolName?, input?, result?, csp? }`. O app roda num iframe com sandbox (`allow-scripts`, origem opaca; formulários só com `allowForms: true`) e CSP restritiva (`form-action 'none'`, `base-uri 'none'`) posta antes de qualquer marcação do app, então nenhum script do app roda antes dela. Os domínios declarados em `csp` precisam ser `https://host[:porta]` ou `https://*.host`; `allowDomains` mantém só os da sua lista (`[]` não libera nenhum). A CSP limita o que o app carrega, não para onde ele navega: o JSON-RPC passa por um `MessageChannel` que o primeiro documento do app abre (handshake com nonce); quando esse documento é trocado o canal fica para trás, então a página nova não tem ponte, e o iframe sair da página ou `unmountMcpApp(elemento)` a fecha. O H4B é o host: `ui/initialize`, entrada e resultado da ferramenta depois do `initialized`, `tools/call` ligado às ações do H4B listadas em `allowTools` (nenhuma por padrão; origem `agent`, registrado no histórico), `size-changed`. Desligados até você ligar: `ui/message` como entrada do usuário (`allowMessages: true`; no máximo uma por segundo e 20 por app, 4000 caracteres, `messageRate`) e `ui/update-model-context` como sinal de contexto (`allowModelContext: true`; até 16 KB). `ui/open-link` abre http(s) sem credenciais, no máximo um por segundo e 10 por app (`linkRate`); `confirmLink(url)` pode perguntar à pessoa antes.
 
 ```ts
 widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] }) } })
@@ -264,6 +265,23 @@ widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] 
 ```
 
 Quando usar o CopilotKit como dono do chat (Modo A), o próprio CopilotKit já renderiza MCP Apps e superfícies A2UI, então não é preciso montar o renderizador do H4B ali.
+
+## a2ui
+
+`a2ui({ catalogs?, allowActions?, reportDataModel?: true, reportCapabilities?: false })`: host headless A2UI 1.0 sobre `@a2ui/web_core`. A apresentação e a renderização ficam com o app host (React, Lit, Angular, Vue ou um renderer próprio).
+
+- `catalogs`: catálogos A2UI 1.0 aceitos pelo `MessageProcessor`; o padrão é `[basicCatalog]` (reexportado junto com `MessageProcessor` de `@a2ui/web_core/v1_0`).
+- `ui.surface` (`kind: 'a2ui'`): aplica `snapshot` (inclusive snapshots reidratados do histórico restaurado do assistente), `delta` (JSON Patch sobre o conteúdo de atividade `a2ui-surface` do AG-UI ou operações A2UI diretas) e `delete`, e limpa as superfícies no `conversation.reset`.
+- `allowActions`: nomes de ações do H4B que interações da superfície podem executar localmente (`origin: 'agent'`, passando `action.context`). Qualquer outra ação da superfície vira um sinal `trigger` `gui-event` (`source: 'a2ui'`) levando `action.userMessage` (quando não vazio) e a parte de dados `a2ui.action`.
+- `reportDataModel` (`true` por padrão) e `reportCapabilities` (`false` por padrão): anexam modelos de dados das superfícies ativas (`sendDataModel: true`) como `a2ui.dataModel` e capacidades do renderer A2UI 1.0 como `a2ui.capabilities` em `request.before`.
+
+```ts
+const a2uiService = h4b.get('a2ui')!
+// O seu renderer React / Lit / Angular / Vue lê a2uiService.processor / getState()
+// e encaminha interações do usuário com a2uiService.dispatchAction(action)
+```
+
+`A2UIService`: `processor` (`MessageProcessor` subjacente de `@a2ui/web_core`), `getState()` (`{ surfaces }`), `getSurface(surfaceId)`, `subscribe(listener)`, `process(messages)`, `dispatchAction(action)`, `deleteSurface(surfaceId)`. Quando usar o CopilotKit como dono do chat (Modo A), o próprio CopilotKit já gerencia e renderiza superfícies A2UI.
 
 ## cues
 

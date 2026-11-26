@@ -207,7 +207,7 @@ describe('sourceView', () => {
       source('a'),
       source('b'),
       { type: 'text', text: 'One.', citations: [{ start: 0, end: 4, sourceIds: ['b'] }] },
-      { type: 'data', name: 'ui', value: {} },
+      { type: 'data', name: 'surface', value: { surfaceId: 's1', kind: 'component', component: 'card' } },
       { type: 'text', text: ' Two.' },
     ])
     expect(view).toEqual({

@@ -18,6 +18,7 @@ Nenhum outro código de terceiros é embutido nos pacotes publicados.
 | Projeto | Uso | Licença |
 |---------|-----|---------|
 | [AG-UI](https://github.com/ag-ui-protocol/ag-ui) (`@ag-ui/core`) | Tipos do protocolo e schemas de eventos do `transport-agui` | MIT |
+| [A2UI](https://github.com/google/A2UI) (`@a2ui/web_core`) | Parser do protocolo A2UI 1.0 e modelo reativo de superfícies e dados no `@handsforbots/a2ui` | Apache-2.0 |
 
 ### Peers opcionais e integrações
 
