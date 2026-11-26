@@ -1,7 +1,7 @@
 {
   "name": "@handsforbots/captions",
   "version": "2.0.0-alpha.4",
-  "description": "Plugin. Word-by-word captions for Hands for Bots: follows the bot's speech word by word (spoken, current with progress, upcoming) from the voice plugin's word timings, for the widget or your own UI.",
+  "description": "Plugin. Word-by-word captions and reading cadence for Hands for Bots: follows voice timings or drives text on its own, with a ready-made renderer and custom element.",
   "keywords": [
     "handsforbots",
     "h4b",
@@ -20,7 +20,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./cadence": "./src/cadence.ts",
+    "./element": "./src/element.ts"
   },
   "publishConfig": {
     "access": "public",
@@ -28,6 +30,14 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./cadence": {
+        "types": "./dist/cadence.d.ts",
+        "import": "./dist/cadence.js"
+      },
+      "./element": {
+        "types": "./dist/element.d.ts",
+        "import": "./dist/element.js"
       }
     }
   },
@@ -41,6 +51,11 @@
   "peerDependencies": {
     "@handsforbots/core": "workspace:^",
     "@handsforbots/voice": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@handsforbots/voice": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@handsforbots/core": "workspace:^",

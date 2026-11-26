@@ -156,11 +156,15 @@ header button[hidden] { display: none; }
 .chips button:hover { background: var(--h4b-soft); }
 .captions { padding: 6px 14px 0; font-size: 15px; line-height: 1.5; color: var(--h4b-muted); }
 .captions[hidden] { display: none; }
-.captions .word { border-radius: 4px; transition: color 120ms; }
+.captions .word { border-radius: 4px; transition: color 120ms, opacity 120ms; }
 .captions .word[data-state='spoken'] { color: var(--h4b-text); }
 .captions .word[data-state='upcoming'] { opacity: 0.6; }
 .captions .word[data-state='active'] { color: var(--h4b-text); background: linear-gradient(to right, var(--h4b-soft) calc(var(--progress, 0) * 100%), transparent 0); }
+.captions .word[data-state='skipped'] { opacity: 0.35; }
+.captions[data-mode='reveal'] .word[data-state='upcoming'] { visibility: hidden; }
+.captions[data-mode='reveal'] .word[data-state='skipped'] { display: none; }
 .captions[data-status='idle'] .word { opacity: 0.75; }
+.captions[data-mode='reveal'][data-status='idle'] .word[data-state='spoken'] { opacity: 1; }
 .partial { font-size: 13px; color: var(--h4b-muted); font-style: italic; padding: 4px 14px 0; }
 .partial:empty { display: none; }
 .partial.failed { font-style: normal; }

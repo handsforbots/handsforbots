@@ -516,6 +516,10 @@ importers:
         version: 3.5.45(typescript@7.0.2)
 
   packages/widget:
+    dependencies:
+      '@handsforbots/captions':
+        specifier: workspace:^
+        version: link:../captions
     devDependencies:
       '@handsforbots/core':
         specifier: workspace:^

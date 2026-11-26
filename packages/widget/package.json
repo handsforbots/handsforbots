@@ -46,6 +46,9 @@
   "peerDependencies": {
     "@handsforbots/core": "workspace:^"
   },
+  "dependencies": {
+    "@handsforbots/captions": "workspace:^"
+  },
   "devDependencies": {
     "@handsforbots/core": "workspace:^",
     "@handsforbots/cues": "workspace:^",

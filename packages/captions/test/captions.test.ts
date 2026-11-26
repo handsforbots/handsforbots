@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createH4B, type H4B, type Transport } from '@handsforbots/core'
+import { createH4B, textOf, type H4B, type Transport } from '@handsforbots/core'
 import { voice, type AudioPlayer, type PlayOptions, type SpeechAudio, type TextToSpeech, type WordAligner } from '@handsforbots/voice'
 import { widget } from '@handsforbots/widget'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -243,5 +243,301 @@ describe('captions in the widget', () => {
     await h4b.ask('oi')
     await eventually(() => expect(h4b.get('captions')!.getState().status).toBe('speaking'))
     expect(document.querySelector('h4b-chat')!.shadowRoot!.querySelector<HTMLElement>('.captions')!.hidden).toBe(true)
+  })
+
+  it('supports captions: { mode: "reveal" } in the widget', async () => {
+    const h4b = createH4B({
+      memory: false,
+      plugins: [captions({ reducedMotion: 'instant' }), widget({ layout: 'inline', captions: { mode: 'reveal' } })],
+    })
+    h4b.provide('transport', transport('Olá mundo.'))
+    await h4b.start()
+    app = h4b
+    await h4b.ask('oi')
+    const box = document.querySelector('h4b-chat')!.shadowRoot!.querySelector<HTMLElement>('.captions')!
+    await eventually(() => expect(box.hidden).toBe(false))
+    expect(box.dataset.mode).toBe('reveal')
+    expect(box.textContent).toBe('Olá mundo.')
+  })
+})
+
+function fakeTimers() {
+  let nowSec = 0
+  let nextId = 1
+  const pending = new Map<number, { at: number; fn: () => void }>()
+  return {
+    clock: () => nowSec,
+    schedule: (fn: () => void, ms: number) => {
+      const id = nextId++
+      pending.set(id, { at: nowSec + ms / 1000, fn })
+      return id
+    },
+    cancelSchedule: (handle: unknown) => {
+      pending.delete(handle as number)
+    },
+    advance(ms: number) {
+      const target = nowSec + ms / 1000
+      for (;;) {
+        let earliestId: number | undefined
+        let earliestAt = Infinity
+        for (const [id, entry] of pending) {
+          if (entry.at <= target + 1e-9 && entry.at < earliestAt) {
+            earliestAt = entry.at
+            earliestId = id
+          }
+        }
+        if (earliestId === undefined) break
+        const entry = pending.get(earliestId)!
+        pending.delete(earliestId)
+        nowSec = Math.max(nowSec, entry.at)
+        entry.fn()
+      }
+      nowSec = target
+    },
+  }
+}
+
+describe('captions without voice (text cadence) and review fixes', () => {
+  it('runs text cadence without the voice plugin in scope: message and scope: chunk', async () => {
+    const t = fakeTimers()
+    const h4b = createH4B({
+      memory: false,
+      plugins: [
+        captions({
+          scope: 'chunk',
+          pace: () => ({ durationMs: 200 }),
+          reducedMotion: 'words',
+          clock: t.clock,
+          schedule: t.schedule,
+          cancelSchedule: t.cancelSchedule,
+        }),
+      ],
+    })
+    h4b.provide('transport', transport('Olá mundo. Até logo.'))
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    expect(service.follow).toBe('auto')
+
+    await h4b.ask('oi')
+    const states = () => service.getState().words.map((w) => `${w.text}:${w.state}`)
+    // First sentence only in scope: 'chunk'
+    expect(states()).toEqual(['Olá:active', 'mundo.:upcoming'])
+    expect(service.getState().driver).toBe('text')
+
+    t.advance(420)
+    // Moved to second sentence
+    expect(states()).toEqual(['Até:active', 'logo.:upcoming'])
+
+    t.advance(420)
+    expect(service.getState()).toMatchObject({ status: 'idle', ended: 'done', replyEnded: true })
+    expect(states()).toEqual(['Até:spoken', 'logo.:spoken'])
+  })
+
+  it('falls back to text cadence in follow: auto when voice is installed with output: text', async () => {
+    const t = fakeTimers()
+    const clock = clockedPlayer()
+    const h4b = createH4B({
+      memory: false,
+      plugins: [
+        voice({ language: 'pt-BR', output: 'text', tts: model, player: clock.player }),
+        captions({
+          scope: 'message',
+          pace: () => ({ durationMs: 150 }),
+          reducedMotion: 'words',
+          clock: t.clock,
+          schedule: t.schedule,
+          cancelSchedule: t.cancelSchedule,
+        }),
+      ],
+    })
+    h4b.provide('transport', transport('Só texto aqui.'))
+    await h4b.start()
+    app = h4b
+    await h4b.ask('oi')
+    const service = h4b.get('captions')!
+    expect(service.getState().driver).toBe('text')
+    expect(service.getState().words.map((w) => `${w.text}:${w.state}`)).toEqual(['Só:active', 'texto:upcoming', 'aqui.:upcoming'])
+    service.skip()
+    expect(service.getState()).toMatchObject({ status: 'idle', ended: 'done', replyEnded: true })
+  })
+
+  it('provides independent per-message stores via forMessage() and hydrates completed messages', async () => {
+    const t = fakeTimers()
+    const h4b = createH4B({
+      memory: false,
+      plugins: [
+        captions({
+          scope: 'message',
+          pace: () => ({ durationMs: 200 }),
+          reducedMotion: 'words',
+          clock: t.clock,
+          schedule: t.schedule,
+          cancelSchedule: t.cancelSchedule,
+        }),
+      ],
+    })
+    let count = 0
+    h4b.provide('transport', {
+      name: 'seq',
+      async *run() {
+        const id = `m${++count}`
+        yield { type: 'message.start', messageId: id }
+        yield { type: 'message.delta', messageId: id, delta: count === 1 ? 'Primeira resposta.' : 'Segunda resposta.' }
+        yield { type: 'message.end', messageId: id }
+      },
+    })
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    const s1 = service.forMessage('m1')
+    const s2 = service.forMessage('m2')
+
+    await h4b.ask('um')
+    t.advance(500)
+    expect(s1.getState()).toMatchObject({ status: 'idle', ended: 'done', replyEnded: true })
+
+    await h4b.ask('dois')
+    expect(s2.getState().words.map((w) => `${w.text}:${w.state}`)).toEqual(['Segunda:active', 'resposta.:upcoming'])
+    // First message store kept its own completed state.
+    expect(s1.getState().words.map((w) => `${w.text}:${w.state}`)).toEqual(['Primeira:spoken', 'resposta.:spoken'])
+  })
+
+  it('cuts an interrupted text reply at what was already shown by default (cutOnInterrupt)', async () => {
+    const t = fakeTimers()
+    let release!: () => void
+    const h4b = createH4B({
+      memory: false,
+      plugins: [
+        captions({
+          scope: 'message',
+          pace: () => ({ durationMs: 200 }),
+          reducedMotion: 'words',
+          clock: t.clock,
+          schedule: t.schedule,
+          cancelSchedule: t.cancelSchedule,
+        }),
+      ],
+    })
+    h4b.provide('transport', {
+      name: 'slow',
+      async *run() {
+        yield { type: 'message.start', messageId: 'm1' }
+        yield { type: 'message.delta', messageId: 'm1', delta: 'um dois tres quatro ' }
+        await new Promise<void>((r) => (release = r))
+        yield { type: 'message.end', messageId: 'm1' }
+      },
+    })
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    const turn = h4b.ask('oi')
+    await eventually(() => expect(service.getState().words.length).toBe(4))
+    // Only 'um' (active) has been shown so far (shown() === 2).
+    await h4b.interrupt()
+    release()
+    await turn
+
+    const assistant = h4b.conversation.find('m1')!
+    expect(textOf(assistant)).toBe('um')
+    expect(service.getState().words.map((w) => `${w.text}:${w.state}`)).toEqual([
+      'um:spoken',
+      'dois:skipped',
+      'tres:skipped',
+      'quatro:skipped',
+    ])
+  })
+
+  it('keeps the full text on interrupt when cutOnInterrupt is false', async () => {
+    const t = fakeTimers()
+    let release!: () => void
+    const h4b = createH4B({
+      memory: false,
+      plugins: [
+        captions({
+          scope: 'message',
+          cutOnInterrupt: false,
+          pace: () => ({ durationMs: 200 }),
+          reducedMotion: 'words',
+          clock: t.clock,
+          schedule: t.schedule,
+          cancelSchedule: t.cancelSchedule,
+        }),
+      ],
+    })
+    h4b.provide('transport', {
+      name: 'slow',
+      async *run() {
+        yield { type: 'message.start', messageId: 'm1' }
+        yield { type: 'message.delta', messageId: 'm1', delta: 'um dois tres ' }
+        await new Promise<void>((r) => (release = r))
+        yield { type: 'message.end', messageId: 'm1' }
+      },
+    })
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    const turn = h4b.ask('oi')
+    await eventually(() => expect(service.getState().words.length).toBe(3))
+    await h4b.interrupt()
+    release()
+    await turn
+
+    expect(textOf(h4b.conversation.find('m1')!)).toBe('um dois tres ')
+  })
+
+  it('marks remaining words as skipped on voice cut (F3) and sets replyEnded only on the last chunk (F4)', async () => {
+    const { h4b, clock, service, states } = await setup({}, 'Um dois tres.')
+    await h4b.ask('oi')
+    await eventually(() => expect(states()).toEqual(['Um:active', 'dois:upcoming', 'tres.:upcoming']))
+    h4b.get('voice')!.cancelSpeech()
+    await eventually(() => expect(service.getState()).toMatchObject({ status: 'idle', ended: 'interrupted', replyEnded: true }))
+    expect(states()).toEqual(['Um:spoken', 'dois:skipped', 'tres.:skipped'])
+    await clock.finishNext().catch(() => {})
+  })
+
+  it('sets replyEnded only after the last chunk of a multi-sentence voice reply (F4)', async () => {
+    const { h4b, clock, service } = await setup({}, 'Olá mundo. Até logo.')
+    await h4b.ask('oi')
+    await eventually(() => expect(service.getState().status).toBe('speaking'))
+    await clock.finishNext()
+    await eventually(() => expect(service.getState()).toMatchObject({ from: 10, to: 20 }))
+    expect(service.getState().replyEnded).toBeUndefined()
+    await clock.finishNext()
+    await eventually(() => expect(service.getState()).toMatchObject({ status: 'idle', ended: 'done', replyEnded: true }))
+  })
+
+  it('appends streamed deltas to scope: message while voice speaks an earlier chunk (F2)', async () => {
+    const clock = clockedPlayer()
+    let sendSecond!: () => void
+    const h4b = createH4B({
+      memory: false,
+      plugins: [voice({ language: 'pt-BR', output: 'voice', tts: model, player: clock.player }), captions({ scope: 'message' })],
+    })
+    h4b.provide('transport', {
+      name: 'stream',
+      async *run() {
+        yield { type: 'message.start', messageId: 'm1' }
+        yield { type: 'message.delta', messageId: 'm1', delta: 'Primeira frase. ' }
+        await new Promise<void>((r) => (sendSecond = r))
+        yield { type: 'message.delta', messageId: 'm1', delta: 'Segunda frase.' }
+        yield { type: 'message.end', messageId: 'm1' }
+      },
+    })
+    await h4b.start()
+    app = h4b
+    const service = h4b.get('captions')!
+    const turn = h4b.ask('oi')
+    await eventually(() => expect(service.getState().words.map((w) => w.text)).toEqual(['Primeira', 'frase.']))
+    sendSecond()
+    await turn
+    await eventually(() =>
+      expect(service.getState().words.map((w) => `${w.text}:${w.state}`)).toEqual([
+        'Primeira:active',
+        'frase.:upcoming',
+        'Segunda:upcoming',
+        'frase.:upcoming',
+      ]),
+    )
   })
 })
