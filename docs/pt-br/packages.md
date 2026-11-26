@@ -40,6 +40,7 @@ npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsfo
 | Apontar coisas na página, tours passo a passo | [`guided`](#handsforbotsguided) |
 | Deixar agentes do navegador usarem minhas ações | [`expose-webmcp`](#handsforbotsexpose-webmcp) |
 | Mostrar apps interativos enviados por um servidor MCP | [`mcp-apps`](#handsforbotsmcp-apps) |
+| Hospedar superfícies declarativas A2UI 1.0 de um agente (com o seu renderer) | [`a2ui`](#handsforbotsa2ui) |
 | Fazer a página reagir à conversa (humor, cenário, urgência) | [`cues`](#handsforbotscues) |
 | Legendas que acompanham a voz do bot palavra por palavra | [`captions`](#handsforbotscaptions) |
 | Manter certos os fatos e as decisões de uma conversa longa | [`conversation-state`](#handsforbotsconversation-state) |
@@ -317,6 +318,21 @@ Renderiza [MCP Apps](https://modelcontextprotocol.io) (recursos `ui://`) que o s
 
 - **Funciona com:** o widget (`renderers`) ou a sua interface (`mountMcpApp`).
 - **Por exemplo:** um gráfico ou um formulário que um servidor MCP devolve, dentro da conversa.
+
+### `@handsforbots/a2ui`
+
+Host headless de superfícies [A2UI 1.0](https://a2ui.org) sobre `@a2ui/web_core`: transforma estímulos `ui.surface` com `kind: 'a2ui'` (e superfícies restauradas do histórico) em modelos vivos de superfície, roteia ações da superfície para ações permitidas do H4B ou sinais `gui-event` e envia modelos de dados ativos e capacidades do renderer como sinais de contexto. **A apresentação e a renderização ficam com o app host** (React, Lit, Angular, Vue ou um renderer próprio).
+
+- **Precisa de:** `@handsforbots/core`. O `@a2ui/web_core` vem junto.
+- **Instalação:**
+
+  ```bash
+  npm install @handsforbots/a2ui@alpha @handsforbots/core@alpha
+  ```
+
+- **Funciona com:** `transport-agui` (eventos de atividade `a2ui-surface`) ou qualquer transporte que emita `ui.surface` (`kind: 'a2ui'`); o renderer A2UI do seu app (`service.processor`, `service.subscribe()`, `service.dispatchAction()`).
+- **Por exemplo:** um formulário colaborativo dinâmico ou um cartão comparativo montado com o catálogo de componentes do próprio app, sem enviar HTML solto.
+- Guia: [Trabalhando com A2UI, MCP Apps, AG-UI e CopilotKit](./ecosystem.md).
 
 ### `@handsforbots/cues`
 

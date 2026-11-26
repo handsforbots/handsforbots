@@ -56,12 +56,15 @@ export type AguiTransportOptions = {
  */
 export const CUSTOM_EVENTS = {
   uiEffect: 'h4b.ui.effect',
-  uiRender: 'h4b.ui.render',
+  uiSurface: 'h4b.ui.surface',
   /** `{ messageId?, sources: Array<Omit<SourcePart, 'type'>> }` → one `message.part` per source (ADR 0014). */
   sources: 'h4b.sources',
   /** `{ messageId?, citations: Citation[] }` → `message.citations` (ADR 0014). */
   citations: 'h4b.citations',
 } as const
+
+/** AG-UI `activityType` emitted by `@ag-ui/a2ui-middleware` for A2UI surfaces. */
+export const A2UI_ACTIVITY_TYPE = 'a2ui-surface'
 
 export const agui = definePlugin<AguiTransportOptions>({
   name: 'transport-agui',
@@ -362,12 +365,48 @@ export function createEventMapper(): (event: BaseEvent) => Stimulus[] {
         return [{ type: 'state.snapshot', state: event.snapshot }]
       case 'STATE_DELTA':
         return [{ type: 'state.patch', patch: event.delta }]
+      case 'ACTIVITY_SNAPSHOT':
+        if (event.activityType === A2UI_ACTIVITY_TYPE) {
+          return [{
+            type: 'ui.surface',
+            surfaceId: typeof event.messageId === 'string' ? event.messageId : undefined,
+            kind: 'a2ui',
+            op: 'snapshot',
+            payload: {
+              content: event.content,
+              replace: typeof event.replace === 'boolean' ? event.replace : true,
+            },
+          }]
+        }
+        return [{ type: 'custom', name: `agui.${raw.type}`, value: raw }]
+      case 'ACTIVITY_DELTA':
+        if (event.activityType === A2UI_ACTIVITY_TYPE) {
+          return [{
+            type: 'ui.surface',
+            surfaceId: typeof event.messageId === 'string' ? event.messageId : undefined,
+            kind: 'a2ui',
+            op: 'delta',
+            payload: {
+              patch: Array.isArray(event.patch) ? event.patch : [],
+            },
+          }]
+        }
+        return [{ type: 'custom', name: `agui.${raw.type}`, value: raw }]
       case 'CUSTOM':
         if (event.name === CUSTOM_EVENTS.uiEffect) {
           return [{ type: 'ui.effect', name: event.value?.name, value: event.value?.value }]
         }
-        if (event.name === CUSTOM_EVENTS.uiRender) {
-          return [{ type: 'ui.render', component: event.value?.component, props: event.value?.props, slot: event.value?.slot }]
+        if (event.name === CUSTOM_EVENTS.uiSurface) {
+          return [{
+            type: 'ui.surface',
+            surfaceId: event.value?.surfaceId,
+            kind: event.value?.kind,
+            op: event.value?.op,
+            component: event.value?.component,
+            payload: event.value?.payload,
+            slot: event.value?.slot,
+            messageId: event.value?.messageId,
+          }]
         }
         if (event.name === CUSTOM_EVENTS.sources) {
           const messageId = targetOf(event.value)

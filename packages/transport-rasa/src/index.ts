@@ -125,10 +125,11 @@ function contextMetadata(context: Signal[]): Record<string, unknown> {
 
 /**
  * Rasa messages → stimuli. Each message becomes its own bubble; images and
- * buttons attach to it; `custom.h4b` can call GUI actions, effects or renders:
+ * buttons attach to it; `custom.h4b` can call GUI actions, effects or surfaces:
  *
  *   custom: { h4b: { action: { name: 'highlight', args: { target: '#save' } } } }
  *   custom: { h4b: { effect: { name: 'scroll', value: '#top' } } }
+ *   custom: { h4b: { surface: { component: 'Card', payload: { id: 1 } } } }
  */
 export function toStimuli(items: RasaMessage[]): Stimulus[] {
   const stimuli: Stimulus[] = []
@@ -170,8 +171,16 @@ export function toStimuli(items: RasaMessage[]): Stimulus[] {
       })
     }
     if (h4b?.effect?.name) stimuli.push({ type: 'ui.effect', name: h4b.effect.name, value: h4b.effect.value })
-    if (h4b?.render?.component) {
-      stimuli.push({ type: 'ui.render', component: h4b.render.component, props: h4b.render.props, slot: h4b.render.slot })
+    if (h4b?.surface && (h4b.surface.component || h4b.surface.kind)) {
+      stimuli.push({
+        type: 'ui.surface',
+        surfaceId: h4b.surface.surfaceId,
+        kind: h4b.surface.kind,
+        op: h4b.surface.op,
+        component: h4b.surface.component,
+        payload: h4b.surface.payload,
+        slot: h4b.surface.slot,
+      })
     }
     if (item.custom && !h4b) stimuli.push({ type: 'custom', name: 'rasa.custom', value: item.custom })
     if (item.attachment !== undefined) stimuli.push({ type: 'custom', name: 'rasa.attachment', value: item.attachment })

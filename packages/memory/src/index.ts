@@ -225,7 +225,7 @@ export function localSummary(previous: string | undefined, turns: Message[][]): 
       continue
     }
     const text = message.parts
-      .map((p) => (p.type === 'text' ? p.text : p.type === 'data' ? (p.name === 'ui' ? '' : `[${p.name}]`) : `[${p.type}]`))
+      .map((p) => (p.type === 'text' ? p.text : p.type === 'data' ? (p.name === 'surface' ? '' : `[${p.name}]`) : `[${p.type}]`))
       .filter(Boolean)
       .join(' ')
       .trim()

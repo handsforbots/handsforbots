@@ -1,0 +1,51 @@
+{
+  "name": "@handsforbots/a2ui",
+  "version": "2.0.0-alpha.4",
+  "description": "Plugin. Headless A2UI 1.0 surface host for Hands for Bots, managing surface state over @a2ui/web_core while leaving rendering to the host app.",
+  "keywords": [
+    "handsforbots",
+    "h4b",
+    "h4b-plugin",
+    "a2ui"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/handsforbots/handsforbots/blob/main/docs/en-us/plugins.md#a2ui",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/handsforbots/handsforbots.git",
+    "directory": "packages/a2ui"
+  },
+  "bugs": {
+    "url": "https://github.com/handsforbots/handsforbots/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@a2ui/web_core": "^0.15.0"
+  },
+  "peerDependencies": {
+    "@handsforbots/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@handsforbots/core": "workspace:^"
+  }
+}

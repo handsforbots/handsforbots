@@ -4,7 +4,13 @@ import { EventType, type BaseEvent, type RunAgentInput } from '@ag-ui/core'
 import { EventEncoder } from '@ag-ui/encoder'
 import { createH4B, textOf, type Message } from '@handsforbots/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { agui, createEventMapper, toAguiMessages, type AguiRunner } from '../src/index.js'
+import {
+  A2UI_ACTIVITY_TYPE,
+  agui,
+  createEventMapper,
+  toAguiMessages,
+  type AguiRunner,
+} from '../src/index.js'
 
 const ev = (type: EventType, fields: Record<string, unknown> = {}) => ({ type, ...fields }) as BaseEvent
 
@@ -76,6 +82,34 @@ describe('event mapper', () => {
       { type: 'message.delta', messageId: 'm', delta: 'b' },
       { type: 'action.call', callId: 't', name: 'go', args: { x: 1 }, messageId: undefined },
       { type: 'message.end', messageId: 'm' },
+    ])
+  })
+
+  it('maps CUSTOM h4b.ui.surface to ui.surface', () => {
+    const map = createEventMapper()
+    const out = map(ev(EventType.CUSTOM, {
+      name: 'h4b.ui.surface',
+      value: {
+        surfaceId: 's1',
+        kind: 'mcp-app',
+        op: 'snapshot',
+        component: 'mcp-app',
+        payload: { html: '<p>hi</p>' },
+        slot: 'message',
+        messageId: 'm1',
+      },
+    }))
+    expect(out).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: 's1',
+        kind: 'mcp-app',
+        op: 'snapshot',
+        component: 'mcp-app',
+        payload: { html: '<p>hi</p>' },
+        slot: 'message',
+        messageId: 'm1',
+      },
     ])
   })
 })
@@ -300,5 +334,92 @@ describe('interop with @ag-ui/client', () => {
     }).start()
     const result = await h4b.ask('oi')
     expect(result.status).toMatchObject({ phase: 'error', error: 'Agent request failed (HTTP 503)' })
+  })
+})
+
+describe('A2UI activity events', () => {
+  it('maps A2UI ACTIVITY_SNAPSHOT to ui.surface and defaults replace to true', () => {
+    const map = createEventMapper()
+    const content = { surfaceId: 'main', components: [] }
+    const omittedReplace = map(ev(EventType.ACTIVITY_SNAPSHOT, {
+      messageId: 'm1',
+      activityType: A2UI_ACTIVITY_TYPE,
+      content,
+    }))
+    const explicitFalse = map(ev(EventType.ACTIVITY_SNAPSHOT, {
+      messageId: 'm2',
+      activityType: 'a2ui-surface',
+      content,
+      replace: false,
+    }))
+
+    expect(omittedReplace).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: 'm1',
+        kind: 'a2ui',
+        op: 'snapshot',
+        payload: { content, replace: true },
+      },
+    ])
+    expect(explicitFalse).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: 'm2',
+        kind: 'a2ui',
+        op: 'snapshot',
+        payload: { content, replace: false },
+      },
+    ])
+  })
+
+  it('maps A2UI ACTIVITY_DELTA to ui.surface and defaults non-array patch to []', () => {
+    const map = createEventMapper()
+    const patch = [{ op: 'replace', path: '/title', value: 'Updated' }]
+    const validPatch = map(ev(EventType.ACTIVITY_DELTA, {
+      messageId: 'm1',
+      activityType: A2UI_ACTIVITY_TYPE,
+      patch,
+    }))
+    const invalidPatch = map(ev(EventType.ACTIVITY_DELTA, {
+      activityType: 'a2ui-surface',
+      patch: { op: 'replace' },
+    }))
+
+    expect(validPatch).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: 'm1',
+        kind: 'a2ui',
+        op: 'delta',
+        payload: { patch },
+      },
+    ])
+    expect(invalidPatch).toEqual([
+      {
+        type: 'ui.surface',
+        surfaceId: undefined,
+        kind: 'a2ui',
+        op: 'delta',
+        payload: { patch: [] },
+      },
+    ])
+  })
+
+  it('falls back to agui.<type> for non-A2UI activity events', () => {
+    const map = createEventMapper()
+    const snapshot = ev(EventType.ACTIVITY_SNAPSHOT, {
+      messageId: 'm1',
+      activityType: 'progress',
+      content: { percent: 50 },
+    })
+    const delta = ev(EventType.ACTIVITY_DELTA, {
+      messageId: 'm1',
+      activityType: 'progress',
+      patch: [{ op: 'replace', path: '/percent', value: 100 }],
+    })
+
+    expect(map(snapshot)).toEqual([{ type: 'custom', name: 'agui.ACTIVITY_SNAPSHOT', value: snapshot }])
+    expect(map(delta)).toEqual([{ type: 'custom', name: 'agui.ACTIVITY_DELTA', value: delta }])
   })
 })

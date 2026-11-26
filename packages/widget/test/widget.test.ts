@@ -543,8 +543,8 @@ describe('<h4b-chat> rich content', () => {
   it('renders the built-in gallery and custom renderers, skipping unsafe URLs', async () => {
     const transport = scripted(() => [
       { type: 'message.delta', messageId: 'a', delta: 'Veja:' },
-      { type: 'ui.render', messageId: 'a', component: 'gallery', props: { title: 'Fotos', images: ['https://x.test/1.jpg', 'javascript:alert(1)'] } },
-      { type: 'ui.render', messageId: 'a', component: 'price', props: { value: 10 } },
+      { type: 'ui.surface', messageId: 'a', component: 'gallery', payload: { title: 'Fotos', images: ['https://x.test/1.jpg', 'javascript:alert(1)'] } },
+      { type: 'ui.surface', messageId: 'a', component: 'price', payload: { value: 10 } },
     ])
     const h4b = createH4B({
       plugins: [widget({ startOpen: true, renderers: { price: ({ value }) => Object.assign(document.createElement('strong'), { textContent: `R$ ${value}` }) } })],
@@ -647,7 +647,7 @@ describe('<h4b-chat> rich parts are stable', () => {
     const created = vi.fn(() => document.createElement('section'))
     const transport = scripted(() => [
       { type: 'message.start', messageId: 'a' },
-      { type: 'ui.render', messageId: 'a', component: 'app', props: {} },
+      { type: 'ui.surface', messageId: 'a', component: 'app', payload: {} },
       { type: 'message.delta', messageId: 'a', delta: 'um ' },
       { type: 'message.delta', messageId: 'a', delta: 'dois' },
       { type: 'message.end', messageId: 'a' },

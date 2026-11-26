@@ -27,8 +27,12 @@ export async function handleAgentRequest(req: IncomingMessage, res: ServerRespon
     send({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: 'Aqui está um resumo interativo:' })
     send({
       type: EventType.CUSTOM,
-      name: 'h4b.ui.render',
-      value: { component: 'mcp-app', props: { html: SUMMARY_APP, toolName: 'orders_summary', input: {}, result: { open: 2, late: 3, closed: 2 } } },
+      name: 'h4b.ui.surface',
+      value: {
+        kind: 'mcp-app',
+        component: 'mcp-app',
+        payload: { html: SUMMARY_APP, toolName: 'orders_summary', input: {}, result: { open: 2, late: 3, closed: 2 } },
+      },
     })
     send({ type: EventType.TEXT_MESSAGE_END, messageId })
   } else if ('tool' in step) {

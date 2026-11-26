@@ -296,7 +296,7 @@ function registerGallery(ctx: PluginContext) {
         [...document.querySelectorAll(`[data-image-gallery-text-for~="${cssEscape(topic)}"]`)].map((el) => el.textContent?.trim() ?? ''),
       )
       if (!images.length) throw new Error(`No images for ${list.join(', ')}`)
-      call.render?.('gallery', { title: title ?? list.join(', '), images, texts: texts.filter(Boolean) })
+      call.surface?.({ component: 'gallery', payload: { title: title ?? list.join(', '), images, texts: texts.filter(Boolean) } })
       return { images: images.length, texts: texts.length }
     },
   }))

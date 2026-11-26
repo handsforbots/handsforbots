@@ -488,28 +488,43 @@ describe('selective capture', () => {
   })
 })
 
-describe('rich content', () => {
-  it('keeps ui.render in the assistant message and lets actions render into the reply', async () => {
+describe('UI surfaces', () => {
+  it('stores ui.surface snapshots in the assistant message, replaces by surfaceId, deletes and lets actions emit surfaces', async () => {
     const transport = scripted([
       [
-        { type: 'ui.render', component: 'card', props: { id: 1 } },
-        { type: 'ui.render', slot: 'sidebar', component: 'map' },
+        { type: 'ui.surface', surfaceId: 's1', component: 'card', payload: { id: 1 } },
+        { type: 'ui.surface', surfaceId: 's1', component: 'card', payload: { id: 2 } },
+        { type: 'ui.surface', surfaceId: 's2', kind: 'a2ui', op: 'snapshot', payload: { ops: [] } },
+        { type: 'ui.surface', surfaceId: 's2', kind: 'a2ui', op: 'delta', payload: { patch: [] } },
+        { type: 'ui.surface', surfaceId: 's2', op: 'delete' },
+        { type: 'ui.surface', slot: 'sidebar', component: 'map' },
         { type: 'action.call', callId: 'c', name: 'gallery', args: {} },
       ],
       [],
     ])
     const h4b = await createH4B({
       plugins: [transportPlugin(transport)],
-      actions: [{ name: 'gallery', description: 'G', handler: (_a, call) => (call.render?.('gallery', { images: ['a.png'] }), 'ok') }],
+      actions: [
+        {
+          name: 'gallery',
+          description: 'G',
+          handler: (_a, call) => (call.surface?.({ component: 'gallery', payload: { images: ['a.png'] } }), 'ok'),
+        },
+      ],
     }).start()
-    const rendered: string[] = []
-    h4b.on('stimulus', ({ stimulus }) => void (stimulus.type === 'ui.render' && rendered.push(stimulus.component)))
+    const seen: string[] = []
+    h4b.on('stimulus', ({ stimulus }) => {
+      if (stimulus.type === 'ui.surface') seen.push(`${stimulus.op ?? 'snapshot'}:${stimulus.component ?? stimulus.kind ?? stimulus.surfaceId}`)
+    })
     h4b.send('x')
     await idle(h4b)
     const assistant = h4b.messages.filter((m) => m.role === 'assistant')
-    const ui = assistant.flatMap((m) => (m as any).parts.filter((p: any) => p.name === 'ui').map((p: any) => p.value.component))
-    expect(ui).toEqual(['card', 'gallery'])
-    expect(rendered).toEqual(['card', 'map', 'gallery'])
+    const surfaces = assistant.flatMap((m) => (m as any).parts.filter((p: any) => p.name === 'surface').map((p: any) => p.value))
+    expect(surfaces).toEqual([
+      { surfaceId: 's1', kind: 'component', component: 'card', payload: { id: 2 } },
+      { surfaceId: expect.any(String), kind: 'component', component: 'gallery', payload: { images: ['a.png'] } },
+    ])
+    expect(seen).toEqual(['snapshot:card', 'snapshot:card', 'snapshot:a2ui', 'delta:a2ui', 'delete:s2', 'snapshot:map', 'snapshot:gallery'])
   })
 })
 

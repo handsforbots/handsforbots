@@ -40,6 +40,7 @@ npm install @handsforbots/core@alpha @handsforbots/transport-http@alpha @handsfo
 | Point at things on the page, step-by-step tours | [`guided`](#handsforbotsguided) |
 | Let browser agents use my actions | [`expose-webmcp`](#handsforbotsexpose-webmcp) |
 | Show interactive apps sent by an MCP server | [`mcp-apps`](#handsforbotsmcp-apps) |
+| Host declarative A2UI 1.0 surfaces from an agent (bring your own renderer) | [`a2ui`](#handsforbotsa2ui) |
 | Make the page react to the conversation (mood, scenery, urgency) | [`cues`](#handsforbotscues) |
 | Captions that follow the bot's voice word by word | [`captions`](#handsforbotscaptions) |
 | Keep the facts and decisions of a long conversation straight | [`conversation-state`](#handsforbotsconversation-state) |
@@ -317,6 +318,21 @@ Renders [MCP Apps](https://modelcontextprotocol.io) (`ui://` resources) that you
 
 - **Works with:** the widget (`renderers`) or your own UI (`mountMcpApp`).
 - **For instance:** a chart or a form an MCP server returns, inside the conversation.
+
+### `@handsforbots/a2ui`
+
+Headless [A2UI 1.0](https://a2ui.org) surface host over `@a2ui/web_core`: turns `ui.surface` stimuli with `kind: 'a2ui'` (and restored conversation history) into live surface models, routes surface actions to allowlisted H4B actions or `gui-event` signals, and reports active data models and renderer capabilities as context signals. **Presentation and rendering are left to the host app** (React, Lit, Angular, Vue, or a custom renderer).
+
+- **Needs:** `@handsforbots/core`. `@a2ui/web_core` comes with it.
+- **Install:**
+
+  ```bash
+  npm install @handsforbots/a2ui@alpha @handsforbots/core@alpha
+  ```
+
+- **Works with:** `transport-agui` (`a2ui-surface` activity events) or any transport emitting `ui.surface` (`kind: 'a2ui'`); your app's A2UI renderer (`service.processor`, `service.subscribe()`, `service.dispatchAction()`).
+- **For instance:** a dynamic collaborative form or comparison card built from your app's own component catalog without shipping raw HTML.
+- Guide: [Working with A2UI, MCP Apps, AG-UI and CopilotKit](./ecosystem.md).
 
 ### `@handsforbots/cues`
 

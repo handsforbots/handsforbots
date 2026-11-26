@@ -87,14 +87,14 @@ describe('Rasa transport', () => {
     await expect(h4b.ask('x')).resolves.toMatchObject({ status: { phase: 'error' } })
   })
 
-  it('maps effects, renders and unknown custom payloads', () => {
+  it('maps effects, surfaces and unknown custom payloads', () => {
     const out = toStimuli([
-      { custom: { h4b: { effect: { name: 'scroll', value: '#top' }, render: { component: 'Card', props: { id: 1 } } } } },
+      { custom: { h4b: { effect: { name: 'scroll', value: '#top' }, surface: { component: 'Card', payload: { id: 1 } } } } },
       { custom: { foo: 1 } },
     ])
     expect(out).toEqual([
       { type: 'ui.effect', name: 'scroll', value: '#top' },
-      { type: 'ui.render', component: 'Card', props: { id: 1 }, slot: undefined },
+      { type: 'ui.surface', surfaceId: undefined, kind: undefined, op: undefined, component: 'Card', payload: { id: 1 }, slot: undefined },
       { type: 'custom', name: 'rasa.custom', value: { foo: 1 } },
     ])
   })

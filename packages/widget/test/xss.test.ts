@@ -222,7 +222,7 @@ describe('XSS: messages in <h4b-chat>', () => {
   it('looks up renderers by own name only, never from Object.prototype', async () => {
     const { h4b, root } = await chat([
       { type: 'message.delta', messageId: 'a', delta: 'x' },
-      ...['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'].map((component) => ({ type: 'ui.render', messageId: 'a', component, props: {} })),
+      ...['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'].map((component) => ({ type: 'ui.surface', messageId: 'a', component, payload: {} })),
     ])
     const errors: unknown[] = []
     h4b.on('error', (e) => errors.push(e))

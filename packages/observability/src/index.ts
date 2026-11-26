@@ -95,7 +95,7 @@ function attach(
   // Perceived latency: from the user's input to the first thing they can see, per route.
   const timing = new Map<string, { start: number; route?: Route; firstSeen?: boolean }>()
   const offs: (() => void)[] = []
-  const VISIBLE = new Set(['message.delta', 'message.part', 'ui.render', 'ui.effect', 'action.call', 'action.result', 'audio'])
+  const VISIBLE = new Set(['message.delta', 'message.part', 'ui.surface', 'ui.effect', 'action.call', 'action.result', 'audio'])
 
   if (clientEnvironment) {
     const nav = (globalThis as { navigator?: { userAgent?: string; language?: string } }).navigator

@@ -3,7 +3,7 @@ import { buildCspPolicy, escapeCspPolicy } from './csp.js'
 
 export { buildCspPolicy as buildCsp, filterCspDomains, intersectCspDomains, isValidCspDomain } from './csp.js'
 
-/** What a backend (acting as MCP client) sends in `ui.render` with component 'mcp-app'. */
+/** What a backend (acting as MCP client) sends in `ui.surface` (`kind: 'mcp-app'` or `component: 'mcp-app'`). */
 export type McpAppProps = {
   /** HTML of the `ui://` resource (mimeType text/html;profile=mcp-app). */
   html: string

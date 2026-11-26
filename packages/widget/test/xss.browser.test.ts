@@ -129,7 +129,7 @@ describe('XSS in Chromium: <h4b-chat>', () => {
       { type: 'message.part', messageId: 'a', part: { type: 'source', id: 'c1', title: payload, url: 'javascript:alert(1)', trail: [payload], excerpt: payload } },
       { type: 'message.citations', messageId: 'a', citations: [{ start: 0, end: 1, sourceIds: ['c1'] }] },
       { type: 'message.part', messageId: 'a', part: { type: 'image', mimeType: 'image/png', source: { kind: 'url', url: 'javascript:alert(1)' }, name: payload } },
-      { type: 'ui.render', messageId: 'a', component: 'gallery', props: { title: payload, images: ['javascript:alert(1)'], texts: [payload] } },
+      { type: 'ui.surface', messageId: 'a', component: 'gallery', payload: { title: payload, images: ['javascript:alert(1)'], texts: [payload] } },
     ])
     await h4b.ask(payload)
     await h4b.runAction('missing', { payload })

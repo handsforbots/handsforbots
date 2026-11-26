@@ -162,7 +162,7 @@ describe('widget edge cases', () => {
     const { h4b, root } = await chat(
       [
         { type: 'message.delta', messageId: 'a', delta: 'hi' },
-        { type: 'ui.render', messageId: 'a', component: 'probe', props: {} },
+        { type: 'ui.surface', messageId: 'a', component: 'probe', payload: {} },
       ],
       { renderers: { probe: renderer } },
     )
@@ -170,7 +170,7 @@ describe('widget edge cases', () => {
     await waitFrame()
     expect(renderer).toHaveBeenCalledTimes(1)
     const chatEl = document.querySelector('h4b-chat') as H4BChatElement
-    const message = h4b.messages.find((m) => m.role === 'assistant' && m.parts.some((p) => p.type === 'data' && p.name === 'ui'))!
+    const message = h4b.messages.find((m) => m.role === 'assistant' && m.parts.some((p) => p.type === 'data' && p.name === 'surface'))!
     const dom = (chatEl as unknown as { rendered: Map<string, { element: HTMLElement }> }).rendered.get(message.id)!
     ;(chatEl as unknown as { fillMessage(el: HTMLElement, msg: Message): void }).fillMessage(dom.element, structuredClone(message))
     expect(renderer).toHaveBeenCalledTimes(1)

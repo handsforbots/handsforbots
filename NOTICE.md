@@ -18,6 +18,7 @@ No other third-party code is bundled in the published packages.
 | Project | Use | License |
 |---------|-----|---------|
 | [AG-UI](https://github.com/ag-ui-protocol/ag-ui) (`@ag-ui/core`) | Protocol types and event schemas for `transport-agui` | MIT |
+| [A2UI](https://github.com/google/A2UI) (`@a2ui/web_core`) | A2UI 1.0 protocol parser and reactive surface/data model engine in `@handsforbots/a2ui` | Apache-2.0 |
 
 ### Optional peers and integrations
 

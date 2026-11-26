@@ -155,7 +155,7 @@ Supports [ADR 0014](../adr/0014-fontes-e-citacoes.md) and [Sources and citations
 | [Gemini `GroundingSupport` (Firebase AI)](https://firebase.google.com/docs/reference/js/ai.groundingsupport.md) · [Go types (eino)](https://pkg.go.dev/github.com/cloudwego/eino/schema/gemini) | `groundingChunks` (sources) and `groundingSupports` (a `segment` of the answer plus indices into the chunks); the Go types document segment offsets in bytes | Sources and links kept apart, and the reason for `utf8OffsetToIndex`: transports convert bytes to UTF-16 |
 | [Perplexity: streaming citations](https://docs.perplexity.ai/docs/cookbook/articles/streaming-citations/README) | Numbered markers in the text (`[1]`, or `[web:1]` in another mode) mapped to `search_results` sent apart | The marker case: handled by `inlineCitations` in the backend or transport, never in the page |
 | [AI SDK `ui-messages.ts`](https://app.unpkg.com/ai@6.0.99/files/src/ui/ui-messages.ts) | `source-url` (`sourceId`, `url`, `title`) and `source-document` parts; no link from a source to a span | `transport-ai-sdk` mapping; `id` and `title` follow the same roles |
-| [AG-UI specification (draft)](https://docs.ag-ui.com/spec/draft) | Event protocol between agents and UIs, with namespaced CUSTOM events and no source event | `h4b.sources` and `h4b.citations` as CUSTOM events, next to `h4b.ui.effect` and `h4b.ui.render` |
+| [AG-UI specification (draft)](https://docs.ag-ui.com/spec/draft) | Event protocol between agents and UIs, with namespaced CUSTOM events and no source event | `h4b.sources` and `h4b.citations` as CUSTOM events, next to `h4b.ui.effect` and `h4b.ui.surface` |
 
 ## Experiments and conversation attributes
 
@@ -226,3 +226,14 @@ Supports the XSS review in the ROADMAP (section 3), `packages/widget/test/xss.te
 | [PortSwigger XSS cheat sheet](https://portswigger.net/web-security/cross-site-scripting/cheat-sheet) | Event handlers, tags and URL schemes that run script, by browser | Which tags, attributes and schemes the suite forbids in rendered DOM |
 | [fast-check](https://fast-check.dev) | Property-based testing for JavaScript (MIT) | Random mixes of Markdown and HTML fragments must render only the widget's own tags and safe links; checked to catch a planted `javascript:` link and a missing escape |
 | [CodeQL](https://codeql.github.com/docs/codeql-language-guides/codeql-for-javascript/) · [`security-extended`](https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/codeql-query-suites) | GitHub's static analysis; the extended suite adds lower-precision security queries, including DOM-based XSS | Runs on every push and pull request over `packages/`, results in code scanning; it does not see through our own escaping, which the tests cover |
+
+## A2UI and MCP Apps
+
+Supports [ADR 0022](../adr/0022-a2ui-e-mcp-apps.md) and the `transport-agui` A2UI activity mapping. Accessed 2026-11-26.
+
+| Source | What it is | Use in H4B |
+|---|---|---|
+| [A2UI](https://github.com/google/A2UI) · [Introducing A2UI (Google Developers Blog)](https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/) | Open declarative generative UI protocol (component tree, data model, bidirectional function calls; v1.0 released November 2026) | Target protocol for the `ui.surface` stimulus (`kind: 'a2ui'`, implemented in `@handsforbots/core`, replacing `ui.render`) and the planned `@handsforbots/a2ui` host runtime (ADR 0020) |
+| [`@a2ui/web_core`](https://github.com/google/A2UI) (Apache-2.0) | Framework-agnostic A2UI protocol parser, reactive surface/data model and schema definitions (including v1.0) | Chosen foundation for the planned `@handsforbots/a2ui` plugin so H4B does not reimplement the protocol engine |
+| [`@ag-ui/a2ui-middleware`](https://github.com/ag-ui-protocol/ag-ui) | AG-UI middleware that streams A2UI surfaces over `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELTA` events with `activityType: "a2ui-surface"` | Basis for `transport-agui` recognizing `a2ui-surface` activity events and mapping them directly to `ui.surface` (`kind: 'a2ui'`, `op: 'snapshot' \| 'delta'`) |
+| [MCP Apps (SEP-1865)](https://modelcontextprotocol.io/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp) · [spec 2026-01-26](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx) | MCP UI extension (`io.modelcontextprotocol/ui`) for sandboxed `ui://` HTML resources (`text/html;profile=mcp-app`) communicating over JSON-RPC/postMessage | Implemented by `@handsforbots/mcp-apps` as a web host; complementary to A2UI (A2UI renderers can also be packaged inside MCP Apps for third-party chat hosts) |

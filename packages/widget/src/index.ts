@@ -13,6 +13,7 @@ import {
   type Retention,
   type Services,
   type Signal,
+  type SurfacePartValue,
   type TurnStatus,
 } from '@handsforbots/core'
 import { renderCaption, type CaptionDisplayMode } from '@handsforbots/captions/element'
@@ -37,7 +38,7 @@ export { bindTextFocus, type AutofocusOptions, type TextFocusOptions, type TextF
 
 export type QuickReply = { label: string; payload?: string }
 
-/** Renders rich content (`ui.render` / data part 'ui') inside a bot message. Return an element. */
+/** Renders a UI surface (`ui.surface` / data part 'surface') inside a bot message. Return an element. */
 export type Renderer = (props: any, context: { h4b: H4B }) => HTMLElement
 
 export type GalleryProps = {
@@ -243,6 +244,7 @@ export class H4BChatElement extends BaseElement {
   }
   private rendered = new Map<string, { message: Message; element: HTMLElement }>()
   private renderedPartKeys = new Set<string>()
+  private renderedSurfaces = new Map<string, { value: SurfacePartValue; element?: HTMLElement }>()
   private renderCoalesce = false
   private revealQueue: HTMLElement[] = []
   private revealTimer?: ReturnType<typeof setTimeout>
@@ -338,6 +340,7 @@ export class H4BChatElement extends BaseElement {
     clearTimeout(this.statusTimer)
     this.rendered.clear()
     this.renderedPartKeys.clear()
+    this.renderedSurfaces.clear()
     this.revealQueue = []
     this.initialRender = true
   }
@@ -586,6 +589,9 @@ export class H4BChatElement extends BaseElement {
         for (const key of this.renderedPartKeys) {
           if (key.startsWith(`${id}:`)) this.renderedPartKeys.delete(key)
         }
+        for (const key of this.renderedSurfaces.keys()) {
+          if (key.startsWith(`${id}:`)) this.renderedSurfaces.delete(key)
+        }
       }
     }
     this.renderQueued(snapshot.queued)
@@ -639,9 +645,10 @@ export class H4BChatElement extends BaseElement {
     }
     const text = textOf(message)
     const images = message.parts.filter((p): p is MediaPart => p.type === 'image')
-    const rich = message.parts.filter((p) => p.type === 'data' && p.name === 'ui')
+    const rich = message.parts.filter((p) => p.type === 'data' && p.name === 'surface')
     const sources = this.options.sources === false || message.role !== 'assistant' ? [] : sourcesOf(message)
     if (!text && images.length === 0 && rich.length === 0 && sources.length === 0) {
+      this.dropSurfacesForMessage(message.id)
       element.hidden = true // e.g. assistant message that only carries tool calls
       return
     }
@@ -670,25 +677,52 @@ export class H4BChatElement extends BaseElement {
     element.title = message.interrupted ? s.interrupted : ''
     element.classList.toggle('rich', rich.length > 0)
     const media = this.region(element, 'media')
+    const activeSurfaceKeys = new Set<string>()
     for (const [partIndex, part] of message.parts.entries()) {
-      const partKey = `${message.id}:${partIndex}`
-      if (this.renderedPartKeys.has(partKey)) continue
       if (part.type === 'image') {
+        const partKey = `${message.id}:${partIndex}`
+        if (this.renderedPartKeys.has(partKey)) continue
         this.renderedPartKeys.add(partKey)
         const img = this.imageElement(part as MediaPart)
         if (img) media.append(img)
-      } else if (part.type === 'data' && part.name === 'ui') {
-        this.renderedPartKeys.add(partKey)
-        const { component, props } = part.value as { component: string; props?: unknown }
+      } else if (part.type === 'data' && part.name === 'surface') {
+        const surface = part.value as SurfacePartValue
+        const surfaceKey = `${message.id}:${surface.surfaceId ?? partIndex}`
+        activeSurfaceKeys.add(surfaceKey)
+        const previous = this.renderedSurfaces.get(surfaceKey)
+        if (previous && sameSurfaceValue(previous.value, surface)) continue
+        const key = surface.component ?? surface.kind
         // Own names only: a component such as 'constructor' must not reach Object.prototype.
-        const own = (table: Record<string, Renderer> | undefined) => (table && Object.hasOwn(table, component) ? table[component] : undefined)
+        const own = (table: Record<string, Renderer> | undefined) => (table && Object.hasOwn(table, key) ? table[key] : undefined)
         const renderer = own(this.options.renderers) ?? own(RENDERERS)
-        if (!renderer || !this.h4b) continue
-        try {
-          media.append(renderer(props ?? {}, { h4b: this.h4b }))
-        } catch (error) {
-          this.h4b.emit('error', { error, source: `widget:renderer:${component}` })
+        if (!renderer || !this.h4b) {
+          previous?.element?.remove()
+          this.renderedSurfaces.set(surfaceKey, { value: surface })
+          continue
         }
+        try {
+          const rendered = renderer(surface.payload ?? {}, { h4b: this.h4b })
+          if (previous?.element?.isConnected) previous.element.replaceWith(rendered)
+          else {
+            previous?.element?.remove()
+            media.append(rendered)
+          }
+          this.renderedSurfaces.set(surfaceKey, { value: surface, element: rendered })
+        } catch (error) {
+          previous?.element?.remove()
+          this.renderedSurfaces.set(surfaceKey, { value: surface })
+          this.h4b.emit('error', { error, source: `widget:renderer:${key}` })
+        }
+      }
+    }
+    this.dropSurfacesForMessage(message.id, activeSurfaceKeys)
+  }
+
+  private dropSurfacesForMessage(messageId: string, keep?: Set<string>) {
+    for (const [key, entry] of this.renderedSurfaces) {
+      if (key.startsWith(`${messageId}:`) && !keep?.has(key)) {
+        entry.element?.remove()
+        this.renderedSurfaces.delete(key)
       }
     }
   }
@@ -1192,4 +1226,26 @@ declare global {
   interface HTMLElementTagNameMap {
     'h4b-chat': H4BChatElement
   }
+}
+
+function sameSurfaceValue(a: unknown, b: unknown, seen = new WeakMap<object, WeakSet<object>>()): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') return false
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime()
+  const objA = a as object
+  const objB = b as object
+  let paired = seen.get(objA)
+  if (paired?.has(objB)) return true
+  if (!paired) {
+    paired = new WeakSet()
+    seen.set(objA, paired)
+  }
+  paired.add(objB)
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => sameSurfaceValue(v, b[i], seen))
+  }
+  const keysA = Object.keys(objA)
+  const keysB = Object.keys(objB)
+  if (keysA.length !== keysB.length) return false
+  return keysA.every((k) => Object.hasOwn(objB, k) && sameSurfaceValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], seen))
 }

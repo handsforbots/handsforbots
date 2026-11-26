@@ -60,7 +60,7 @@ Beyond the kernel, a transport and a UI, each capability is its own package:
 | Run commands without the LLM | [`menu`](https://www.npmjs.com/package/@handsforbots/menu) · [`keyboard`](https://www.npmjs.com/package/@handsforbots/keyboard) | slash commands, phrases, shortcuts, push-to-talk, palette |
 | Show and guide on the page | [`guided`](https://www.npmjs.com/package/@handsforbots/guided) · [`cues`](https://www.npmjs.com/package/@handsforbots/cues) | tours, highlights, sections, galleries; tone and scene states the page mirrors |
 | Take in more than text | [`inputs`](https://www.npmjs.com/package/@handsforbots/inputs) | camera, files, GUI events, idle, sensors |
-| Open the page to other agents and apps | [`expose-webmcp`](https://www.npmjs.com/package/@handsforbots/expose-webmcp) · [`mcp-apps`](https://www.npmjs.com/package/@handsforbots/mcp-apps) | browser agents (WebMCP), MCP Apps in sandboxed iframes |
+| Open the page to other agents and apps | [`expose-webmcp`](https://www.npmjs.com/package/@handsforbots/expose-webmcp) · [`mcp-apps`](https://www.npmjs.com/package/@handsforbots/mcp-apps) · [`a2ui`](https://www.npmjs.com/package/@handsforbots/a2ui) | browser agents (WebMCP), MCP Apps in sandboxed iframes, headless A2UI surfaces |
 | Remember and continue | [`memory`](https://www.npmjs.com/package/@handsforbots/memory) · [`storage-local`](https://www.npmjs.com/package/@handsforbots/storage-local) · [`storage-backend`](https://www.npmjs.com/package/@handsforbots/storage-backend) · [`tab-sync`](https://www.npmjs.com/package/@handsforbots/tab-sync) · [`conversation-state`](https://www.npmjs.com/package/@handsforbots/conversation-state) | what is sent and kept, encrypted browser or server storage, tabs, explicit conversation state |
 | Respect privacy | [`consent`](https://www.npmjs.com/package/@handsforbots/consent) | consent rules per law and region, erasure, anonymization |
 | Measure | [`observability`](https://www.npmjs.com/package/@handsforbots/observability) · [`semantic-event-observability`](https://www.npmjs.com/package/@handsforbots/semantic-event-observability) | semantic logs, metrics and traces (Grafana, OTel, Langfuse, LangSmith) |
@@ -79,6 +79,7 @@ Coding agents integrate H4B better with its [skills](./skills/README.md). In Cla
 
 - [Getting started](./docs/en-us/getting-started.md)
 - [Concepts](./docs/en-us/concepts.md): signals, turns, stimuli, routes, sync/async
+- [Ecosystem: A2UI, MCP Apps, AG-UI and CopilotKit](./docs/en-us/ecosystem.md): boundaries, combinations and when to use each piece
 - [Packages](./docs/en-us/packages.md): what each package is for, what it needs, what it works with
 - [Plugins](./docs/en-us/plugins.md): every package and its options
 - [Writing plugins](./docs/en-us/writing-plugins.md)

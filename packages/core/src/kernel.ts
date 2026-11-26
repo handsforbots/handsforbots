@@ -1180,7 +1180,7 @@ export class H4B {
         origin,
         callId: call.id,
         signal: abortSignal,
-        render: (component, props) => this.applyStimulus(turnId, { type: 'ui.render', component, props }, round),
+        surface: (surface) => this.applyStimulus(turnId, { type: 'ui.surface', ...surface }, round),
       })
       outcome = { result }
     } catch (error) {
@@ -1361,11 +1361,37 @@ export class H4B {
           })
         }
         break
-      case 'ui.render':
+      case 'ui.surface':
         if (!stimulus.slot || stimulus.slot === 'message') {
-          const id = this.resolveAssistantMessageId(round, stimulus.messageId)
-          const part = { type: 'data' as const, name: 'ui', value: { component: stimulus.component, props: stimulus.props } }
-          conversation.update<AssistantMessage>(id, (m) => ({ ...m, parts: [...m.parts, part] }))
+          const op = stimulus.op ?? 'snapshot'
+          if (op === 'snapshot') {
+            const surfaceId = stimulus.surfaceId ?? createId('sfc')
+            const kind = stimulus.kind ?? (stimulus.component ? 'component' : 'custom')
+            const value = {
+              surfaceId,
+              kind,
+              ...(stimulus.component !== undefined ? { component: stimulus.component } : {}),
+              ...(stimulus.payload !== undefined ? { payload: stimulus.payload } : {}),
+            }
+            const id = this.resolveAssistantMessageId(round, stimulus.messageId)
+            const part = { type: 'data' as const, name: 'surface', value }
+            conversation.update<AssistantMessage>(id, (m) => {
+              const idx = m.parts.findIndex(
+                (p) => p.type === 'data' && p.name === 'surface' && (p.value as { surfaceId?: unknown } | undefined)?.surfaceId === surfaceId,
+              )
+              const parts = idx >= 0 ? m.parts.with(idx, part) : [...m.parts, part]
+              return { ...m, parts }
+            })
+          } else if (op === 'delete' && stimulus.surfaceId) {
+            const id = this.resolveAssistantMessageId(round, stimulus.messageId)
+            const targetId = stimulus.surfaceId
+            conversation.update<AssistantMessage>(id, (m) => ({
+              ...m,
+              parts: m.parts.filter(
+                (p) => !(p.type === 'data' && p.name === 'surface' && (p.value as { surfaceId?: unknown } | undefined)?.surfaceId === targetId),
+              ),
+            }))
+          }
         }
         break
       case 'state.snapshot':
