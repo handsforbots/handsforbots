@@ -9,6 +9,19 @@ export function textOf(source: Message | Part[]): string {
     .join('')
 }
 
+/** A word in a text: `from` (inclusive) and `to` (exclusive) are UTF-16 positions. */
+export type WordSpan = { text: string; from: number; to: number }
+
+/**
+ * The words of a text: maximal runs of non-space characters, punctuation
+ * included (`"Olá,"`). The one tokenization voice and captions share.
+ */
+export function splitWords(text: string): WordSpan[] {
+  const words: WordSpan[] = []
+  for (const match of text.matchAll(/\S+/g)) words.push({ text: match[0], from: match.index, to: match.index + match[0].length })
+  return words
+}
+
 /** Whether two retentions are the same choice. */
 export function sameRetention(a: Retention, b: Retention): boolean {
   return typeof a === 'object' && typeof b === 'object' ? a.ttlMinutes === b.ttlMinutes : a === b

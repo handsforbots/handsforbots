@@ -1,3 +1,7 @@
+import { splitWords, type WordSpan } from '@handsforbots/core'
+
+export { splitWords, type WordSpan }
+
 /**
  * Word timings (ADR 0020): one tokenization for every source, timings mapped
  * onto it, estimation when nothing better exists, and WebVTT with inline
@@ -15,9 +19,6 @@ export type WordQuality =
 
 /** Where the timing came from, independent of its quality. */
 export type WordSource = 'model' | 'backend' | 'boundary' | 'asr' | 'estimate'
-
-/** A word in a text: `from` (inclusive) and `to` (exclusive) are UTF-16 positions. */
-export type WordSpan = { text: string; from: number; to: number }
 
 /** A word of a spoken chunk. Times are seconds since the chunk started, as heard. */
 export type WordTiming = WordSpan & {
@@ -44,16 +45,6 @@ export type TimedWord = {
 
 /** At most this many units are read from a provider or backend. */
 export const MAX_TIMED_WORDS = 2000
-
-/**
- * The words of a text: maximal runs of non-space characters, punctuation
- * included (`"Olá,"`). The one tokenization captions use, whatever the source.
- */
-export function splitWords(text: string): WordSpan[] {
-  const words: WordSpan[] = []
-  for (const match of text.matchAll(/\S+/g)) words.push({ text: match[0], from: match.index, to: match.index + match[0].length })
-  return words
-}
 
 const LETTERS = /[\p{L}\p{N}]/u
 
