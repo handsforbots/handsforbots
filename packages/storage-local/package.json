@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/storage-local",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Persists the Hands for Bots conversation in localStorage/sessionStorage with an inactivity timeout.",
   "keywords": [
     "handsforbots",

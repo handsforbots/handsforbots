@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/assistant-ui",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "UI. assistant-ui runtime for Hands for Bots: use assistant-ui components as the conversation surface over any H4B transport.",
   "keywords": [
     "handsforbots",

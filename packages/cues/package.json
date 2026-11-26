@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/cues",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Cues for Hands for Bots: closed-vocabulary presentation categories (tone, scene, urgency…) set by the backend, an action or content rules, with repetition counts and policies.",
   "keywords": [
     "handsforbots",

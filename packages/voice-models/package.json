@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/voice-models",
-  "version": "2.0.0-alpha.4.1",
+  "version": "2.0.0-alpha.5",
   "description": "Add-on. Neural text-to-speech in the browser for @handsforbots/voice: Piper, Kokoro and transformers.js pipelines, models from Hugging Face, any URL or a local file, downloaded with progress and cached.",
   "keywords": [
     "handsforbots",

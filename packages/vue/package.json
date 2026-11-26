@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/vue",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "UI. Vue bindings for Hands for Bots: plugin and composables for messages, actions, context and stimuli.",
   "keywords": [
     "handsforbots",

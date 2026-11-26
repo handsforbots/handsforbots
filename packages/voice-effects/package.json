@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/voice-effects",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Standalone. Declarative effects for synthesized speech: a JSON chain in Web Audio terms, parameters described like Web Audio Modules, SSML prosody, presets, offline rendering and export to FFmpeg filtergraphs and SSML.",
   "keywords": [
     "handsforbots",

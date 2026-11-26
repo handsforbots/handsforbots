@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/testkit",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Dev. Test helpers and a transport conformance suite for Hands for Bots apps and plugins.",
   "keywords": [
     "handsforbots",

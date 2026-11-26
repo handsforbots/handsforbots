@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/memory",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Hands for Bots memory policy: how many turns are sent and kept, and compaction of older turns. Mounted by default by @handsforbots/core.",
   "keywords": [
     "handsforbots",

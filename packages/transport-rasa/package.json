@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/transport-rasa",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Transport (pick one). Connects Hands for Bots to Rasa (REST channel).",
   "keywords": [
     "handsforbots",

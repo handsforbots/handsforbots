@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/keyboard",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Keyboard shortcuts for Hands for Bots: push-to-talk, interrupt, command palette.",
   "keywords": [
     "handsforbots",

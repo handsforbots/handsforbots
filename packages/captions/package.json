@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/captions",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Word-by-word captions and reading cadence for Hands for Bots: follows voice timings or drives text on its own, with a ready-made renderer and custom element.",
   "keywords": [
     "handsforbots",

@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/guided",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Guided tours and on-screen highlights that assistants, agents and users can trigger (successor of v1 GUIDed).",
   "keywords": [
     "handsforbots",

@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/a2ui",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Headless A2UI 1.0 surface host for Hands for Bots, managing surface state over @a2ui/web_core while leaving rendering to the host app.",
   "keywords": [
     "handsforbots",

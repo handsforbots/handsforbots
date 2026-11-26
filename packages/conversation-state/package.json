@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/conversation-state",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Explicit conversation state for Hands for Bots: a small, structured, auditable record of topic, goal, entities, decisions, sourced facts and pending items, changed only by checked operations and sent with every request.",
   "keywords": [
     "handsforbots",

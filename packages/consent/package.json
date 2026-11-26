@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/consent",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Add-on. Consent rule sets for Hands for Bots (LGPD, GDPR, CCPA starting points), JSON/YAML loaders, region helpers and anonymization.",
   "keywords": [
     "handsforbots",

@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/inputs",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Multimodal inputs for Hands for Bots: camera (photos, video frames), files, GUI events (successor of Poke) and sensors.",
   "keywords": [
     "handsforbots",

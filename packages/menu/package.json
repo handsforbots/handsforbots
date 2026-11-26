@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/menu",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Direct commands (no LLM) for Hands for Bots: slash, patterns and fuzzy phrases.",
   "keywords": [
     "handsforbots",

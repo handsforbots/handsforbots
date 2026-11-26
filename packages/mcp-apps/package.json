@@ -1,6 +1,6 @@
 {
   "name": "@handsforbots/mcp-apps",
-  "version": "2.0.0-alpha.4",
+  "version": "2.0.0-alpha.5",
   "description": "Plugin. Renders MCP Apps (ui:// resources) in sandboxed iframes inside Hands for Bots conversations, bridging their tool calls to H4B actions.",
   "keywords": [
     "handsforbots",
