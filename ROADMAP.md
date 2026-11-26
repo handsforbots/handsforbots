@@ -45,6 +45,21 @@ O H4B **não compete** com eles: ele se conecta a eles. A regra de arquitetura �
 
 AG-UI e CopilotKit são os alvos **prioritários** porque são o padrão mais adotado hoje, mas não são dependências do core.
 
+### Relação com UI generativa (A2UI) e MCP Apps
+
+A2UI define o que desenhar; MCP Apps entrega UI em hosts de terceiros (Claude, ChatGPT) ou em iframes isolados; o H4B é o **runtime de host na página do dev** que faz essa UI agir, ouvir e lembrar com qualquer backend.
+
+| Capacidade | Onde o H4B acrescenta valor sobre A2UI ou MCP Apps |
+|---|---|
+| Sessão e histórico | Integra superfícies declarativas e recursos `ui://` ao histórico, persistência, sincronia entre abas (`tab-sync`) e regras de consentimento |
+| Voz e multimodalidade | Soma entrada/saída de voz, barge-in e legendas sincronizadas às interações visuais |
+| Ações ("declare uma vez") | Uma mesma ação declarada no app fica disponível ao LLM, ao WebMCP, ao `@handsforbots/mcp-apps` e às funções do catálogo A2UI (`callRendererFunction`), sob `exposeTo`, schema e `confirm` |
+| Qualquer backend | Leva A2UI também a backends fora do AG-UI (como Laravel, Rasa e HTTP), sem prender o app a um framework |
+
+Nesse desenho, `ui.render` segue como recurso secundário e leve para desenvolvimento rápido sem dependências pesadas, enquanto superfícies declarativas do A2UI terão o estímulo próprio `ui.surface` ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)).
+
+**Quando não faz sentido:** se o app só existe dentro de hosts de terceiros como Claude ou ChatGPT, o caminho é o servidor MCP do backend (fora do escopo do H4B). No modo A do CopilotKit (CopilotKit dono do chat), o CopilotKit já traz renderers de A2UI e MCP Apps; o H4B só agrega se o app quiser voz, menu, ações ou WebMCP.
+
 ### Relação com frameworks de agente e "browser hands"
 
 Tutoriais e frameworks de agente (o ADK do Google, o Agents SDK da OpenAI e afins) ensinam a montar um "agente multimodal completo" em camadas, e algumas séries resumem isso como *hear · talk · act · remember · see*: SDK do modelo → framework de agente → tools → **hands** → memory → **eyes**. São os mesmos cinco verbos da tese do H4B, mas do **lado do agente**. No diagrama da seção 2.1, essa pilha inteira cabe na caixa **Transportes**.
@@ -412,7 +427,8 @@ O registro de ações substitui o `BotsCommands` (que hoje executa `window[comma
 | `bridge-copilotkit` | Duas direções: ações do H4B viram frontend tools do CopilotKit; voz, menu, sensores e WebMCP do H4B funcionam dentro de um app CopilotKit | P0 |
 | `react` | Hooks finos (`useH4B`, `useAction`, `useModality`, `useStimuli`) | P0 |
 | `expose-webmcp` | Publica ações em `document.modelContext` (absorve mudanças da spec) | P1 |
-| `render-mcp-apps` | Renderiza `ui://` de MCP Apps em iframe com sandbox dentro de slots | P1 |
+| `render-mcp-apps` | `@handsforbots/mcp-apps` (entregue): renderiza `ui://` de MCP Apps em iframe com sandbox dentro de slots e liga chamadas a ações H4B; complementar ao modo A do CopilotKit | P1 |
+| `a2ui` | `@handsforbots/a2ui`: runtime de host sobre `@a2ui/web_core` — superfícies no histórico via `ui.surface`, `action` → sinal `gui-event`, `callRendererFunction` → ações do H4B ([ADR 0020](./docs/adr/0020-a2ui-e-mcp-apps.md)) | P1 |
 | `transport-ai-sdk` / `bridge-assistant-ui` | Alternativas ao AG-UI / CopilotKit; provam a substituibilidade | P1 |
 | `transport-rasa`, `transport-universal-llm`, `transport-turn-based` | Backends existentes e APIs síncronas genéricas (ex.: Laravel) | P1 |
 | `transport-realtime` | Sessão fala-a-fala (áudio e vídeo) com ações pelo canal de dados; provedor de referência em aberto (seção 8) | P1 |
@@ -621,6 +637,8 @@ P3 — reavaliar com demanda
 └── Wearables
 ```
 
+- **Guia de arquiteturas de referência** (`docs/*/architectures.md`, planejado — não imediato): documentar topologias completas combinando H4B com A2UI, MCP Apps, AG-UI, CopilotKit, ADK/LangGraph, Laravel/Rasa e voz, para ajudar devs a montar a pilha e apoiar adoção.
+
 ---
 
 ## 6. O que não fazer
@@ -674,6 +692,7 @@ P3 — reavaliar com demanda
 
 | Data | Alteração |
 |------|-----------|
+| 2026-11-26 | Posicionamento frente a A2UI 1.0 e MCP Apps (H4B como runtime de host; `ui.render` secundário; futuro `ui.surface` e `@handsforbots/a2ui` sobre `@a2ui/web_core`), mapeamento de `a2ui-surface` (`ACTIVITY_SNAPSHOT`/`ACTIVITY_DELTA`) no `transport-agui`, e plano do guia de arquiteturas de referência (`docs/*/architectures.md`) (ADR 0020) |
 | 2026-11-17 | Testes de XSS e do sandbox dos MCP Apps no Chromium (`pnpm test:browser`, job `browser` na CI) (seção 3) |
 | 2026-11-17 | CSP do `mcp-apps` antes de toda marcação do app; avisos de segurança em produção só genéricos (seção 3) |
 | 2026-11-17 | Revisão de XSS começou: suíte de payloads e propriedades no widget, CodeQL na CI; imagens restritas a esquemas seguros e renderizadores só por nome próprio (seção 3) |

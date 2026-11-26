@@ -55,7 +55,7 @@ Fontes e citações ([guia](./sources.md)): `sourceView`, `sourceGroups`, `sourc
 
 ## transport-agui
 
-`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.render` viram efeitos na GUI e conteúdo rico; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). As fontes não voltam no histórico. Um evento SSE acima de `maxEventBytes` (1 MiB) faz o turno falhar; `RUN_ERROR` mostra à pessoa `Agent run failed` e mantém só um `code` de verdade.
+`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` pode ser uma função (renovar tokens, cabeçalhos de trace). `agent` aceita qualquer agente AG-UI (ex.: `new HttpAgent()` de `@ag-ui/client`, ou um local). Eventos CUSTOM `h4b.ui.effect` e `h4b.ui.render` viram efeitos na GUI e conteúdo rico; `h4b.sources` (`{ messageId?, sources: [...] }`) e `h4b.citations` (`{ messageId?, citations }`) viram [fontes e citações](./sources.md). Eventos `ACTIVITY_SNAPSHOT` e `ACTIVITY_DELTA` com `activityType: 'a2ui-surface'` (emitidos por `@ag-ui/a2ui-middleware`) viram os estímulos personalizados `a2ui.surface.snapshot` e `a2ui.surface.delta` (`A2UI_STIMULI`, `A2UI_ACTIVITY_TYPE`), enquanto outros tipos de atividade continuam como `agui.ACTIVITY_*`. As fontes não voltam no histórico. Um evento SSE acima de `maxEventBytes` (1 MiB) faz o turno falhar; `RUN_ERROR` mostra à pessoa `Agent run failed` e mantém só um `code` de verdade.
 
 ## transport-rasa
 
@@ -262,6 +262,8 @@ Renderiza [MCP Apps](https://modelcontextprotocol.io) (recursos `ui://`, `text/h
 widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] }) } })
 // ou na sua própria UI: elemento.append(mountMcpApp(h4b, props, { allowTools }))
 ```
+
+Quando usar o CopilotKit como dono do chat (Modo A), o próprio CopilotKit já renderiza MCP Apps e superfícies A2UI, então não é preciso montar o renderizador do H4B ali.
 
 ## cues
 

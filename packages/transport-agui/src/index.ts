@@ -63,6 +63,18 @@ export const CUSTOM_EVENTS = {
   citations: 'h4b.citations',
 } as const
 
+/** AG-UI `activityType` emitted by `@ag-ui/a2ui-middleware` for A2UI surfaces. */
+export const A2UI_ACTIVITY_TYPE = 'a2ui-surface'
+
+/**
+ * Custom stimulus names emitted for A2UI AG-UI activity events until
+ * `@handsforbots/core` adds a dedicated `ui.surface` stimulus (ADR 0020).
+ */
+export const A2UI_STIMULI = {
+  snapshot: 'a2ui.surface.snapshot',
+  delta: 'a2ui.surface.delta',
+} as const
+
 export const agui = definePlugin<AguiTransportOptions>({
   name: 'transport-agui',
   provides: ['transport'],
@@ -362,6 +374,31 @@ export function createEventMapper(): (event: BaseEvent) => Stimulus[] {
         return [{ type: 'state.snapshot', state: event.snapshot }]
       case 'STATE_DELTA':
         return [{ type: 'state.patch', patch: event.delta }]
+      case 'ACTIVITY_SNAPSHOT':
+        if (event.activityType === A2UI_ACTIVITY_TYPE) {
+          return [{
+            type: 'custom',
+            name: A2UI_STIMULI.snapshot,
+            value: {
+              messageId: typeof event.messageId === 'string' ? event.messageId : undefined,
+              content: event.content,
+              replace: typeof event.replace === 'boolean' ? event.replace : true,
+            },
+          }]
+        }
+        return [{ type: 'custom', name: `agui.${raw.type}`, value: raw }]
+      case 'ACTIVITY_DELTA':
+        if (event.activityType === A2UI_ACTIVITY_TYPE) {
+          return [{
+            type: 'custom',
+            name: A2UI_STIMULI.delta,
+            value: {
+              messageId: typeof event.messageId === 'string' ? event.messageId : undefined,
+              patch: Array.isArray(event.patch) ? event.patch : [],
+            },
+          }]
+        }
+        return [{ type: 'custom', name: `agui.${raw.type}`, value: raw }]
       case 'CUSTOM':
         if (event.name === CUSTOM_EVENTS.uiEffect) {
           return [{ type: 'ui.effect', name: event.value?.name, value: event.value?.value }]

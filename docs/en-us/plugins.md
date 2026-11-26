@@ -55,7 +55,7 @@ Sources and citations ([guide](./sources.md)): `sourceView`, `sourceGroups`, `so
 
 ## transport-agui
 
-`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` may be a function (refresh tokens, trace headers). `agent` accepts any AG-UI agent (e.g. `new HttpAgent()` from `@ag-ui/client`, or an in-process one). CUSTOM events named `h4b.ui.effect` and `h4b.ui.render` become GUI effects and rich content; `h4b.sources` (`{ messageId?, sources: [...] }`) and `h4b.citations` (`{ messageId?, citations }`) become [sources and citations](./sources.md). Sources are not sent back in the history. An SSE event over `maxEventBytes` (1 MiB) fails the turn; `RUN_ERROR` shows the person `Agent run failed` and keeps only a real `code`.
+`agui({ url, headers?, agent?, forwardedProps?, maxEventBytes? })`: HTTP POST + SSE. `headers` may be a function (refresh tokens, trace headers). `agent` accepts any AG-UI agent (e.g. `new HttpAgent()` from `@ag-ui/client`, or an in-process one). CUSTOM events named `h4b.ui.effect` and `h4b.ui.render` become GUI effects and rich content; `h4b.sources` (`{ messageId?, sources: [...] }`) and `h4b.citations` (`{ messageId?, citations }`) become [sources and citations](./sources.md). `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELTA` events with `activityType: 'a2ui-surface'` (emitted by `@ag-ui/a2ui-middleware`) map to the custom stimuli `a2ui.surface.snapshot` and `a2ui.surface.delta` (`A2UI_STIMULI`, `A2UI_ACTIVITY_TYPE`), while other activity types stay as `agui.ACTIVITY_*`. Sources are not sent back in the history. An SSE event over `maxEventBytes` (1 MiB) fails the turn; `RUN_ERROR` shows the person `Agent run failed` and keeps only a real `code`.
 
 ## transport-rasa
 
@@ -262,6 +262,8 @@ Renders [MCP Apps](https://modelcontextprotocol.io) (`ui://` resources, `text/ht
 widget({ renderers: { 'mcp-app': mcpAppRenderer({ allowTools: ['filter_orders'] }) } })
 // or in your own UI: element.append(mountMcpApp(h4b, props, { allowTools }))
 ```
+
+When using CopilotKit as the chat owner (Mode A), CopilotKit already renders MCP Apps and A2UI surfaces, so you do not need to mount H4B's renderer there.
 
 ## cues
 

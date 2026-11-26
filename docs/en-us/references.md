@@ -209,3 +209,14 @@ Supports the XSS review in the ROADMAP (section 3), `packages/widget/test/xss.te
 | [PortSwigger XSS cheat sheet](https://portswigger.net/web-security/cross-site-scripting/cheat-sheet) | Event handlers, tags and URL schemes that run script, by browser | Which tags, attributes and schemes the suite forbids in rendered DOM |
 | [fast-check](https://fast-check.dev) | Property-based testing for JavaScript (MIT) | Random mixes of Markdown and HTML fragments must render only the widget's own tags and safe links; checked to catch a planted `javascript:` link and a missing escape |
 | [CodeQL](https://codeql.github.com/docs/codeql-language-guides/codeql-for-javascript/) · [`security-extended`](https://docs.github.com/en/code-security/code-scanning/managing-your-code-scanning-configuration/codeql-query-suites) | GitHub's static analysis; the extended suite adds lower-precision security queries, including DOM-based XSS | Runs on every push and pull request over `packages/`, results in code scanning; it does not see through our own escaping, which the tests cover |
+
+## A2UI and MCP Apps
+
+Supports [ADR 0020](../adr/0020-a2ui-e-mcp-apps.md) and the `transport-agui` A2UI activity mapping. Accessed 2026-11-26.
+
+| Source | What it is | Use in H4B |
+|---|---|---|
+| [A2UI](https://github.com/google/A2UI) · [Introducing A2UI (Google Developers Blog)](https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/) | Open declarative generative UI protocol (component tree, data model, bidirectional function calls; v1.0 released November 2026) | Target protocol for the planned `ui.surface` stimulus and `@handsforbots/a2ui` host runtime (ADR 0020), keeping `ui.render` as a lightweight secondary escape hatch |
+| [`@a2ui/web_core`](https://github.com/google/A2UI) (Apache-2.0) | Framework-agnostic A2UI protocol parser, reactive surface/data model and schema definitions (including v1.0) | Chosen foundation for the planned `@handsforbots/a2ui` plugin so H4B does not reimplement the protocol engine |
+| [`@ag-ui/a2ui-middleware`](https://github.com/ag-ui-protocol/ag-ui) | AG-UI middleware that streams A2UI surfaces over `ACTIVITY_SNAPSHOT` and `ACTIVITY_DELTA` events with `activityType: "a2ui-surface"` | Basis for `transport-agui` recognizing `a2ui-surface` activity events and emitting `a2ui.surface.snapshot` / `a2ui.surface.delta` |
+| [MCP Apps (SEP-1865)](https://modelcontextprotocol.io/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp) · [spec 2026-01-26](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx) | MCP UI extension (`io.modelcontextprotocol/ui`) for sandboxed `ui://` HTML resources (`text/html;profile=mcp-app`) communicating over JSON-RPC/postMessage | Implemented by `@handsforbots/mcp-apps` as a web host; complementary to A2UI (A2UI renderers can also be packaged inside MCP Apps for third-party chat hosts) |
